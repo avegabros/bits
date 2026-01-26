@@ -1,0 +1,26 @@
+/**
+ * Prisma schema file (documentation)
+ *
+ * Purpose:
+ * - Defines a PostgreSQL datasource and a Prisma Client generator.
+ *
+ * Issues / Recommendations:
+ * - The datasource is missing a connection URL. Add a line like:
+ *     url = env("DATABASE_URL")
+ *   (Prisma needs this to connect to the database.)
+ * - The generator provider should typically be "prisma-client-js".
+ *   ("prisma-client" is not the standard provider name for modern Prisma versions.)
+ * - The generator output "./generated" is acceptable but optional; the default is node_modules/.prisma/client.
+ * - Optionally consider adding migration-related settings (e.g., shadowDatabaseUrl) or preview features if required.
+ *
+ * Verdict:
+ * - Not fully correct as-is. Update the datasource URL and the generator provider before using with the Prisma CLI.
+ */
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
