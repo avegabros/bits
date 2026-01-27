@@ -1,4 +1,4 @@
-# BITS - Full Stack Application
+# Full Stack Application Scaffold
 
 A modern full-stack application with Next.js frontend and Express.js backend, containerized with Docker.
 
@@ -11,46 +11,63 @@ A modern full-stack application with Next.js frontend and Express.js backend, co
 
 ## Quick Start
 
-1. Clone the repository
-2. Copy environment files:
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-3. Run with Docker Compose:
-   ```bash
-   docker-compose up --build
-   ```
+# Full Stack Application Scaffold
 
-The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:3001
-- Database: localhost:5432
+A modern full-stack application with a Next.js frontend and an Express.js backend, containerized with Docker.
 
-## API Endpoints
+## Quick Start (Docker)
 
-- `GET /api/health` - Health check
-- `GET /api/test-db` - Test database connection
+1. Copy any necessary env files for services (backend, DB):
 
-## Development
-
-### Frontend
-```bash
-cd frontend
-npm run dev
+```powershell
+cp backend/.env.example backend/.env
 ```
 
-### Backend
+2. Build and run with Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+The application will be available at:
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+
+If you prefer to build the frontend image manually:
+
+```bash
+docker build -t frontend:local frontend
+docker run -p 3000:3000 frontend:local
+```
+
+## Local development (no Docker)
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev            # development server
+# or for production build
+npm run build
+npm run start
+```
+
+Backend (example):
+
 ```bash
 cd backend
 cp .env.example .env
+npm install
 npm run dev
 ```
 
-### Database
-PostgreSQL runs on port 5432 with default credentials:
-- Database: `app`
-- User: `postgres`
-- Password: `password`
+## Build notes and troubleshooting
+
+- If `npm install` fails with `No matching version found for next@...`, update `frontend/package.json` to a valid Next.js version.
+- The Dockerfile expects the Next standalone build output at `/app/.next/standalone` — make sure `next.config.ts` contains `output: "standalone"`.
+- If the Next build detects the wrong workspace root (warning about multiple lockfiles), ensure you're running build commands from the `frontend` folder, or remove extra lockfiles.
 
 ## Project Structure
 
@@ -60,5 +77,3 @@ PostgreSQL runs on port 5432 with default credentials:
 ├── docker-compose.yml # Docker orchestration
 └── README.md
 ```
-
-HELLO OJTS!
