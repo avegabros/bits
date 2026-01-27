@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // produce a standalone server build so the Dockerfile can copy /.next/standalone
-  output: "standalone",
+  // Empty turbopack config to silence the error and use default behavior
+  turbopack: {},
 };
 
 export default nextConfig;
