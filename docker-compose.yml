@@ -21,13 +21,18 @@ services:
       dockerfile: Dockerfile
     container_name: bits_backend
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3001
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: db_bits
       DB_USER: root
       DB_PASSWORD: root
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
+    command: npm run dev
     ports:
       - "3001:3001"
     depends_on:
@@ -40,6 +45,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: bits_frontend
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev -- --webpack
     ports:
       - "3000:3000"
     depends_on:
