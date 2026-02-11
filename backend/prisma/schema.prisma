@@ -1,26 +1,146 @@
-/**
- * Prisma schema file (documentation)
- *
- * Purpose:
- * - Defines a PostgreSQL datasource and a Prisma Client generator.
- *
- * Issues / Recommendations:
- * - The datasource is missing a connection URL. Add a line like:
- *     url = env("DATABASE_URL")
- *   (Prisma needs this to connect to the database.)
- * - The generator provider should typically be "prisma-client-js".
- *   ("prisma-client" is not the standard provider name for modern Prisma versions.)
- * - The generator output "./generated" is acceptable but optional; the default is node_modules/.prisma/client.
- * - Optionally consider adding migration-related settings (e.g., shadowDatabaseUrl) or preview features if required.
- *
- * Verdict:
- * - Not fully correct as-is. Update the datasource URL and the generator provider before using with the Prisma CLI.
- */
-datasource db {
-  provider = "postgresql"
+generator client {
+  provider = "prisma-client-js"
 }
 
-generator client {
-  provider = "prisma-client"
-  output   = "./generated"
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+enum Role {
+  USER
+  ADMIN
+  HR
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+}
+
+// --- MODELS ---
+
+// Represents physical ZKTeco machines
+model Device {
+  id        Int             @id @default(autoincrement())
+  name      String          // e.g. "Main Entrance"
+  ip        String          @unique // e.g. "192.168.1.201"
+  port      Int             @default(4370)
+  location  String?
+  isActive  Boolean         @default(true)
+  logs      AttendanceLog[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([isActive])
+}
+
+// Organizational Departments
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique // e.g. "IT", "HR"
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// Work Shifts (for calculating lateness)
+model Shift {
+  id        Int        @id @default(autoincrement())
+  name      String     // e.g. "Morning 9-6"
+  startTime String     // "08:30"
+  endTime   String     // "18:30"
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// Users/Employees
+model Employee {
+  id               Int                 @id @default(autoincrement())
+  zkId             Int?                @unique // The User ID inside the K14 device
+  employeeNumber   String?             @unique // Company employee ID (e.g. "AVG-26020-6001")
+  
+  // Personal Information
+  firstName        String
+  lastName         String
+  email            String?             @unique // For login
+  contactNumber    String?             // Phone number for HR contact
+  
+  // Authentication
+  password         String?             // Hashed password
+  role             Role                @default(USER)
+  
+  // Work Details
+  department       String?             // Simple department name (e.g. "Engineering", "HR")
+  position         String?             // Job title (e.g. "Senior Developer", "Manager")
+  branch           String?             // Work location (e.g. "Main Branch", "North Branch")
+
+  // Employment Status
+  hireDate         DateTime?           // Date employee was hired
+  employmentStatus EmploymentStatus    @default(ACTIVE)
+  
+  // Relationships
+  departmentId     Int?
+  departmentRel    Department?         @relation(fields: [departmentId], references: [id])
+  
+  shiftId          Int?
+  shift            Shift?              @relation(fields: [shiftId], references: [id])
+  
+  logs             AttendanceLog[]
+  attendances      Attendance[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([email])
+  @@index([employeeNumber])
+  @@index([employmentStatus])
+  @@index([role])
+  @@index([departmentId])
+}
+
+// Clock-in/out records (raw device logs)
+model AttendanceLog {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime
+  status     Int      // 0 = Check-in, 1 = Check-out, etc. (From Device)
+  
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  
+  deviceId   Int?
+  device     Device?  @relation(fields: [deviceId], references: [id])
+  
+  createdAt  DateTime @default(now())
+
+  // Ensure we don't save the same punch twice from the same user at the exact same second
+  @@unique([timestamp, employeeId])
+  @@index([employeeId])
+  @@index([timestamp])
+  @@index([deviceId])
+}
+
+// Processed attendance records (check-in/check-out pairs)
+model Attendance {
+  id           Int       @id @default(autoincrement())
+  
+  employeeId   Int
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  
+  date         DateTime  // Date of attendance (normalized to midnight for grouping)
+  checkInTime  DateTime  // Actual check-in timestamp
+  checkOutTime DateTime? // Actual check-out timestamp (null if not checked out yet)
+  
+  status       String    @default("present") // present, late, absent, incomplete
+  notes        String?   // For manual corrections or issues
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
 }

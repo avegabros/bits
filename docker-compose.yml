@@ -23,6 +23,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
+      DATABASE_URL: postgresql://root:root@postgres:5432/db_bits
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: db_bits
@@ -47,6 +48,7 @@ services:
     container_name: bits_frontend
     environment:
       NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:3001/api
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     volumes:
@@ -60,9 +62,28 @@ services:
       - backend
     networks:
       - bits_network
+  # Prisma Studio - Database GUI
+  # prisma-studio:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: bits_prisma_studio
+  #   environment:
+  #     DATABASE_URL: postgresql://root:root@postgres:5432/db_bits
+  #   volumes:
+  #     - ./backend:/app
+  #     - /app/node_modules
+  #   command: npx prisma studio --hostname 0.0.0.0 --port 5555
+  #   ports:
+  #     - "5555:5555"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - bits_network
 
 volumes:
   postgres_data:
+
 
 networks:
   bits_network:
