@@ -11,6 +11,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [userName, setUserName] = useState('');
 
   const updateImage = () => {
     const savedImage = localStorage.getItem('userProfileImage');
@@ -20,6 +21,15 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
   useEffect(() => {
     setMounted(true);
     updateImage();
+    try {
+      const employee = localStorage.getItem('employee');
+      if (employee) {
+        const parsed = JSON.parse(employee);
+        setUserName(`${parsed.firstName} ${parsed.lastName}`);
+      }
+    } catch {
+      setUserName('HR');
+    }
     const timer = setInterval(() => setTime(new Date()), 1000);
 
     // Listen for image updates from the profile page
@@ -43,9 +53,8 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('employee');
-    sessionStorage.removeItem('authenticated');
-    sessionStorage.removeItem('userEmail');
     router.push('/login');
   };
 
@@ -94,7 +103,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
                   {profileImage ? <img src={profileImage} className="h-full w-full object-cover" /> : <User className="mx-auto mt-2 text-slate-300" />}
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Signed in as</p>
-                <p className="text-sm font-black text-slate-800 tracking-tight">mwehehe</p>
+                <p className="text-sm font-black text-slate-800 tracking-tight">{userName || 'HR'}</p>
               </div>
               <div className="p-1">
                 <Link href="/hr/profile" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"><User size={16} /> My Profile</Link>

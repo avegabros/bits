@@ -65,7 +65,7 @@ export default function Dashboard() {
                     <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
                     <p className="text-muted-foreground mt-1">Welcome to BITS Admin Panel</p>
                 </div>
-                <Button className="bg-primary hover:bg-primary/90">Generate Report</Button>
+                <Button className="bg-primary hover:bg-primary/90" onClick={() => router.push('/admin/reports')}>Generate Report</Button>
             </div>
 
             {/* Status Cards */}

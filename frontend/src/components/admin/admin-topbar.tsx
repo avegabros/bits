@@ -16,11 +16,18 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
 
   useEffect(() => {
-    const savedEmail = sessionStorage.getItem('userEmail') || 'admin@avega.com'
-    setUserEmail(savedEmail)
+    try {
+      const employee = localStorage.getItem('employee')
+      if (employee) {
+        const parsed = JSON.parse(employee)
+        setUserName(`${parsed.firstName} ${parsed.lastName}`)
+      }
+    } catch {
+      setUserName('Admin')
+    }
 
     const timer = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(timer)
@@ -37,8 +44,9 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
   }, [])
 
   const handleLogout = () => {
-    sessionStorage.removeItem('authenticated')
-    sessionStorage.removeItem('userEmail')
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('employee')
     router.push('/login')
   }
 
@@ -113,7 +121,7 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
                   )}
                 </div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Signed in as</p>
-                <p className="text-sm font-black text-gray-800 tracking-tight">{userEmail.split('@')[0]}</p>
+                <p className="text-sm font-black text-gray-800 tracking-tight">{userName || 'Admin'}</p>
               </div>
               <div className="p-1">
                 <a href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors">

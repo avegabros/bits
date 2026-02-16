@@ -1,12 +1,23 @@
 "use client";
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import Sidebar from './hr-sidebar';
 import TopBar from './hr-topbar';
 
 export default function HRLayout({ children }: { children: React.ReactNode }) {
+    const { isLoading, isAuthenticated } = useAuth('HR');
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const pathname = usePathname();
+
+    // Show loading state while checking auth
+    if (isLoading || !isAuthenticated) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-white">
+                <div className="text-gray-500">Loading...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-screen bg-white overflow-hidden relative">

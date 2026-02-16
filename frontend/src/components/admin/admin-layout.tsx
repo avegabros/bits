@@ -1,13 +1,23 @@
 'use client'
 
 import React, { useState } from "react"
-
+import { useAuth } from '@/hooks/useAuth'
 import { AdminSidebar } from './admin-sidebar'
 import { AdminTopbar } from './admin-topbar'
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
+    const { isLoading, isAuthenticated } = useAuth('ADMIN')
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+    // Show loading state while checking auth
+    if (isLoading || !isAuthenticated) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-gray-50">
+                <div className="text-gray-500">Loading...</div>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">

@@ -18,7 +18,7 @@ export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }:
   const navItems = [
     {
       label: 'Dashboard',
-      href: '/',
+      href: '/dashboard',
       icon: LayoutDashboard,
     },
     {
@@ -33,13 +33,8 @@ export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }:
     },
     {
       label: 'Reports',
-      href: '/reports',
+      href: '/admin/reports',
       icon: FileText,
-    },
-    {
-      label: 'Settings',
-      href: '/settings',
-      icon: Settings,
     },
   ]
 

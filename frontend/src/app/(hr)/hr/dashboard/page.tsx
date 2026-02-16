@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Users, 
   UserCheck, 
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function HRDashboard() {
+  const router = useRouter();
   const [editingLog, setEditingLog] = useState<any>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false); 
 
@@ -68,6 +70,7 @@ export default function HRDashboard() {
             </div>
             
             <button 
+              onClick={() => router.push('/hr/reports')}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-red-600 hover:border-red-200 transition-all shadow-sm"
             >
               <Download size={14} />

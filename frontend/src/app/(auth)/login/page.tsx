@@ -70,18 +70,17 @@ export default function LoginPage() {
         return
       }
 
-      // Store token and employee data (using backend's "employee" key)
-      localStorage.setItem('token', data.token)
+      // Store token and employee data
+      localStorage.setItem('token', data.accessToken)
       localStorage.setItem('employee', JSON.stringify(data.employee))
 
       // Role-based redirect
       if (data.employee.role === 'HR') {
         router.push('/hr')
       } else if (data.employee.role === 'ADMIN') {
-        router.push('/')
+        router.push('/dashboard')
       } else {
-        // Default redirect for any other roles
-        router.push('/')
+        router.push('/login')
       }
     } catch (error: any) {
       setValidationErrors({

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
 
 const mockEmployees = [
   { id: 1, name: 'John Doe', contactNumber: '+63-934-567-8901', department: 'Engineering', position: 'Senior Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2022-03-15' },
@@ -31,6 +31,9 @@ export default function EmployeesPage() {
   const [selectedDept, setSelectedDept] = useState<string>('all')
   const [selectedBranch, setSelectedBranch] = useState<string>('all')
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     contactNumber: '',
@@ -78,131 +81,204 @@ export default function EmployeesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Employees</h2>
-          <p className="text-muted-foreground mt-1">Manage your workforce and employee records</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Employees</h2>
+          <p className="text-muted-foreground text-sm mt-1">Manage your workforce and employee records</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 gap-2">
-              <Plus className="w-4 h-4" />
-              Add Employee
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Register New Employee</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label className="text-foreground">Full Name</Label>
-                <Input
-                  placeholder="John Doe"
-                  className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                  value={newEmployee.name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, name: e.target.value })}
-                />
+        <div className="flex gap-2 w-full sm:w-auto">
+          {/* Import Excel Button */}
+          <Dialog open={isImportOpen} onOpenChange={(open) => { setIsImportOpen(open); if (!open) { setImportFile(null); } }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex-1 sm:flex-none border-border text-foreground hover:bg-secondary gap-2">
+                <Upload className="w-4 h-4" />
+                <span className="hidden xs:inline">Import</span> Excel
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Import Employees from Excel</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Upload an Excel file (.xlsx, .xls) or CSV (.csv) to bulk import employee records.
+                </p>
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                  <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                  <label htmlFor="excel-upload" className="cursor-pointer">
+                    <span className="text-sm text-primary font-medium hover:underline">Click to select file</span>
+                    <input
+                      id="excel-upload"
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setImportFile(file)
+                      }}
+                    />
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">Supports .xlsx, .xls, .csv</p>
+                </div>
+                {importFile && (
+                  <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded-lg">
+                    <Upload className="w-4 h-4 text-primary" />
+                    <span className="text-sm text-foreground flex-1 truncate">{importFile.name}</span>
+                    <span className="text-xs text-muted-foreground">{(importFile.size / 1024).toFixed(1)} KB</span>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-border text-foreground hover:bg-secondary"
+                    onClick={() => { setIsImportOpen(false); setImportFile(null); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-primary hover:bg-primary/90"
+                    disabled={!importFile || isImporting}
+                    onClick={() => {
+                      // TODO: Implement actual Excel upload to backend
+                      setIsImporting(true)
+                      setTimeout(() => {
+                        setIsImporting(false)
+                        setIsImportOpen(false)
+                        setImportFile(null)
+                      }, 1500)
+                    }}
+                  >
+                    {isImporting ? 'Importing...' : 'Upload & Import'}
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label className="text-foreground">Contact Number</Label>
-                <Input
-                  type="tel"
-                  placeholder="+63-934-567-8900"
-                  className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                  value={newEmployee.contactNumber}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, contactNumber: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label className="text-foreground">Department</Label>
-                <Select value={newEmployee.department} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, department: value })}>
-                  <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-secondary border-border">
-                    {departments.map(dept => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-foreground">Position</Label>
-                <Input
-                  placeholder="Job Title"
-                  className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                  value={newEmployee.position}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, position: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label className="text-foreground">Branch</Label>
-                <Select value={newEmployee.branch} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, branch: value })}>
-                  <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-secondary border-border">
-                    {branches.map(branch => (
-                      <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-foreground">Bio</Label>
-                <Textarea
-                  placeholder="Employee bio..."
-                  className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                  rows={3}
-                  value={newEmployee.bio}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEmployee({ ...newEmployee, bio: e.target.value })}
-                />
-              </div>
-              <Button onClick={handleAddEmployee} className="w-full bg-primary hover:bg-primary/90">
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Employee Button */}
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex-1 sm:flex-none bg-primary hover:bg-primary/90 gap-2">
+                <Plus className="w-4 h-4" />
                 Add Employee
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Register New Employee</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-foreground">Full Name</Label>
+                  <Input
+                    placeholder="John Doe"
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    value={newEmployee.name}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-foreground">Contact Number</Label>
+                  <Input
+                    type="tel"
+                    placeholder="+63-934-567-8900"
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    value={newEmployee.contactNumber}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, contactNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-foreground">Department</Label>
+                  <Select value={newEmployee.department} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, department: value })}>
+                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-secondary border-border">
+                      {departments.map(dept => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-foreground">Position</Label>
+                  <Input
+                    placeholder="Job Title"
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    value={newEmployee.position}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, position: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-foreground">Branch</Label>
+                  <Select value={newEmployee.branch} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, branch: value })}>
+                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-secondary border-border">
+                      {branches.map(branch => (
+                        <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-foreground">Bio</Label>
+                  <Textarea
+                    placeholder="Employee bio..."
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    rows={3}
+                    value={newEmployee.bio}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEmployee({ ...newEmployee, bio: e.target.value })}
+                  />
+                </div>
+                <Button onClick={handleAddEmployee} className="w-full bg-primary hover:bg-primary/90">
+                  Add Employee
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
       <Card className="bg-card border-border p-4">
-        <div className="flex gap-4 flex-wrap">
-          <div className="flex-1 min-w-64">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or contact number..."
+                placeholder="Search by name or contact..."
                 className="pl-10 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
                 value={searchTerm}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
-          <Select value={selectedDept} onValueChange={setSelectedDept}>
-            <SelectTrigger className="w-48 bg-secondary border-border text-foreground">
-              <SelectValue placeholder="Filter by department" />
-            </SelectTrigger>
-            <SelectContent className="bg-secondary border-border">
-              <SelectItem value="all">All Departments</SelectItem>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-48 bg-secondary border-border text-foreground">
-              <SelectValue placeholder="Filter by branch" />
-            </SelectTrigger>
-            <SelectContent className="bg-secondary border-border">
-              <SelectItem value="all">All Branches</SelectItem>
-              {branches.map(branch => (
-                <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-3 w-full sm:w-auto">
+            <Select value={selectedDept} onValueChange={setSelectedDept}>
+              <SelectTrigger className="flex-1 sm:w-48 bg-secondary border-border text-foreground">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent className="bg-secondary border-border">
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments.map(dept => (
+                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="flex-1 sm:w-48 bg-secondary border-border text-foreground">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent className="bg-secondary border-border">
+                <SelectItem value="all">All Branches</SelectItem>
+                {branches.map(branch => (
+                  <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </Card>
 
@@ -280,22 +356,22 @@ export default function EmployeesPage() {
           </table>
         </div>
         {/* Pagination */}
-        <div className="px-6 py-4 bg-secondary/20 border-t border-border flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="px-4 sm:px-6 py-4 bg-secondary/20 border-t border-border flex items-center justify-between">
+          <span className="text-xs sm:text-sm text-muted-foreground">
             Page {currentPage} of {totalPages || 1}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="h-8 px-3 border-border text-foreground hover:bg-secondary disabled:opacity-50"
+              className="h-8 px-2 sm:px-3 border-border text-foreground hover:bg-secondary disabled:opacity-50"
             >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Previous
+              <ChevronLeft className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Previous</span>
             </Button>
-            <div className="flex gap-1">
+            <div className="hidden sm:flex gap-1">
               {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(page => (
                 <Button
                   key={page}
@@ -308,15 +384,16 @@ export default function EmployeesPage() {
                 </Button>
               ))}
             </div>
+            <span className="sm:hidden text-xs text-muted-foreground px-2">{currentPage}/{totalPages || 1}</span>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages || totalPages === 0}
-              className="h-8 px-3 border-border text-foreground hover:bg-secondary disabled:opacity-50"
+              className="h-8 px-2 sm:px-3 border-border text-foreground hover:bg-secondary disabled:opacity-50"
             >
-              Next
-              <ChevronRight className="w-4 h-4 ml-1" />
+              <span className="hidden sm:inline mr-1">Next</span>
+              <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
