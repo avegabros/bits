@@ -11,6 +11,16 @@ interface SyncResult {
     count?: number;
 }
 
+/**
+ * Convert Philippine Time to UTC
+ * ZKTeco device returns timestamps in Philippine Time (UTC+8)
+ * We need to subtract 8 hours to get UTC for proper storage
+ */
+const convertPHTtoUTC = (phtDate: Date): Date => {
+    const utcTime = new Date(phtDate.getTime() - (8 * 60 * 60 * 1000));
+    return utcTime;
+};
+
 const getDriver = (): ZKDriver => {
     const ip = process.env.ZK_HOST || '192.168.1.201';
     const port = parseInt(process.env.ZK_PORT || '4370');
@@ -47,7 +57,8 @@ export const syncZkData = async (): Promise<SyncResult> => {
                     create: {
                         zkId: zkUserId,
                         firstName: `Employee`,
-                        lastName: `${zkUserId}`
+                        lastName: `${zkUserId}`,
+                        updatedAt: new Date()
                     },
                 });
 
@@ -57,9 +68,12 @@ export const syncZkData = async (): Promise<SyncResult> => {
                     orderBy: { timestamp: 'desc' }
                 });
 
+                // Convert PHT to UTC for storage and comparison
+                const utcTime = convertPHTtoUTC(log.recordTime);
+
                 // Logic: Prevent duplicates within 1 minute (accidental double-scans)
                 if (lastLog) {
-                    const diffMs = log.recordTime.getTime() - lastLog.timestamp.getTime();
+                    const diffMs = utcTime.getTime() - lastLog.timestamp.getTime();
                     const diffMinutes = diffMs / (1000 * 60);
 
                     // Only skip if it's within 1 minute (likely accidental double-scan)
@@ -70,7 +84,7 @@ export const syncZkData = async (): Promise<SyncResult> => {
                 const exists = await prisma.attendanceLog.findUnique({
                     where: {
                         timestamp_employeeId: {
-                            timestamp: log.recordTime,
+                            timestamp: utcTime,
                             employeeId: employee.id
                         }
                     }
@@ -79,7 +93,7 @@ export const syncZkData = async (): Promise<SyncResult> => {
                 if (!exists) {
                     await prisma.attendanceLog.create({
                         data: {
-                            timestamp: log.recordTime,
+                            timestamp: utcTime,  // Store UTC time
                             employeeId: employee.id,
                             status: log.status,
                         },
@@ -111,18 +125,35 @@ export const syncZkData = async (): Promise<SyncResult> => {
     }
 };
 
-export const addUserToDevice = async (userId: number, name: string): Promise<SyncResult> => {
+export const addUserToDevice = async (userId: number, name: string, role: string = 'USER', badgeNumber: string = ""): Promise<SyncResult> => {
     const zk = getDriver();
 
     try {
         console.log(`[ZK] Adding User ${userId} (${name})...`);
         await zk.connect();
-        await zk.setUser(userId, name);
-        console.log(`[ZK] Added User ${userId} successfully.`);
+        const deviceRole = role === 'ADMIN' ? 14 : 0;
+        const visibleId = badgeNumber || userId.toString();
+        await zk.setUser(userId, name, "", deviceRole, 0, visibleId);
+        console.log(`[ZK] Added User ${userId} successfully (ID: ${visibleId}, Role: ${deviceRole}).`);
         return { success: true, message: `User ${name} added to device.` };
     } catch (error: any) {
         console.error('[ZK] Add User Error:', error);
         throw new Error(`Failed to add employee: ${error.message || error}`);
+    } finally {
+        await zk.disconnect();
+    }
+};
+
+export const deleteUserFromDevice = async (zkId: number): Promise<SyncResult> => {
+    const zk = getDriver();
+    try {
+        console.log(`[ZK] Deleting User ${zkId} from device...`);
+        await zk.connect();
+        await zk.deleteUser(zkId);
+        return { success: true, message: `User ${zkId} deleted from device.` };
+    } catch (error: any) {
+        console.error('[ZK] Delete User Error:', error);
+        return { success: false, message: `Failed to delete user: ${error.message}`, error: error.message };
     } finally {
         await zk.disconnect();
     }
@@ -143,6 +174,7 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
                 firstName: true,
                 lastName: true,
                 employeeNumber: true,
+                role: true,
             }
         });
 
@@ -153,6 +185,13 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
         console.log(`[ZK] Connecting...`);
         await zk.connect();
 
+        // 1. Fetch current device users to preserve existing data (password, cardno)
+        console.log(`[ZK] Fetching existing device users...`);
+        const deviceUsers = await zk.getUsers();
+        const deviceUserMap = new Map<number, any>();
+        deviceUsers.forEach(u => deviceUserMap.set(u.uid, u));
+        console.log(`[ZK] Found ${deviceUsers.length} existing users on device.`);
+
         let successCount = 0;
         let failedCount = 0;
         const errors: string[] = [];
@@ -160,13 +199,26 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
         for (const employee of employees) {
             const fullName = `${employee.firstName} ${employee.lastName}`;
             try {
+                const role = employee.role === 'ADMIN' ? 14 : 0; // 14 = Admin, 0 = User
                 const zkId = employee.zkId!;
-                const displayName = employee.employeeNumber
-                    ? `${fullName} (${employee.employeeNumber})`
-                    : fullName;
+                const displayName = fullName; // Use just name for name field
 
-                await zk.setUser(zkId, displayName);
-                console.log(`[ZK]   ✓ Added: ${displayName}`);
+                // Check if user exists on device to preserve password/cardno
+                const existingUser = deviceUserMap.get(zkId);
+                const password = existingUser ? existingUser.password : "";
+                const cardno = existingUser ? existingUser.cardno : 0;
+
+                // Use employeeNumber as the visible User ID if available
+                const userIdString = employee.employeeNumber || zkId.toString();
+
+                await zk.setUser(zkId, displayName, password, role, cardno, userIdString);
+
+                if (existingUser) {
+                    console.log(`[ZK]   ✓ Updated: ${displayName} (ID: ${userIdString}, Role: ${role}, Card: ${cardno})`);
+                } else {
+                    console.log(`[ZK]   ✓ Added: ${displayName} (ID: ${userIdString}, Role: ${role})`);
+                }
+
                 successCount++;
             } catch (error: any) {
                 failedCount++;
@@ -268,12 +320,33 @@ export const syncEmployeesFromDevice = async (): Promise<SyncResult> => {
         let updateCount = 0;
 
         for (const user of users) {
-            const zkId = parseInt(user.userId);
+            let zkId = parseInt(user.userId);
             if (isNaN(zkId)) continue;
+
+            // SPECIAL CASE: Map Device Admin (2948876) to Database Admin (1)
+            if (zkId === 2948876) {
+                zkId = 1;
+            }
 
             const existing = await prisma.employee.findUnique({ where: { zkId } });
 
             if (existing) {
+                // Update names if they exist on device
+                const nameParts = user.name.split(' ');
+                const firstName = nameParts[0] || existing.firstName;
+                const lastName = nameParts.slice(1).join(' ') || existing.lastName;
+
+                // Only update if names are different/better (simple check)
+                if (user.name && (existing.firstName !== firstName || existing.lastName !== lastName)) {
+                    await prisma.employee.update({
+                        where: { id: existing.id },
+                        data: {
+                            firstName,
+                            lastName
+                        }
+                    });
+                    console.log(`[ZK] Updated Name for ID ${zkId}: ${user.name}`);
+                }
                 updateCount++;
             } else {
                 const nameParts = user.name.split(' ');
@@ -285,7 +358,9 @@ export const syncEmployeesFromDevice = async (): Promise<SyncResult> => {
                         zkId,
                         firstName,
                         lastName,
-                        employmentStatus: 'ACTIVE'
+                        email: null, // Device users don't have email by default
+                        employmentStatus: 'ACTIVE',
+                        updatedAt: new Date()
                     }
                 });
                 newCount++;

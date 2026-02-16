@@ -119,6 +119,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             success: true,
             message: 'Login successful',
             accessToken,
+            token: accessToken, // Alias for frontend compatibility
             refreshToken,
             employee: {
                 id: employee.id,

@@ -134,7 +134,7 @@ export class ZKDriver {
     /**
      * Set a user on the device
      */
-    async setUser(zkId: number, name: string, password: string = "", role: number = 0, cardno: number = 0): Promise<void> {
+    async setUser(zkId: number, name: string, password: string = "", role: number = 0, cardno: number = 0, userId: string = ""): Promise<void> {
         if (!this.zkInstance) throw new Error('Not connected');
 
         // Manual implementation since node-zklib v1.x lacks setUser
@@ -162,13 +162,38 @@ export class ZKDriver {
 
         // 6. User ID (String, 9 bytes) - The visible ID on screen
         // Offset 48 based on utils.js (decodeUserData72)
-        buf.write(zkId.toString(), 48, 9, 'ascii');
+        const visibleId = userId || zkId.toString();
+        buf.write(visibleId, 48, 9, 'ascii');
 
         // Send command
         try {
             await this.zkInstance.executeCmd(COMMANDS.CMD_USER_WRQ, buf);
         } catch (error: any) {
             throw new Error(`Failed to set user: ${error.message || error}`);
+        }
+    }
+
+    /**
+     * Delete a user from the device
+     */
+    async deleteUser(uid: number): Promise<void> {
+        if (!this.zkInstance) throw new Error('Not connected');
+
+        const { COMMANDS } = require('node-zklib/constants');
+
+        // CMD_DELETE_USER = 18
+        // Packet: 2 bytes (UID in little endian)
+        const buf = Buffer.alloc(2);
+        buf.writeUInt16LE(uid, 0);
+
+        console.log(`[ZKDriver] Deleting user UID: ${uid}...`);
+
+        try {
+            await this.zkInstance.executeCmd(COMMANDS.CMD_DELETE_USER, buf);
+            console.log(`[ZKDriver] User ${uid} deleted.`);
+        } catch (error: any) {
+            // If user doesn't exist, it might throw error, we can ignore or rethrow
+            throw new Error(`Failed to delete user: ${error.message || error}`);
         }
     }
 

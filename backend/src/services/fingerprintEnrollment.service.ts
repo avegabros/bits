@@ -188,7 +188,7 @@ export async function enrollFingerprint(
 
         return {
             success: true,
-            message: `Fingerprint enrolled successfully for user ${employeeId}`,
+            message: `Enrollment started on device for user ${employeeId}. Please press finger 3 times.`,
             employee_id: employeeId,
             finger_index: fingerIndex
         };

@@ -34,7 +34,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
         // Get all logs ordered by timestamp
         const logs = await prisma.attendanceLog.findMany({
             orderBy: { timestamp: 'asc' },
-            include: { employee: true }
+            include: { Employee: true }
         });
 
         let created = 0;
@@ -155,6 +155,90 @@ export const autoCloseIncompleteAttendance = async (): Promise<number> => {
 };
 
 /**
+ * Auto-checkout employees who haven't manually checked out
+ * Runs at 11:59 PM and sets checkout time to 5:00 PM for flexibility
+ * This allows employees to work overtime while preventing unrealistic work hours for forgotten checkouts
+ */
+export const autoCheckoutEmployees = async (): Promise<number> => {
+    try {
+        // Get today's date at midnight (UTC)
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+
+        // Create checkout time at 5:00 PM Philippine Time
+        // 5 PM PHT = 9 AM UTC (5 - 8 = -3, then + 12 = 9)
+        const autoCheckoutTime = new Date(today);
+        autoCheckoutTime.setUTCHours(9, 0, 0, 0);  // 9 AM UTC = 5 PM PHT
+
+        // Find all records for TODAY that still don't have a checkout time
+        const result = await prisma.attendance.updateMany({
+            where: {
+                date: today,
+                checkOutTime: null
+            },
+            data: {
+                checkOutTime: autoCheckoutTime,
+                notes: 'Auto checkout - No manual checkout detected by 11:59 PM',
+                updatedAt: new Date()
+            }
+        });
+
+        console.log(`[Attendance] Auto-checkout completed: ${result.count} employees checked out at 5:00 PM`);
+        return result.count;
+    } catch (error: any) {
+        console.error('[Attendance] Error during auto-checkout:', error);
+        return 0;
+    }
+};
+
+/**
+ * Startup Repair: Fix any missing checkouts from previous days
+ * This ensures that if the server was off at 11:59 PM, the records are fixed on next startup
+ */
+export const repairMissingCheckouts = async (): Promise<number> => {
+    try {
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+
+        // Find all records from dates BEFORE today that have no checkout time
+        const records = await prisma.attendance.findMany({
+            where: {
+                date: { lt: today },
+                checkOutTime: null
+            }
+        });
+
+        if (records.length === 0) return 0;
+
+        let repairedCount = 0;
+        for (const record of records) {
+            // Set checkout time to 5:00 PM PHT (9:00 AM UTC) for that specific date
+            const repairTime = new Date(record.date);
+            repairTime.setUTCHours(9, 0, 0, 0);
+
+            await prisma.attendance.update({
+                where: { id: record.id },
+                data: {
+                    checkOutTime: repairTime,
+                    status: 'present', // Assume present if they checked in but forgot to check out
+                    notes: record.notes
+                        ? `${record.notes} | Auto-checkout set to 5:00 PM (Forgotten checkout)`
+                        : 'Auto-checkout set to 5:00 PM (Forgotten checkout)',
+                    updatedAt: new Date()
+                }
+            });
+            repairedCount++;
+        }
+
+        console.log(`[Attendance] Startup Repair: Fixed ${repairedCount} missing checkouts from previous days`);
+        return repairedCount;
+    } catch (error: any) {
+        console.error('[Attendance] Error during startup repair:', error);
+        return 0;
+    }
+};
+
+/**
  * Get attendance records with filters
  */
 export const getAttendanceRecords = async (filters: AttendanceFilters = {}) => {
@@ -177,7 +261,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}) => {
     const records = await prisma.attendance.findMany({
         where,
         include: {
-            employee: {
+            Employee: {
                 select: {
                     id: true,
                     firstName: true,
@@ -192,8 +276,9 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}) => {
     });
 
     // Add Philippine Time formatted strings for easier reading
-    return records.map((record) => ({
+    return records.map((record: any) => ({
         ...record,
+        employee: record.Employee, // Map upper-case relation to lower-case property for frontend
         checkInTimePH: formatToPhilippineTime(record.checkInTime),
         checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null
     }));

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { syncEmployeesToDevice, enrollEmployeeFingerprint, addUserToDevice } from '../services/zkServices';
+import { syncEmployeesToDevice, enrollEmployeeFingerprint, addUserToDevice, deleteUserFromDevice } from '../services/zkServices';
 
 // GET /api/employees - Get all employees
 export const getAllEmployees = async (req: Request, res: Response) => {
@@ -8,6 +8,7 @@ export const getAllEmployees = async (req: Request, res: Response) => {
         const employees = await prisma.employee.findMany({
             select: {
                 id: true,
+                zkId: true,
                 employeeNumber: true,
                 firstName: true,
                 lastName: true,
@@ -21,14 +22,29 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 employmentStatus: true,
                 createdAt: true,
             },
+            // Order by ID initially to keep consistent secondary sorting
             orderBy: {
-                createdAt: 'desc',
+                id: 'asc',
             },
+        });
+
+        // Define role priority weights (Lower number = Higher priority)
+        const roleWeights: { [key: string]: number } = {
+            'ADMIN': 1,
+            'HR': 2,
+            'USER': 3
+        };
+
+        // Sort employees based on role weight
+        const sortedEmployees = employees.sort((a, b) => {
+            const weightA = roleWeights[a.role] || 99; // Default to high number if unknown
+            const weightB = roleWeights[b.role] || 99;
+            return weightA - weightB;
         });
 
         res.json({
             success: true,
-            employees,
+            employees: sortedEmployees,
         });
     } catch (error) {
         console.error('Error fetching employees:', error);
@@ -84,7 +100,7 @@ export const deleteEmployee = async (req: Request, res: Response) => {
         // Check if employee exists
         const employee = await prisma.employee.findUnique({
             where: { id: employeeId },
-            select: { id: true, firstName: true, lastName: true, employmentStatus: true },
+            select: { id: true, firstName: true, lastName: true, employmentStatus: true, zkId: true },
         });
 
         if (!employee) {
@@ -92,6 +108,16 @@ export const deleteEmployee = async (req: Request, res: Response) => {
                 success: false,
                 message: 'Employee not found',
             });
+        }
+
+        // Delete from ZK Device if zkId exists
+        if (employee.zkId) {
+            try {
+                await deleteUserFromDevice(employee.zkId);
+            } catch (err) {
+                console.error(`[API] Failed to delete user ${employee.zkId} from device:`, err);
+                // Continue with soft delete even if device delete fails
+            }
         }
 
         // Soft delete: Mark as INACTIVE instead of actually deleting
@@ -279,6 +305,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 hireDate: hireDate ? new Date(hireDate) : undefined,
                 employmentStatus: employmentStatus || 'ACTIVE',
                 zkId: nextZkId,
+                updatedAt: new Date()
             },
             select: {
                 id: true,
@@ -308,7 +335,8 @@ export const createEmployee = async (req: Request, res: Response) => {
                 // Use zkId for both userId and user_id(uid) on device
                 // Concatenate firstName and lastName for device
                 const displayName = `${newEmployee.firstName} ${newEmployee.lastName}`;
-                await addUserToDevice(newEmployee.zkId, displayName);
+                const badgeNumber = newEmployee.employeeNumber || "";
+                await addUserToDevice(newEmployee.zkId, displayName, newEmployee.role, badgeNumber);
                 deviceSyncResult = { success: true, message: 'Synced to device' };
             }
         } catch (syncError: any) {

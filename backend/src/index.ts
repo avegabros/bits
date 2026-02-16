@@ -9,6 +9,7 @@ import attendanceRoutes from './routes/attendance_routes';
 import authRoutes from './routes/auth_routes';
 import employeeRoutes from './routes/employee_routes';
 import { startCronJobs } from './lib/cronJobs';
+import { repairMissingCheckouts } from './services/attendance.service';
 
 dotenv.config();
 
@@ -81,6 +82,9 @@ process.on('uncaughtException', (error) => {
 
 app.listen(port, () => {
   console.log(`Backend server running on port ${port}`);
+
+  // Run startup repair for missing checkouts
+  repairMissingCheckouts();
 
   // Initialize automated cron jobs
   startCronJobs();
