@@ -42,7 +42,7 @@ export default function HRDashboard() {
 
   return (
     <div className="relative space-y-8">
-      {/* 1. KPI CARDS SECTION */}
+     
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -58,7 +58,7 @@ export default function HRDashboard() {
         ))}
       </div>
 
-      {/* 2. ATTENDANCE MANAGEMENT TABLE */}
+      
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 bg-slate-50 border-b border-slate-200">
           <div className="flex items-center justify-between mb-6">
@@ -67,12 +67,7 @@ export default function HRDashboard() {
               <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest">Attendance Management</h3>
             </div>
             
-            <button 
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-red-600 hover:border-red-200 transition-all shadow-sm"
-            >
-              <Download size={14} />
-              Generate Report
-            </button>
+            
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -146,7 +141,7 @@ export default function HRDashboard() {
         </div>
       </div>
 
-      {/* MANUAL CORRECTION MODAL */}
+      
       {editingLog && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">

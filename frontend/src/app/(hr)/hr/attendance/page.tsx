@@ -24,7 +24,7 @@ export default function AttendancePage() {
   const [showSuccessToast, setShowSuccessToast] = useState(false); // State for Toast
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  // Toast Auto-hide logic
+  
   useEffect(() => {
     if (showSuccessToast) {
       const timer = setTimeout(() => setShowSuccessToast(false), 3000);
@@ -50,7 +50,7 @@ export default function AttendancePage() {
   return (
     <div className="space-y-6 relative">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Attendance Logs</h1>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Attendance Logs</h1>
         
         <div className="flex gap-2 relative">
           <input 
@@ -80,7 +80,7 @@ export default function AttendancePage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search by name or ID..." 
+            placeholder="Search employees..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 outline-none" 
@@ -153,7 +153,7 @@ export default function AttendancePage() {
         </table>
       </div>
 
-      {/* MATCHED MODAL FROM DASHBOARD */}
+      
       {editingLog && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -208,7 +208,7 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* ALERT CHUCHU */}
+      
       {showSuccessToast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-500 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="bg-emerald-500 p-1 rounded-full">
