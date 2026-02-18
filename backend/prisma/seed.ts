@@ -56,7 +56,7 @@ async function main() {
             email: 'john@bits.com',
             firstName: 'John',
             lastName: 'Doe',
-            role: 'EMPLOYEE',
+            role: 'USER',
             department: 'Engineering',
             position: 'Senior Developer',
             preferredZkId: 3
@@ -65,7 +65,7 @@ async function main() {
             email: 'jane@bits.com',
             firstName: 'Jane',
             lastName: 'Smith',
-            role: 'EMPLOYEE',
+            role: 'USER',
             department: 'Design',
             position: 'UI Designer',
             preferredZkId: 4
@@ -74,7 +74,7 @@ async function main() {
             email: 'alex@bits.com',
             firstName: 'Alex',
             lastName: 'Rivera',
-            role: 'EMPLOYEE',
+            role: 'USER',
             department: 'Marketing',
             position: 'Marketing Lead',
             preferredZkId: 5
