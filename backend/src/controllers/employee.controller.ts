@@ -22,29 +22,15 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 employmentStatus: true,
                 createdAt: true,
             },
-            // Order by ID initially to keep consistent secondary sorting
+            // Order by ZK ID ascending
             orderBy: {
-                id: 'asc',
+                zkId: 'asc',
             },
-        });
-
-        // Define role priority weights (Lower number = Higher priority)
-        const roleWeights: { [key: string]: number } = {
-            'ADMIN': 1,
-            'HR': 2,
-            'USER': 3
-        };
-
-        // Sort employees based on role weight
-        const sortedEmployees = employees.sort((a, b) => {
-            const weightA = roleWeights[a.role] || 99; // Default to high number if unknown
-            const weightB = roleWeights[b.role] || 99;
-            return weightA - weightB;
         });
 
         res.json({
             success: true,
-            employees: sortedEmployees,
+            employees: employees,
         });
     } catch (error) {
         console.error('Error fetching employees:', error);

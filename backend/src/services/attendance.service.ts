@@ -34,7 +34,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
         // Get all logs ordered by timestamp
         const logs = await prisma.attendanceLog.findMany({
             orderBy: { timestamp: 'asc' },
-            include: { Employee: true }
+            include: { employee: true }
         });
 
         let created = 0;
@@ -241,7 +241,7 @@ export const repairMissingCheckouts = async (): Promise<number> => {
 /**
  * Get attendance records with filters
  */
-export const getAttendanceRecords = async (filters: AttendanceFilters = {}) => {
+export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page: number = 1, limit: number = 10000) => {
     const where: any = {};
 
     if (filters.startDate || filters.endDate) {
@@ -258,38 +258,40 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}) => {
         where.status = filters.status;
     }
 
-    const records = await prisma.attendance.findMany({
-        where,
-        include: {
-            Employee: {
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    employeeNumber: true,
-                    department: true,
-                    position: true
-                }
-            }
-        },
-        orderBy: { date: 'desc' }
-    });
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    const [total, records] = await Promise.all([
+        prisma.attendance.count({ where }),
+        prisma.attendance.findMany({
+            where,
+            include: {
+                employee: true
+            },
+            orderBy: { date: 'desc' },
+            skip,
+            take: limit
+        })
+    ]);
 
     // Add Philippine Time formatted strings for easier reading
-    return records.map((record: any) => ({
+    const data = records.map((record: any) => ({
         ...record,
-        employee: record.Employee, // Map upper-case relation to lower-case property for frontend
+        // employee relation is already included as 'employee'
         checkInTimePH: formatToPhilippineTime(record.checkInTime),
         checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null
     }));
+
+    return { data, total };
 };
 
 /**
  * Helper: Convert UTC date to Philippine Time string
  */
 const formatToPhilippineTime = (utcDate: Date): string => {
-    const phDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    return phDate.toLocaleString('en-PH', {
+    // Just use toLocaleString with timeZone option. 
+    // The input utcDate is already a valid Date object (UTC).
+    return utcDate.toLocaleString('en-US', {
         timeZone: 'Asia/Manila',
         year: 'numeric',
         month: '2-digit',
@@ -308,10 +310,11 @@ export const getTodayAttendance = async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    return await getAttendanceRecords({
+    const result = await getAttendanceRecords({
         startDate: today,
         endDate: today
     });
+    return result.data;
 };
 
 /**
@@ -322,9 +325,10 @@ export const getEmployeeAttendanceHistory = async (
     startDate?: Date,
     endDate?: Date
 ) => {
-    return await getAttendanceRecords({
+    const result = await getAttendanceRecords({
         employeeId,
         startDate,
         endDate
     });
+    return result.data;
 };

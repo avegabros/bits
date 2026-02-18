@@ -17,7 +17,7 @@ model Attendance {
   notes        String?
   createdAt    DateTime  @default(now())
   updatedAt DateTime   @updatedAt
-  Employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@index([date])
@@ -33,7 +33,7 @@ model AttendanceLog {
   deviceId   Int?
   createdAt  DateTime @default(now())
   Device     Device?  @relation(fields: [deviceId], references: [id])
-  Employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([timestamp, employeeId])
   @@index([deviceId])

@@ -46,6 +46,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
                 employeeNumber: employeeNumber || null,
                 branch: branch || null,
                 hireDate: hireDate ? new Date(hireDate) : null,
+                updatedAt: new Date(),
             }
         });
 

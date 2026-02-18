@@ -12,7 +12,7 @@ interface AdminTopbarProps {
 
 export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarProps) {
   const router = useRouter()
-  const [time, setTime] = useState(new Date())
+  const [time, setTime] = useState<Date | null>(null)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -29,6 +29,7 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
       setUserName('Admin')
     }
 
+    setTime(new Date())
     const timer = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
@@ -91,7 +92,7 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
         {/* System Time */}
         <div className="hidden sm:block text-right border-l pl-6 border-gray-200">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">System Time</p>
-          <p className="text-sm font-black text-gray-700 font-mono tracking-tighter">{time.toLocaleTimeString()}</p>
+          <p className="text-sm font-black text-gray-700 font-mono tracking-tighter">{time ? time.toLocaleTimeString() : '\u00A0'}</p>
         </div>
 
         {/* Profile Dropdown */}
@@ -124,9 +125,9 @@ export function AdminTopbar({ onMenuClick, isCollapsed = false }: AdminTopbarPro
                 <p className="text-sm font-black text-gray-800 tracking-tight">{userName || 'Admin'}</p>
               </div>
               <div className="p-1">
-                <a href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors">
+                <button onClick={() => { setIsProfileOpen(false); router.push('/settings') }} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors text-left">
                   <Settings size={16} /> Account Settings
-                </a>
+                </button>
               </div>
               <div className="p-1 border-t border-gray-50 mt-1">
                 <button

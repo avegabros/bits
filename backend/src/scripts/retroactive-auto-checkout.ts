@@ -36,7 +36,7 @@ async function retroactiveAutoCheckout() {
                         }
                     },
                     include: {
-                        employee: {
+                        Employee: {
                             select: {
                                 firstName: true,
                                 lastName: true,
@@ -47,7 +47,7 @@ async function retroactiveAutoCheckout() {
                 });
 
                 if (record) {
-                    console.log(`Employee ${empId} (${record.employee.firstName} ${record.employee.lastName}):`);
+                    console.log(`Employee ${empId} (${record.Employee.firstName} ${record.Employee.lastName}):`);
                     console.log(`  Check-in:  ${record.checkInTime}`);
                     console.log(`  Check-out: ${record.checkOutTime || 'NOT SET ❌'}`);
                     console.log(`  Status:    ${record.status}`);
@@ -109,7 +109,7 @@ async function retroactiveAutoCheckout() {
                         }
                     },
                     include: {
-                        employee: {
+                        Employee: {
                             select: {
                                 firstName: true,
                                 lastName: true,
@@ -120,7 +120,7 @@ async function retroactiveAutoCheckout() {
                 });
 
                 if (record) {
-                    console.log(`Employee ${empId} (${record.employee.firstName} ${record.employee.lastName}):`);
+                    console.log(`Employee ${empId} (${record.Employee.firstName} ${record.Employee.lastName}):`);
                     console.log(`  Check-in:  ${record.checkInTime}`);
                     console.log(`  Check-out: ${record.checkOutTime} ✅`);
                     console.log(`  Status:    ${record.status}`);

@@ -5,6 +5,7 @@ import {
     getTodayAttendance,
     getEmployeeAttendanceHistory
 } from '../services/attendance.service';
+import { prisma } from '../lib/prisma';
 
 
 export const syncAttendance = async (req: Request, res: Response) => {
@@ -51,25 +52,40 @@ export const addUser = async (req: Request, res: Response) => {
  */
 export const getAttendance = async (req: Request, res: Response) => {
     try {
-        const { startDate, endDate, employeeId, status } = req.query;
+        const { startDate, endDate, employeeId, status, page = 1, limit = 10 } = req.query;
 
         const filters: any = {};
 
         if (startDate) filters.startDate = new Date(String(startDate));
-        if (endDate) filters.endDate = new Date(String(endDate));
+
+        if (endDate) {
+            const end = new Date(String(endDate));
+            end.setHours(23, 59, 59, 999);
+            filters.endDate = end;
+        }
         if (employeeId) filters.employeeId = parseInt(String(employeeId));
         if (status) filters.status = String(status);
 
-        const records = await getAttendanceRecords(filters);
+        const pageNum = parseInt(String(page));
+        const limitNum = parseInt(String(limit));
+
+        const { data, total } = await getAttendanceRecords(filters, pageNum, limitNum);
 
         res.json({
             success: true,
-            count: records.length,
-            data: records
+            data,
+            meta: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
         });
     } catch (error: any) {
+        console.error('Get Attendance Failed:', error);
         res.status(500).json({
             success: false,
+            message: error.message || 'Failed to fetch attendance records',
             error: error.message
         });
     }

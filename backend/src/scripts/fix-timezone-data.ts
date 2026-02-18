@@ -96,7 +96,7 @@ async function fixTimezoneData() {
             take: 3,
             orderBy: { timestamp: 'desc' },
             include: {
-                employee: {
+                Employee: {
                     select: {
                         firstName: true,
                         lastName: true
@@ -107,7 +107,7 @@ async function fixTimezoneData() {
 
         console.log('Latest 3 AttendanceLogs:');
         sampleLogs.forEach((log, idx) => {
-            console.log(`${idx + 1}. ${log.employee.firstName} ${log.employee.lastName}`);
+            console.log(`Processing log: ${log.timestamp.toISOString()} - ${log.Employee.firstName} ${log.Employee.lastName}`);
             console.log(`   Timestamp (UTC): ${log.timestamp.toISOString()}`);
             console.log(`   Will display as: ${new Date(log.timestamp.getTime() + (8 * 60 * 60 * 1000)).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}\n`);
         });
@@ -116,7 +116,7 @@ async function fixTimezoneData() {
             take: 3,
             orderBy: { date: 'desc' },
             include: {
-                employee: {
+                Employee: {
                     select: {
                         firstName: true,
                         lastName: true
@@ -127,7 +127,7 @@ async function fixTimezoneData() {
 
         console.log('Latest 3 Attendance Records:');
         sampleAttendances.forEach((att, idx) => {
-            console.log(`${idx + 1}. ${att.employee.firstName} ${att.employee.lastName}`);
+            console.log(`${idx + 1}. ${att.Employee.firstName} ${att.Employee.lastName}`);
             console.log(`   Date: ${att.date.toISOString().split('T')[0]}`);
             console.log(`   Check-in (UTC): ${att.checkInTime.toISOString()}`);
             console.log(`   Check-out (UTC): ${att.checkOutTime ? att.checkOutTime.toISOString() : 'NULL'}`);

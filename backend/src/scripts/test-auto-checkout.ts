@@ -23,7 +23,7 @@ async function testAutoCheckout() {
                 checkOutTime: null
             },
             include: {
-                employee: {
+                Employee: {
                     select: {
                         firstName: true,
                         lastName: true,
@@ -35,7 +35,7 @@ async function testAutoCheckout() {
 
         console.log(`Found ${incompleteRecords.length} employees without checkout:\n`);
         incompleteRecords.forEach((record, index) => {
-            console.log(`${index + 1}. ${record.employee.firstName} ${record.employee.lastName} (${record.employee.employeeNumber})`);
+            console.log(`${index + 1}. ${record.Employee.firstName} ${record.Employee.lastName} (${record.Employee.employeeNumber})`);
             console.log(`   Check-in: ${record.checkInTime}`);
             console.log(`   Check-out: ${record.checkOutTime || 'NOT SET'}`);
             console.log(`   Notes: ${record.notes || 'None'}\n`);
@@ -67,7 +67,7 @@ async function testAutoCheckout() {
                 }
             },
             include: {
-                employee: {
+                Employee: {
                     select: {
                         firstName: true,
                         lastName: true,
@@ -79,7 +79,7 @@ async function testAutoCheckout() {
 
         console.log(`Found ${updatedRecords.length} auto-checked-out records:\n`);
         updatedRecords.forEach((record, index) => {
-            console.log(`${index + 1}. ${record.employee.firstName} ${record.employee.lastName} (${record.employee.employeeNumber})`);
+            console.log(`${index + 1}. ${record.Employee.firstName} ${record.Employee.lastName} (${record.Employee.employeeNumber})`);
             console.log(`   Check-in: ${record.checkInTime}`);
             console.log(`   Check-out: ${record.checkOutTime}`);
             console.log(`   Notes: ${record.notes}\n`);
