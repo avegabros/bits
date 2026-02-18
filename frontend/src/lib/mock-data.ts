@@ -1,94 +1,153 @@
-// mock-data.ts — Provides placeholder/mock data for frontend pages that haven't
-// been wired to real API endpoints yet. This file exists so the frontend builds
-// cleanly while we progressively replace mock data with real backend calls.
+// ─── Shared Mock Data ────────────────────────────────────────────
+// Single source of truth for employees, attendance, branches, and departments.
+// All admin pages import from here so numbers stay consistent.
 
-// ─── Shared constants ────────────────────────────────────────────────
-export const branches = ['MAIN OFFICE', 'CEBU BRANCH', 'MAKATI BRANCH']
-export const departments = ['Engineering', 'Design', 'HR', 'Finance', 'Marketing', 'Operations']
+export const branches = ['MAIN OFFICE', 'CEBU BRANCH', 'MAKATI BRANCH'] as const
+export const departments = ['Engineering', 'Design', 'HR', 'Finance', 'Marketing', 'Operations'] as const
 
-// ─── Employee type & data ────────────────────────────────────────────
-export type Employee = {
-    id: number
-    name: string
-    contactNumber: string
-    department: string
-    position: string
-    branch: string
-    status: 'active' | 'inactive'
-    joinDate: string
-    bio?: string
+export type Branch = (typeof branches)[number]
+export type Department = (typeof departments)[number]
+
+// ─── Employees ───────────────────────────────────────────────────
+
+export interface Employee {
+  id: number
+  name: string
+  contactNumber: string
+  department: Department
+  position: string
+  branch: Branch
+  status: 'active' | 'inactive'
+  joinDate: string
 }
 
 export const employees: Employee[] = [
-    { id: 1, name: 'John Doe', contactNumber: '+63-912-345-6789', department: 'Engineering', position: 'Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2025-01-15' },
-    { id: 2, name: 'Jane Smith', contactNumber: '+63-923-456-7890', department: 'Design', position: 'UI Designer', branch: 'CEBU BRANCH', status: 'active', joinDate: '2025-02-01' },
-    { id: 3, name: 'Mark Anthony', contactNumber: '+63-934-567-8901', department: 'HR', position: 'HR Officer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2025-01-20' },
-    { id: 4, name: 'Sarah Jenkins', contactNumber: '+63-945-678-9012', department: 'Finance', position: 'Accountant', branch: 'MAKATI BRANCH', status: 'active', joinDate: '2025-03-10' },
-    { id: 5, name: 'Alex Rivera', contactNumber: '+63-956-789-0123', department: 'Marketing', position: 'Marketing Lead', branch: 'CEBU BRANCH', status: 'active', joinDate: '2025-02-15' },
-    { id: 6, name: 'Emily Chen', contactNumber: '+63-967-890-1234', department: 'Operations', position: 'Operations Manager', branch: 'MAIN OFFICE', status: 'active', joinDate: '2025-01-05' },
+  { id: 1, name: 'John Doe', contactNumber: '+63-934-567-8901', department: 'Engineering', position: 'Senior Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2022-03-15' },
+  { id: 2, name: 'Jane Smith', contactNumber: '+63-934-567-8902', department: 'Design', position: 'UI/UX Designer', branch: 'CEBU BRANCH', status: 'active', joinDate: '2022-06-20' },
+  { id: 3, name: 'Mike Johnson', contactNumber: '+63-934-567-8903', department: 'Engineering', position: 'Frontend Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2023-01-10' },
+  { id: 4, name: 'Sarah Williams', contactNumber: '+63-934-567-8904', department: 'HR', position: 'HR Manager', branch: 'MAKATI BRANCH', status: 'active', joinDate: '2021-05-01' },
+  { id: 5, name: 'Robert Brown', contactNumber: '+63-934-567-8905', department: 'Finance', position: 'Accountant', branch: 'MAIN OFFICE', status: 'inactive', joinDate: '2022-11-15' },
+  { id: 6, name: 'Emily Davis', contactNumber: '+63-934-567-8906', department: 'Marketing', position: 'Marketing Manager', branch: 'CEBU BRANCH', status: 'active', joinDate: '2023-02-28' },
+  { id: 7, name: 'Alex Turner', contactNumber: '+63-934-567-8907', department: 'Operations', position: 'Operations Lead', branch: 'MAKATI BRANCH', status: 'active', joinDate: '2023-04-12' },
+  { id: 8, name: 'Maria Santos', contactNumber: '+63-934-567-8908', department: 'HR', position: 'HR Specialist', branch: 'CEBU BRANCH', status: 'active', joinDate: '2023-06-01' },
 ]
 
-// ─── Dashboard helpers ───────────────────────────────────────────────
+// ─── Attendance Records ──────────────────────────────────────────
+
+export interface AttendanceRecord {
+  id: number
+  employeeName: string
+  branch: Branch
+  department: Department
+  date: string
+  checkIn: string
+  checkOut: string
+  status: 'present' | 'late' | 'absent'
+  hours: number
+  overtime: number
+  undertime: number
+}
+
+export const attendanceRecords: AttendanceRecord[] = [
+  { id: 1, employeeName: 'John Doe', branch: 'MAIN OFFICE', department: 'Engineering', date: '2024-01-15', checkIn: '08:15 AM', checkOut: '05:45 PM', status: 'present', hours: 9.5, overtime: 1.5, undertime: 0 },
+  { id: 2, employeeName: 'Jane Smith', branch: 'CEBU BRANCH', department: 'Design', date: '2024-01-15', checkIn: '08:02 AM', checkOut: '05:30 PM', status: 'present', hours: 9.47, overtime: 1.47, undertime: 0 },
+  { id: 3, employeeName: 'Mike Johnson', branch: 'MAIN OFFICE', department: 'Engineering', date: '2024-01-15', checkIn: '08:42 AM', checkOut: '05:50 PM', status: 'late', hours: 9.13, overtime: 1.13, undertime: 0 },
+  { id: 4, employeeName: 'Sarah Williams', branch: 'MAKATI BRANCH', department: 'HR', date: '2024-01-15', checkIn: '-', checkOut: '-', status: 'absent', hours: 0, overtime: 0, undertime: 8 },
+  { id: 5, employeeName: 'Robert Brown', branch: 'MAIN OFFICE', department: 'Finance', date: '2024-01-15', checkIn: '08:10 AM', checkOut: '03:00 PM', status: 'present', hours: 6.83, overtime: 0, undertime: 1.17 },
+  { id: 6, employeeName: 'Emily Davis', branch: 'CEBU BRANCH', department: 'Marketing', date: '2024-01-15', checkIn: '08:20 AM', checkOut: '05:40 PM', status: 'present', hours: 9.33, overtime: 1.33, undertime: 0 },
+  { id: 7, employeeName: 'Alex Turner', branch: 'MAKATI BRANCH', department: 'Operations', date: '2024-01-15', checkIn: '07:55 AM', checkOut: '06:10 PM', status: 'present', hours: 10.25, overtime: 2.25, undertime: 0 },
+  { id: 8, employeeName: 'Maria Santos', branch: 'CEBU BRANCH', department: 'HR', date: '2024-01-15', checkIn: '09:05 AM', checkOut: '05:00 PM', status: 'late', hours: 7.92, overtime: 0, undertime: 0.08 },
+]
+
+// ─── Helper Functions ────────────────────────────────────────────
+
+/** Overall employee stats */
 export function getEmployeeStats() {
-    return {
-        total: employees.length,
-        active: employees.filter(e => e.status === 'active').length,
-        inactive: employees.filter(e => e.status === 'inactive').length,
-    }
+  const total = employees.length
+  const active = employees.filter(e => e.status === 'active').length
+  const inactive = total - active
+  const byDepartment = departments.map(dept => ({
+    department: dept,
+    count: employees.filter(e => e.department === dept).length,
+  }))
+  const byBranch = branches.map(b => ({
+    branch: b,
+    count: employees.filter(e => e.branch === b).length,
+  }))
+  return { total, active, inactive, byDepartment, byBranch }
 }
 
-export function getAttendanceStats() {
-    return {
-        totalPresent: 4,
-        totalLate: 1,
-        totalAbsent: 1,
-        totalOvertime: 2.5,
-        totalUndertime: 0.5,
-    }
+/** Attendance stats for today's records */
+export function getAttendanceStats(records: AttendanceRecord[] = attendanceRecords) {
+  const totalPresent = records.filter(r => r.status === 'present').length
+  const totalLate = records.filter(r => r.status === 'late').length
+  const totalAbsent = records.filter(r => r.status === 'absent').length
+  const working = records.filter(r => r.hours > 0)
+  const avgHours = working.length > 0
+    ? +(working.reduce((s, r) => s + r.hours, 0) / working.length).toFixed(1)
+    : 0
+  const totalOvertime = +records.reduce((s, r) => s + r.overtime, 0).toFixed(1)
+  const totalUndertime = +records.reduce((s, r) => s + r.undertime, 0).toFixed(1)
+  return { totalPresent, totalLate, totalAbsent, avgHours, totalOvertime, totalUndertime }
 }
 
+/** Department breakdown with employee count and attendance rate */
 export function getDepartmentBreakdown() {
-    return departments.map(dept => {
-        const empCount = employees.filter(e => e.department === dept).length
-        return {
-            department: dept,
-            employeeCount: empCount,
-            attendanceRate: Math.round(60 + Math.random() * 35), // 60-95%
-        }
-    })
+  return departments.map(dept => {
+    const deptEmployees = employees.filter(e => e.department === dept)
+    const deptRecords = attendanceRecords.filter(r => r.department === dept)
+    const present = deptRecords.filter(r => r.status === 'present' || r.status === 'late').length
+    const rate = deptRecords.length > 0 ? Math.round((present / deptRecords.length) * 100) : 0
+    return {
+      department: dept,
+      employeeCount: deptEmployees.length,
+      attendanceRate: rate,
+    }
+  })
 }
 
+/** Weekly trend data for charts (mock — simulates Mon–Fri) */
 export function getWeeklyTrend() {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-    return days.map(day => ({
-        day,
-        present: Math.floor(3 + Math.random() * 3),
-        late: Math.floor(Math.random() * 2),
-        absent: Math.floor(Math.random() * 2),
-    }))
+  return [
+    { day: 'Mon', present: 6, late: 1, absent: 1 },
+    { day: 'Tue', present: 7, late: 1, absent: 0 },
+    { day: 'Wed', present: 6, late: 1, absent: 1 },
+    { day: 'Thu', present: 7, late: 0, absent: 1 },
+    { day: 'Fri', present: 5, late: 2, absent: 1 },
+  ]
 }
 
+/** Recent activity entries (derived from attendance) */
 export function getRecentActivity() {
-    return [
-        { id: 1, employee: 'John Doe', department: 'Engineering', action: 'Checked In', time: '08:02 AM', status: 'on-time' },
-        { id: 2, employee: 'Jane Smith', department: 'Design', action: 'Checked In', time: '08:25 AM', status: 'late' },
-        { id: 3, employee: 'Mark Anthony', department: 'HR', action: 'Checked In', time: '07:55 AM', status: 'on-time' },
-        { id: 4, employee: 'Sarah Jenkins', department: 'Finance', action: 'Checked In', time: '08:10 AM', status: 'on-time' },
-        { id: 5, employee: 'Alex Rivera', department: 'Marketing', action: 'Absent', time: '-', status: 'absent' },
-    ]
+  return attendanceRecords.map(r => ({
+    id: r.id,
+    employee: r.employeeName,
+    action: r.status === 'absent' ? 'Absent' : r.checkOut !== '-' ? 'Checked Out' : 'Checked In',
+    time: r.status === 'absent' ? 'N/A' : r.checkIn,
+    status: r.status === 'present' ? 'on-time' : r.status,
+    department: r.department,
+  }))
 }
 
-// ─── Reports helper ──────────────────────────────────────────────────
+/** Aggregate per-employee report data for reports page */
 export function getReportData() {
-    return employees.map(emp => ({
-        id: emp.id,
-        name: emp.name,
-        department: emp.department,
-        branch: emp.branch,
-        totalDays: 22,
-        present: Math.floor(18 + Math.random() * 4),
-        late: Math.floor(Math.random() * 3),
-        absent: Math.floor(Math.random() * 3),
-        totalHours: parseFloat((160 + Math.random() * 20).toFixed(2)),
-    }))
+  return employees.map(emp => {
+    const records = attendanceRecords.filter(r => r.employeeName === emp.name)
+    const totalDays = 22 // working days in month
+    const present = records.filter(r => r.status === 'present').length
+    const late = records.filter(r => r.status === 'late').length
+    const absent = records.filter(r => r.status === 'absent').length
+    const totalHours = records.reduce((s, r) => s + r.hours, 0)
+    return {
+      id: emp.id,
+      name: emp.name,
+      department: emp.department,
+      branch: emp.branch,
+      totalDays,
+      present,
+      late,
+      absent,
+      totalHours: +totalHours.toFixed(2),
+    }
+  })
 }
