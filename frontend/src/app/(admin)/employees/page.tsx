@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,10 +12,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
-import { employees as mockEmployees, departments, branches, type Employee } from '@/lib/mock-data'
+
+// Employee type matching backend response
+type Employee = {
+  id: number
+  zkId: number | null
+  employeeNumber: string | null
+  firstName: string
+  lastName: string
+  email: string | null
+  role: string
+  department: string | null
+  position: string | null
+  branch: string | null
+  contactNumber: string | null
+  hireDate: string | null
+  employmentStatus: 'ACTIVE' | 'INACTIVE' | 'TERMINATED'
+  createdAt: string
+}
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState(mockEmployees)
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDept, setSelectedDept] = useState<string>('all')
   const [selectedBranch, setSelectedBranch] = useState<string>('all')
@@ -24,20 +42,60 @@ export default function EmployeesPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [newEmployee, setNewEmployee] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     contactNumber: '',
     department: '',
     position: '',
     branch: '',
-    bio: ''
+    email: '',
   })
 
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 10
 
+  // Derive unique departments and branches from the fetched data
+  const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean))) as string[]
+  const branches = Array.from(new Set(employees.map(e => e.branch).filter(Boolean))) as string[]
+
+  // Fetch employees from backend
+  const fetchEmployees = async () => {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/employees', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        setEmployees(data.employees)
+      } else {
+        console.error('Failed to fetch employees:', data.message)
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
+
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.contactNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase()
+    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
+      (emp.contactNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesDept = selectedDept === 'all' || emp.department === selectedDept
     const matchesBranch = selectedBranch === 'all' || emp.branch === selectedBranch
     return matchesSearch && matchesDept && matchesBranch
@@ -49,22 +107,64 @@ export default function EmployeesPage() {
     currentPage * rowsPerPage
   )
 
-  const handleAddEmployee = () => {
-    if (newEmployee.name && newEmployee.contactNumber && newEmployee.department && newEmployee.position && newEmployee.branch) {
-      const employee = {
-        id: employees.length + 1,
-        ...newEmployee,
-        status: 'active' as const,
-        joinDate: new Date().toISOString().split('T')[0]
-      } as Employee
-      setEmployees([...employees, employee])
-      setNewEmployee({ name: '', contactNumber: '', department: '', position: '', branch: '', bio: '' })
-      setIsAddOpen(false)
+  const handleAddEmployee = async () => {
+    if (newEmployee.firstName && newEmployee.lastName && newEmployee.department && newEmployee.position && newEmployee.branch) {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/employees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            firstName: newEmployee.firstName,
+            lastName: newEmployee.lastName,
+            contactNumber: newEmployee.contactNumber || undefined,
+            department: newEmployee.department,
+            position: newEmployee.position,
+            branch: newEmployee.branch,
+            email: newEmployee.email || undefined,
+          })
+        })
+
+        const data = await res.json()
+        if (data.success) {
+          // Refresh the list from backend
+          await fetchEmployees()
+          setNewEmployee({ firstName: '', lastName: '', contactNumber: '', department: '', position: '', branch: '', email: '' })
+          setIsAddOpen(false)
+        } else {
+          alert('Failed to add employee: ' + (data.message || 'Unknown error'))
+        }
+      } catch (error) {
+        console.error('Error adding employee:', error)
+        alert('Failed to add employee')
+      }
     }
   }
 
-  const deleteEmployee = (id: number) => {
-    setEmployees(employees.filter(emp => emp.id !== id))
+  const deleteEmployee = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/employees/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        // Refresh the list from backend
+        await fetchEmployees()
+      } else {
+        alert('Failed to delete employee: ' + (data.message || 'Unknown error'))
+      }
+    } catch (error) {
+      console.error('Error deleting employee:', error)
+      alert('Failed to delete employee')
+    }
   }
 
   return (
@@ -157,13 +257,34 @@ export default function EmployeesPage() {
                 <DialogTitle className="text-foreground">Register New Employee</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-foreground">First Name</Label>
+                    <Input
+                      placeholder="John"
+                      className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                      value={newEmployee.firstName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-foreground">Last Name</Label>
+                    <Input
+                      placeholder="Doe"
+                      className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                      value={newEmployee.lastName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label className="text-foreground">Full Name</Label>
+                  <Label className="text-foreground">Email</Label>
                   <Input
-                    placeholder="John Doe"
+                    type="email"
+                    placeholder="john@company.com"
                     className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    value={newEmployee.name}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                    value={newEmployee.email}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, email: e.target.value })}
                   />
                 </div>
                 <div>
@@ -178,16 +299,12 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label className="text-foreground">Department</Label>
-                  <Select value={newEmployee.department} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, department: value })}>
-                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-secondary border-border">
-                      {departments.map(dept => (
-                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder="Engineering"
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    value={newEmployee.department}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, department: e.target.value })}
+                  />
                 </div>
                 <div>
                   <Label className="text-foreground">Position</Label>
@@ -200,25 +317,11 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label className="text-foreground">Branch</Label>
-                  <Select value={newEmployee.branch} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, branch: value })}>
-                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-secondary border-border">
-                      {branches.map(branch => (
-                        <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-foreground">Bio</Label>
-                  <Textarea
-                    placeholder="Employee bio..."
+                  <Input
+                    placeholder="MAIN OFFICE"
                     className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    rows={3}
-                    value={newEmployee.bio}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEmployee({ ...newEmployee, bio: e.target.value })}
+                    value={newEmployee.branch}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
                   />
                 </div>
                 <Button onClick={handleAddEmployee} className="w-full bg-primary hover:bg-primary/90">
@@ -291,56 +394,72 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedEmployees.map((employee, index) => (
-                <tr
-                  key={employee.id}
-                  className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
-                >
-                  <td className="px-6 py-4 text-sm text-muted-foreground font-mono">#{employee.id.toString().padStart(3, '0')}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                        {employee.name.charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{employee.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{employee.contactNumber}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
-                      {employee.department}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-foreground">{employee.position}</td>
-                  <td className="px-6 py-4">
-                    <Badge className={employee.status === 'active'
-                      ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                      : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'}>
-                      <span className={`w-2 h-2 rounded-full mr-2 ${employee.status === 'active' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
-                      {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">{employee.joinDate}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 rounded-lg">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-                        onClick={() => deleteEmployee(employee.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">Loading employees...</td>
                 </tr>
-              ))}
+              ) : paginatedEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No employees found.</td>
+                </tr>
+              ) : (
+                paginatedEmployees.map((employee, index) => {
+                  const fullName = `${employee.firstName} ${employee.lastName}`
+                  const statusLower = employee.employmentStatus.toLowerCase()
+                  return (
+                    <tr
+                      key={employee.id}
+                      className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
+                    >
+                      <td className="px-6 py-4 text-sm text-muted-foreground font-mono">#{employee.id.toString().padStart(3, '0')}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                            {employee.firstName.charAt(0)}
+                          </div>
+                          <span className="text-sm font-medium text-foreground">{fullName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{employee.contactNumber || '-'}</td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
+                          {employee.department || '-'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-foreground">{employee.position || '-'}</td>
+                      <td className="px-6 py-4">
+                        <Badge className={statusLower === 'active'
+                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+                          : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'}>
+                          <span className={`w-2 h-2 rounded-full mr-2 ${statusLower === 'active' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
+                          {employee.employmentStatus.charAt(0) + employee.employmentStatus.slice(1).toLowerCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-CA') : '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 rounded-lg">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                            onClick={() => deleteEmployee(employee.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>

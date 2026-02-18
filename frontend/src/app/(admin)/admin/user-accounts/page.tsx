@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,20 +27,14 @@ interface UserAccount {
   firstName: string
   lastName: string
   email: string
-  role: 'admin' | 'hr'
+  role: string
   status: 'active' | 'inactive'
   createdAt: string
 }
 
-const mockUsers: UserAccount[] = [
-  { id: 1, firstName: 'Athena', lastName: 'Yvonnete', email: 'athena@avega.com', role: 'admin', status: 'active', createdAt: '2024-01-05' },
-  { id: 2, firstName: 'Maria', lastName: 'Santos', email: 'maria@avega.com', role: 'hr', status: 'active', createdAt: '2024-02-10' },
-  { id: 3, firstName: 'John', lastName: 'Reyes', email: 'john@avega.com', role: 'admin', status: 'active', createdAt: '2024-03-15' },
-  { id: 4, firstName: 'Anna', lastName: 'Cruz', email: 'anna@avega.com', role: 'hr', status: 'inactive', createdAt: '2024-04-20' },
-]
-
 export default function UserAccountsPage() {
-  const [users, setUsers] = useState<UserAccount[]>(mockUsers)
+  const [users, setUsers] = useState<UserAccount[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -54,16 +48,48 @@ export default function UserAccountsPage() {
     firstName: '',
     lastName: '',
     email: '',
-    role: 'admin' as 'admin' | 'hr',
+    role: 'ADMIN' as string,
     password: '',
     confirmPassword: '',
   })
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState('')
 
+  // Fetch users from backend
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        setUsers(data.users)
+      } else {
+        console.error('Failed to fetch users:', data.message)
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
   const filteredUsers = users.filter(u => {
     const matchesSearch = `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter
+    const matchesRole = roleFilter === 'all' || u.role.toLowerCase() === roleFilter
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter
     return matchesSearch && matchesRole && matchesStatus
   })
@@ -76,13 +102,13 @@ export default function UserAccountsPage() {
 
   // Stats
   const totalUsers = users.length
-  const adminCount = users.filter(u => u.role === 'admin').length
-  const hrCount = users.filter(u => u.role === 'hr').length
+  const adminCount = users.filter(u => u.role === 'ADMIN').length
+  const hrCount = users.filter(u => u.role === 'HR').length
   const activeCount = users.filter(u => u.status === 'active').length
 
   const openAddDialog = () => {
     setEditingUser(null)
-    setFormData({ firstName: '', lastName: '', email: '', role: 'admin', password: '', confirmPassword: '' })
+    setFormData({ firstName: '', lastName: '', email: '', role: 'ADMIN', password: '', confirmPassword: '' })
     setFormError('')
     setIsDialogOpen(true)
   }
@@ -101,7 +127,7 @@ export default function UserAccountsPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setFormError('')
     if (!formData.firstName || !formData.lastName || !formData.email) {
       setFormError('First name, last name, and email are required')
@@ -116,35 +142,77 @@ export default function UserAccountsPage() {
       return
     }
 
-    if (editingUser) {
-      setUsers(users.map(u =>
-        u.id === editingUser.id
-          ? { ...u, firstName: formData.firstName, lastName: formData.lastName, email: formData.email, role: formData.role }
-          : u
-      ))
-    } else {
-      const newUser: UserAccount = {
-        id: users.length + 1,
+    try {
+      const token = localStorage.getItem('token')
+      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users'
+      const method = editingUser ? 'PUT' : 'POST'
+
+      const body: any = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
         role: formData.role,
-        status: 'active',
-        createdAt: new Date().toISOString().split('T')[0],
       }
-      setUsers([...users, newUser])
+      if (formData.password) {
+        body.password = formData.password
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        await fetchUsers()
+        setIsDialogOpen(false)
+      } else {
+        setFormError(data.message || 'Failed to save user')
+      }
+    } catch (error) {
+      console.error('Error saving user:', error)
+      setFormError('Failed to save user')
     }
-    setIsDialogOpen(false)
   }
 
-  const toggleStatus = (id: number) => {
-    setUsers(users.map(u =>
-      u.id === id ? { ...u, status: u.status === 'active' ? 'inactive' : 'active' } : u
-    ))
+  const toggleStatus = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/users/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.success) {
+        await fetchUsers()
+      } else {
+        alert(data.message || 'Failed to toggle status')
+      }
+    } catch (error) {
+      console.error('Error toggling status:', error)
+    }
   }
 
-  const deleteUser = (id: number) => {
-    setUsers(users.filter(u => u.id !== id))
+  const deleteUser = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.success) {
+        await fetchUsers()
+      } else {
+        alert(data.message || 'Failed to delete user')
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error)
+    }
   }
 
   return (
@@ -204,13 +272,13 @@ export default function UserAccountsPage() {
 
               <div>
                 <Label className="text-foreground text-sm">Role</Label>
-                <Select value={formData.role} onValueChange={(v: string) => setFormData({ ...formData, role: v as 'admin' | 'hr' })}>
+                <Select value={formData.role} onValueChange={(v: string) => setFormData({ ...formData, role: v })}>
                   <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="admin">Administrator</SelectItem>
-                    <SelectItem value="hr">HR</SelectItem>
+                    <SelectItem value="ADMIN">Administrator</SelectItem>
+                    <SelectItem value="HR">HR</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -363,7 +431,11 @@ export default function UserAccountsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedUsers.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">Loading users...</td>
+                </tr>
+              ) : paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">No users found</td>
                 </tr>
@@ -372,7 +444,7 @@ export default function UserAccountsPage() {
                   <tr key={user.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}>
                     <td className="px-4 sm:px-6 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${user.role === 'admin' ? 'bg-blue-500' : 'bg-green-500'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${user.role === 'ADMIN' ? 'bg-blue-500' : 'bg-green-500'}`}>
                           {user.firstName.charAt(0)}
                         </div>
                         <div className="min-w-0">
@@ -387,12 +459,12 @@ export default function UserAccountsPage() {
                     <td className="px-4 sm:px-6 py-3">
                       <Badge
                         variant="outline"
-                        className={user.role === 'admin'
+                        className={user.role === 'ADMIN'
                           ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs'
                           : 'bg-green-500/20 text-green-400 border-green-500/30 text-xs'
                         }
                       >
-                        {user.role === 'admin' ? 'Admin' : 'HR'}
+                        {user.role === 'ADMIN' ? 'Admin' : 'HR'}
                       </Badge>
                     </td>
                     <td className="px-4 sm:px-6 py-3 hidden sm:table-cell">
@@ -409,7 +481,9 @@ export default function UserAccountsPage() {
                       </button>
                     </td>
                     <td className="px-4 sm:px-6 py-3 hidden lg:table-cell">
-                      <span className="text-sm text-muted-foreground font-mono">{user.createdAt}</span>
+                      <span className="text-sm text-muted-foreground font-mono">
+                        {new Date(user.createdAt).toLocaleDateString('en-CA')}
+                      </span>
                     </td>
                     <td className="px-4 sm:px-6 py-3">
                       <div className="flex items-center justify-end gap-1">

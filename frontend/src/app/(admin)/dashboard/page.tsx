@@ -18,28 +18,51 @@ import {
   FileText,
   CalendarDays
 } from 'lucide-react'
-import {
-  employees,
-  getEmployeeStats,
-  getAttendanceStats,
-  getDepartmentBreakdown,
-  getWeeklyTrend,
-  getRecentActivity
-} from '@/lib/mock-data'
 
-// Pre-compute all data from shared source
-const empStats = getEmployeeStats()
-const attStats = getAttendanceStats()
-const deptBreakdown = getDepartmentBreakdown()
-const weeklyTrend = getWeeklyTrend()
-const recentActivity = getRecentActivity()
-const attendanceRate = employees.length > 0
-  ? Math.round(((attStats.totalPresent + attStats.totalLate) / employees.length) * 100)
-  : 0
+interface EmpStats {
+  total: number;
+  active: number;
+}
+
+interface AttStats {
+  totalPresent: number;
+  totalLate: number;
+  totalAbsent: number;
+  totalOvertime: number;
+  totalUndertime: number;
+}
+
+interface DeptBreakdown {
+  department: string;
+  employeeCount: number;
+  attendanceRate: number;
+}
+
+interface WeeklyDay {
+  day: string;
+  present: number;
+  late: number;
+  absent: number;
+}
+
+interface RecentAct {
+  id: number;
+  employee: string;
+  department: string;
+  action: string;
+  time: string;
+  status: string;
+}
 
 export default function Dashboard() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
+  const [empStats, setEmpStats] = useState<EmpStats>({ total: 0, active: 0 })
+  const [attStats, setAttStats] = useState<AttStats>({ totalPresent: 0, totalLate: 0, totalAbsent: 0, totalOvertime: 0, totalUndertime: 0 })
+  const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdown[]>([])
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyDay[]>([])
+  const [recentActivity, setRecentActivity] = useState<RecentAct[]>([])
+  const [attendanceRate, setAttendanceRate] = useState(0)
 
   useEffect(() => {
     const token = typeof window !== 'undefined' && localStorage.getItem('token')
@@ -47,9 +70,184 @@ export default function Dashboard() {
     if (!token || !employee) {
       router.replace('/login')
     } else {
-      setIsLoading(false)
+      fetchDashboardData()
     }
   }, [router])
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      const today = new Date()
+      const offset = today.getTimezoneOffset()
+      const localDate = new Date(today.getTime() - (offset * 60 * 1000))
+      const todayStr = localDate.toISOString().split('T')[0]
+
+      // Get start of week (Monday)
+      const dayOfWeek = localDate.getDay()
+      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+      const monday = new Date(localDate)
+      monday.setDate(monday.getDate() - mondayOffset)
+      const mondayStr = monday.toISOString().split('T')[0]
+
+      // Fetch employees and this week's attendance in parallel
+      const [empRes, attRes] = await Promise.all([
+        fetch('/api/employees', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`/api/attendance?startDate=${mondayStr}&endDate=${todayStr}&limit=5000`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ])
+
+      if (empRes.status === 401 || attRes.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+
+      const empData = await empRes.json()
+      const attData = await attRes.json()
+
+      const employees = empData.success ? (empData.employees || empData.data || []) : []
+      const attendance = attData.success ? (attData.data || []) : []
+
+      // --- Employee stats ---
+      const totalEmp = employees.length
+      const activeEmp = employees.filter((e: any) => e.employmentStatus === 'ACTIVE').length
+      setEmpStats({ total: totalEmp, active: activeEmp })
+
+      // --- Today's attendance stats ---
+      const todayRecords = attendance.filter((r: any) => {
+        const recDate = new Date(r.date).toISOString().split('T')[0]
+        return recDate === todayStr
+      })
+
+      let presentCount = 0
+      let lateCount = 0
+      let totalOT = 0
+      let totalUT = 0
+      const requiredHours = 8
+
+      todayRecords.forEach((r: any) => {
+        const checkIn = r.checkInTime ? new Date(r.checkInTime) : null
+        const checkOut = r.checkOutTime ? new Date(r.checkOutTime) : null
+        const isLate = r.status === 'late' || (checkIn && (checkIn.getHours() > 8 || (checkIn.getHours() === 8 && checkIn.getMinutes() > 0)))
+
+        if (isLate) {
+          lateCount++
+        } else if (checkIn) {
+          presentCount++
+        }
+
+        if (checkIn && checkOut) {
+          const hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)
+          if (hours > requiredHours) totalOT += Math.round(hours - requiredHours)
+          else if (hours < requiredHours) totalUT += Math.round(requiredHours - hours)
+        }
+      })
+
+      const absentCount = totalEmp - presentCount - lateCount
+      setAttStats({
+        totalPresent: presentCount,
+        totalLate: lateCount,
+        totalAbsent: absentCount > 0 ? absentCount : 0,
+        totalOvertime: totalOT,
+        totalUndertime: totalUT
+      })
+
+      const rate = totalEmp > 0 ? Math.round(((presentCount + lateCount) / totalEmp) * 100) : 0
+      setAttendanceRate(rate)
+
+      // --- Department breakdown ---
+      const deptMap = new Map<string, { count: number; present: number }>()
+      employees.forEach((e: any) => {
+        const dept = e.department || 'Unassigned'
+        if (!deptMap.has(dept)) deptMap.set(dept, { count: 0, present: 0 })
+        deptMap.get(dept)!.count++
+      })
+
+      todayRecords.forEach((r: any) => {
+        const emp = employees.find((e: any) => e.id === r.employeeId)
+        const dept = emp?.department || 'Unassigned'
+        if (deptMap.has(dept)) {
+          deptMap.get(dept)!.present++
+        }
+      })
+
+      const deptArr: DeptBreakdown[] = []
+      deptMap.forEach((val, dept) => {
+        deptArr.push({
+          department: dept,
+          employeeCount: val.count,
+          attendanceRate: val.count > 0 ? Math.round((val.present / val.count) * 100) : 0
+        })
+      })
+      setDeptBreakdown(deptArr)
+
+      // --- Weekly trend ---
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const weekly: WeeklyDay[] = []
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday)
+        d.setDate(d.getDate() + i)
+        const dateStr = d.toISOString().split('T')[0]
+        if (d > localDate) break // don't include future days
+
+        const dayRecords = attendance.filter((r: any) => {
+          return new Date(r.date).toISOString().split('T')[0] === dateStr
+        })
+
+        let dayPresent = 0, dayLate = 0
+        dayRecords.forEach((r: any) => {
+          const ci = r.checkInTime ? new Date(r.checkInTime) : null
+          const isLateDay = r.status === 'late' || (ci && (ci.getHours() > 8 || (ci.getHours() === 8 && ci.getMinutes() > 0)))
+          if (isLateDay) dayLate++
+          else if (ci) dayPresent++
+        })
+
+        weekly.push({
+          day: dayNames[i],
+          present: dayPresent,
+          late: dayLate,
+          absent: Math.max(0, totalEmp - dayPresent - dayLate)
+        })
+      }
+      setWeeklyTrend(weekly)
+
+      // --- Recent activity (today's check-ins) ---
+      const recent: RecentAct[] = todayRecords.slice(0, 5).map((r: any, idx: number) => {
+        const emp = r.employee || employees.find((e: any) => e.id === r.employeeId) || {}
+        const checkIn = r.checkInTime ? new Date(r.checkInTime) : null
+        const isLate = r.status === 'late' || (checkIn && (checkIn.getHours() > 8 || (checkIn.getHours() === 8 && checkIn.getMinutes() > 0)))
+
+        return {
+          id: r.id || idx,
+          employee: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee #${r.employeeId}`,
+          department: emp.department || 'General',
+          action: 'Clock In',
+          time: checkIn ? checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '---',
+          status: isLate ? 'late' : 'on-time'
+        }
+      })
+      setRecentActivity(recent)
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Color palette for department bars
+  const deptColors: Record<string, string> = {
+    Engineering: '#6366f1',
+    Design: '#f472b6',
+    HR: '#34d399',
+    Finance: '#fbbf24',
+    Marketing: '#60a5fa',
+    Operations: '#a78bfa',
+  }
 
   if (isLoading) {
     return (
@@ -62,16 +260,6 @@ export default function Dashboard() {
         </div>
       </div>
     )
-  }
-
-  // Color palette for department bars
-  const deptColors: Record<string, string> = {
-    Engineering: '#6366f1',
-    Design: '#f472b6',
-    HR: '#34d399',
-    Finance: '#fbbf24',
-    Marketing: '#60a5fa',
-    Operations: '#a78bfa',
   }
 
   return (
@@ -183,7 +371,7 @@ export default function Dashboard() {
             <Building2 className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="space-y-3">
-            {deptBreakdown.map(dept => (
+            {deptBreakdown.length > 0 ? deptBreakdown.map(dept => (
               <div key={dept.department}>
                 <div className="flex items-center justify-between text-sm mb-1.5">
                   <span className="text-foreground font-medium truncate">{dept.department}</span>
@@ -213,7 +401,9 @@ export default function Dashboard() {
                   />
                 </div>
               </div>
-            ))}
+            )) : (
+              <p className="text-sm text-muted-foreground">No department data available</p>
+            )}
           </div>
         </Card>
       </div>
@@ -243,7 +433,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {recentActivity.slice(0, 5).map((activity, index) => (
+              {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
                 <tr
                   key={activity.id}
                   className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
@@ -281,7 +471,13 @@ export default function Dashboard() {
                     </Badge>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                    No activity recorded today
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

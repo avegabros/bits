@@ -1,18 +1,22 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Shield, MapPin, Calendar, Camera, Check, X, CheckCircle, Trash2 } from 'lucide-react';
+import { User, Mail, Shield, MapPin, Calendar, Camera, Check, X, CheckCircle, Trash2, Phone } from 'lucide-react';
 
 export default function ProfilePage() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("Profile updated successfully!");
+  const [saving, setSaving] = useState(false);
+
   const [userData, setUserData] = useState({
-    name: "mwehehe",
-    role: "HR Payroll Officer",
-    email: "admin@bipbip.com",
-    site: "Cebu Office",
-    joined: "January 2024"
+    firstName: "",
+    lastName: "",
+    role: "HR",
+    email: "",
+    phone: "",
+    branch: "",
+    hireDate: "",
   });
 
   useEffect(() => {
@@ -25,8 +29,22 @@ export default function ProfilePage() {
   useEffect(() => {
     const savedImage = localStorage.getItem('userProfileImage');
     if (savedImage) setProfileImage(savedImage);
-    const savedData = localStorage.getItem('userData');
-    if (savedData) setUserData(JSON.parse(savedData));
+
+    try {
+      const employee = localStorage.getItem('employee');
+      if (employee) {
+        const parsed = JSON.parse(employee);
+        setUserData({
+          firstName: parsed.firstName || '',
+          lastName: parsed.lastName || '',
+          role: parsed.role || 'HR',
+          email: parsed.email || '',
+          phone: parsed.contactNumber || parsed.phone || '',
+          branch: parsed.branch || '',
+          hireDate: parsed.hireDate ? new Date(parsed.hireDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '',
+        });
+      }
+    } catch { /* fallback */ }
   }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,7 +61,6 @@ export default function ProfilePage() {
     }
   };
 
-  // NEW: Function to clear the profile photo
   const handleClearPhoto = () => {
     setProfileImage(null);
     localStorage.removeItem('userProfileImage');
@@ -52,12 +69,51 @@ export default function ProfilePage() {
     setShowToast(true);
   };
 
-  const handleSave = () => {
-    localStorage.setItem('userData', JSON.stringify(userData));
-    setIsEditing(false);
-    setToastMessage("Profile updated successfully!");
-    setShowToast(true);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          contactNumber: userData.phone,
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        // Update localStorage
+        const employee = localStorage.getItem('employee');
+        if (employee) {
+          const parsed = JSON.parse(employee);
+          parsed.firstName = userData.firstName;
+          parsed.lastName = userData.lastName;
+          parsed.contactNumber = userData.phone;
+          localStorage.setItem('employee', JSON.stringify(parsed));
+        }
+        setIsEditing(false);
+        setToastMessage("Profile updated successfully!");
+        setShowToast(true);
+      } else {
+        setToastMessage(data.message || "Failed to update profile");
+        setShowToast(true);
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setToastMessage("Failed to update profile");
+      setShowToast(true);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const displayRole = userData.role === 'HR' ? 'HR Payroll Officer' : userData.role;
 
   return (
     <div className="space-y-6 relative">
@@ -87,7 +143,6 @@ export default function ProfilePage() {
                 </label>
               </div>
 
-              {/* NEW: Clear Photo Button - Only shows if there is an image */}
               {profileImage && (
                 <button
                   onClick={handleClearPhoto}
@@ -116,9 +171,10 @@ export default function ProfilePage() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center gap-2"
+                  disabled={saving}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Check size={16} /> Save Changes
+                  <Check size={16} /> {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             )}
@@ -129,21 +185,28 @@ export default function ProfilePage() {
               <div>
                 {isEditing ? (
                   <div className="space-y-2">
-                    <input
-                      className="text-2xl font-black text-slate-800 uppercase tracking-tighter border-b-2 border-red-500 outline-none w-full bg-slate-50 px-2"
-                      value={userData.name}
-                      onChange={(e) => setUserData({ ...userData, name: e.target.value })}
-                    />
-                    <input
-                      className="text-red-600 font-bold text-sm uppercase tracking-widest border-b border-red-200 outline-none w-full bg-slate-50 px-2"
-                      value={userData.role}
-                      onChange={(e) => setUserData({ ...userData, role: e.target.value })}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        className="text-lg font-black text-slate-800 uppercase tracking-tighter border-b-2 border-red-500 outline-none w-full bg-slate-50 px-2 py-1"
+                        value={userData.firstName}
+                        placeholder="First Name"
+                        onChange={(e) => setUserData({ ...userData, firstName: e.target.value })}
+                      />
+                      <input
+                        className="text-lg font-black text-slate-800 uppercase tracking-tighter border-b-2 border-red-500 outline-none w-full bg-slate-50 px-2 py-1"
+                        value={userData.lastName}
+                        placeholder="Last Name"
+                        onChange={(e) => setUserData({ ...userData, lastName: e.target.value })}
+                      />
+                    </div>
+                    <p className="text-red-600 font-bold text-sm uppercase tracking-widest">{displayRole}</p>
                   </div>
                 ) : (
                   <>
-                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{userData.name}</h3>
-                    <p className="text-red-600 font-bold text-sm uppercase tracking-widest">{userData.role}</p>
+                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">
+                      {userData.firstName} {userData.lastName}
+                    </h3>
+                    <p className="text-red-600 font-bold text-sm uppercase tracking-widest">{displayRole}</p>
                   </>
                 )}
               </div>
@@ -151,31 +214,30 @@ export default function ProfilePage() {
               <div className="space-y-3 pt-4 text-slate-600">
                 <div className="flex items-center gap-3">
                   <Mail size={18} className="text-slate-400" />
+                  <span className="text-sm font-medium">{userData.email || '—'}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Phone size={18} className="text-slate-400" />
                   {isEditing ? (
                     <input
                       className="text-sm font-medium border-b border-slate-200 outline-none w-full bg-slate-50"
-                      value={userData.email}
-                      onChange={(e) => setUserData({ ...userData, email: e.target.value })}
+                      value={userData.phone}
+                      placeholder="Phone number"
+                      onChange={(e) => setUserData({ ...userData, phone: e.target.value })}
                     />
                   ) : (
-                    <span className="text-sm font-medium">{userData.email}</span>
+                    <span className="text-sm font-medium">{userData.phone || '—'}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin size={18} className="text-slate-400" />
-                  {isEditing ? (
-                    <input
-                      className="text-sm font-medium border-b border-slate-200 outline-none w-full bg-slate-50"
-                      value={userData.site}
-                      onChange={(e) => setUserData({ ...userData, site: e.target.value })}
-                    />
-                  ) : (
-                    <span className="text-sm font-medium">{userData.site}</span>
-                  )}
+                  <span className="text-sm font-medium">{userData.branch || '—'}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Calendar size={18} className="text-slate-400" />
-                  <span className="text-sm font-medium">Joined {userData.joined}</span>
+                  <span className="text-sm font-medium">
+                    {userData.hireDate ? `Joined ${userData.hireDate}` : '—'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -185,7 +247,7 @@ export default function ProfilePage() {
                 <Shield size={14} /> System Permissions
               </h4>
               <ul className="space-y-2">
-                {['Full Access', 'Attendance Correction', 'Report Generation', 'User Management'].map((perm) => (
+                {['Attendance View', 'Attendance Correction', 'Report Generation', 'Employee Directory'].map((perm) => (
                   <li key={perm} className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white p-2 rounded-lg border border-slate-200">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {perm}
                   </li>
@@ -196,7 +258,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Synchronized Toast Message */}
+      {/* Toast */}
       {showToast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 z-50">
           <div className="bg-emerald-500 p-1 rounded-full">

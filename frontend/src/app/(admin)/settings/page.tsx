@@ -22,12 +22,14 @@ import {
 export default function SettingsPage() {
   const [userName, setUserName] = useState('Admin')
   const [userEmail, setUserEmail] = useState('admin@avega.com')
+  const [userRole, setUserRole] = useState('ADMIN')
 
   // Profile form
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
   const [profileSaved, setProfileSaved] = useState(false)
+  const [profileError, setProfileError] = useState('')
 
   // Password form
   const [currentPassword, setCurrentPassword] = useState('')
@@ -48,21 +50,58 @@ export default function SettingsPage() {
         setLastName(parsed.lastName || '')
         setUserName(`${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Admin')
         setUserEmail(parsed.email || 'admin@avega.com')
-        setPhone(parsed.phone || '+63-000-000-0000')
+        setUserRole(parsed.role || 'ADMIN')
+        setPhone(parsed.contactNumber || parsed.phone || '')
       }
     } catch {
       // fallback defaults
     }
   }, [])
 
-  const handleSaveProfile = () => {
-    // Mock save — in real app, this would call the backend
-    setUserName(`${firstName} ${lastName}`.trim() || 'Admin')
-    setProfileSaved(true)
-    setTimeout(() => setProfileSaved(false), 3000)
+  const handleSaveProfile = async () => {
+    setProfileError('')
+    setProfileSaved(false)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ firstName, lastName, contactNumber: phone })
+      })
+
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        // Update localStorage with new profile data
+        const employee = localStorage.getItem('employee')
+        if (employee) {
+          const parsed = JSON.parse(employee)
+          parsed.firstName = firstName
+          parsed.lastName = lastName
+          parsed.contactNumber = phone
+          localStorage.setItem('employee', JSON.stringify(parsed))
+        }
+        setUserName(`${firstName} ${lastName}`.trim() || 'Admin')
+        setProfileSaved(true)
+        setTimeout(() => setProfileSaved(false), 3000)
+      } else {
+        setProfileError(data.message || 'Failed to update profile')
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error)
+      setProfileError('Failed to update profile')
+    }
   }
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setPasswordError('')
     setPasswordSaved(false)
 
@@ -79,12 +118,37 @@ export default function SettingsPage() {
       return
     }
 
-    // Mock password change
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setPasswordSaved(true)
-    setTimeout(() => setPasswordSaved(false), 3000)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/users/change-password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ currentPassword, newPassword })
+      })
+
+      if (res.status === 401 && !currentPassword) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setPasswordSaved(true)
+        setTimeout(() => setPasswordSaved(false), 3000)
+      } else {
+        setPasswordError(data.message || 'Failed to change password')
+      }
+    } catch (error) {
+      console.error('Error changing password:', error)
+      setPasswordError('Failed to change password')
+    }
   }
 
   // Password strength indicator
@@ -100,7 +164,7 @@ export default function SettingsPage() {
     if (score === 3) return { label: 'Good', color: 'bg-blue-500', width: '75%' }
     return { label: 'Strong', color: 'bg-green-500', width: '100%' }
   }
-  
+
   const strength = getPasswordStrength(newPassword)
 
   return (
@@ -137,7 +201,7 @@ export default function SettingsPage() {
             <p className="text-sm font-semibold text-foreground">{userName}</p>
             <p className="text-xs text-muted-foreground">{userEmail}</p>
             <Badge variant="outline" className="mt-1 bg-primary/20 text-primary border-primary/30 text-[10px]">
-              <Shield className="w-3 h-3 mr-1" /> Administrator
+              <Shield className="w-3 h-3 mr-1" />{userRole === 'ADMIN' ? 'Administrator' : 'HR'}
             </Badge>
           </div>
         </div>
@@ -188,6 +252,13 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {profileError && (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-4">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {profileError}
+          </div>
+        )}
 
         <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 mt-6 pt-4 border-t border-border">
           {profileSaved && (
@@ -262,11 +333,10 @@ export default function SettingsPage() {
                 <div className="w-full bg-secondary rounded-full h-1.5">
                   <div className={`h-1.5 rounded-full transition-all duration-300 ${strength.color}`} style={{ width: strength.width }} />
                 </div>
-                <p className={`text-[10px] mt-1 font-medium ${
-                  strength.label === 'Weak' ? 'text-red-400' :
-                  strength.label === 'Fair' ? 'text-yellow-400' :
-                  strength.label === 'Good' ? 'text-blue-400' : 'text-green-400'
-                }`}>
+                <p className={`text-[10px] mt-1 font-medium ${strength.label === 'Weak' ? 'text-red-400' :
+                    strength.label === 'Fair' ? 'text-yellow-400' :
+                      strength.label === 'Good' ? 'text-blue-400' : 'text-green-400'
+                  }`}>
                   Password strength: {strength.label}
                 </p>
               </div>
@@ -330,7 +400,9 @@ export default function SettingsPage() {
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 py-2 border-b border-border">
             <span className="text-sm text-foreground">Role</span>
-            <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-xs w-fit">Administrator</Badge>
+            <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-xs w-fit">
+              {userRole === 'ADMIN' ? 'Administrator' : 'HR'}
+            </Badge>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 py-2 border-b border-border">
             <span className="text-sm text-foreground">Two-Factor Authentication</span>
@@ -338,7 +410,9 @@ export default function SettingsPage() {
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 py-2">
             <span className="text-sm text-foreground">Last Login</span>
-            <span className="text-xs text-muted-foreground font-mono">Feb 16, 2026 — 02:25 PM</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              {new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} — {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
         </div>
       </Card>
