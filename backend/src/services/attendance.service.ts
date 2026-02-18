@@ -34,7 +34,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
         // Get all logs ordered by timestamp
         const logs = await prisma.attendanceLog.findMany({
             orderBy: { timestamp: 'asc' },
-            include: { employee: true }
+            include: { Employee: true }
         });
 
         let created = 0;
