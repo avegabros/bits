@@ -18,20 +18,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
-
-const branches = ['MAIN OFFICE', 'CEBU BRANCH', 'MAKATI BRANCH']
-const departments = ['Engineering', 'Design', 'HR', 'Finance', 'Marketing', 'Operations']
-
-const attendanceRecords = [
-  { id: 1, employeeName: 'John Doe', branch: 'MAIN OFFICE', department: 'Engineering', date: '2024-01-15', checkIn: '08:15 AM', checkOut: '05:45 PM', status: 'present', hours: 9.5, overtime: 1.5, undertime: 0 },
-  { id: 2, employeeName: 'Jane Smith', branch: 'CEBU BRANCH', department: 'Design', date: '2024-01-15', checkIn: '08:02 AM', checkOut: '05:30 PM', status: 'present', hours: 9.47, overtime: 1.47, undertime: 0 },
-  { id: 3, employeeName: 'Mike Johnson', branch: 'MAIN OFFICE', department: 'Engineering', date: '2024-01-15', checkIn: '08:42 AM', checkOut: '05:50 PM', status: 'late', hours: 9.13, overtime: 1.13, undertime: 0 },
-  { id: 4, employeeName: 'Sarah Williams', branch: 'MAKATI BRANCH', department: 'HR', date: '2024-01-15', checkIn: '-', checkOut: '-', status: 'absent', hours: 0, overtime: 0, undertime: 8 },
-  { id: 5, employeeName: 'Robert Brown', branch: 'MAIN OFFICE', department: 'Finance', date: '2024-01-15', checkIn: '08:10 AM', checkOut: '03:00 PM', status: 'present', hours: 6.83, overtime: 0, undertime: 1.17 },
-  { id: 6, employeeName: 'Emily Davis', branch: 'CEBU BRANCH', department: 'Marketing', date: '2024-01-15', checkIn: '08:20 AM', checkOut: '05:40 PM', status: 'present', hours: 9.33, overtime: 1.33, undertime: 0 },
-  { id: 7, employeeName: 'Alex Turner', branch: 'MAKATI BRANCH', department: 'Operations', date: '2024-01-15', checkIn: '07:55 AM', checkOut: '06:10 PM', status: 'present', hours: 10.25, overtime: 2.25, undertime: 0 },
-  { id: 8, employeeName: 'Maria Santos', branch: 'CEBU BRANCH', department: 'HR', date: '2024-01-15', checkIn: '09:05 AM', checkOut: '05:00 PM', status: 'late', hours: 7.92, overtime: 0, undertime: 0.08 },
-]
+import { attendanceRecords, branches, departments } from '@/lib/mock-data'
 
 export default function AttendancePage() {
   const [searchTerm, setSearchTerm] = useState('')

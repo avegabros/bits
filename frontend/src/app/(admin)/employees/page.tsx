@@ -12,18 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
-
-const mockEmployees = [
-  { id: 1, name: 'John Doe', contactNumber: '+63-934-567-8901', department: 'Engineering', position: 'Senior Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2022-03-15' },
-  { id: 2, name: 'Jane Smith', contactNumber: '+63-934-567-8902', department: 'Design', position: 'UI/UX Designer', branch: 'CEBU BRANCH', status: 'active', joinDate: '2022-06-20' },
-  { id: 3, name: 'Mike Johnson', contactNumber: '+63-934-567-8903', department: 'Engineering', position: 'Frontend Developer', branch: 'MAIN OFFICE', status: 'active', joinDate: '2023-01-10' },
-  { id: 4, name: 'Sarah Williams', contactNumber: '+63-934-567-8904', department: 'HR', position: 'HR Manager', branch: 'MAKATI BRANCH', status: 'active', joinDate: '2021-05-01' },
-  { id: 5, name: 'Robert Brown', contactNumber: '+63-934-567-8905', department: 'Finance', position: 'Accountant', branch: 'MAIN OFFICE', status: 'inactive', joinDate: '2022-11-15' },
-  { id: 6, name: 'Emily Davis', contactNumber: '+63-934-567-8906', department: 'Marketing', position: 'Marketing Manager', branch: 'CEBU BRANCH', status: 'active', joinDate: '2023-02-28' },
-]
-
-const departments = ['Engineering', 'Design', 'HR', 'Finance', 'Marketing', 'Operations']
-const branches = ['MAIN OFFICE', 'CEBU BRANCH', 'MAKATI BRANCH']
+import { employees as mockEmployees, departments, branches, type Employee } from '@/lib/mock-data'
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState(mockEmployees)
@@ -67,7 +56,7 @@ export default function EmployeesPage() {
         ...newEmployee,
         status: 'active' as const,
         joinDate: new Date().toISOString().split('T')[0]
-      }
+      } as Employee
       setEmployees([...employees, employee])
       setNewEmployee({ name: '', contactNumber: '', department: '', position: '', branch: '', bio: '' })
       setIsAddOpen(false)

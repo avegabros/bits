@@ -17,18 +17,9 @@ import {
   ChevronLeft,
   Building2
 } from 'lucide-react';
+import { branches, departments, getReportData } from '@/lib/mock-data';
 
-const branches = ['MAIN OFFICE', 'CEBU BRANCH', 'MAKATI BRANCH'];
-const departments = ['Engineering', 'Design', 'HR', 'Finance', 'Marketing', 'Operations'];
-
-const mockReportData = [
-  { id: 1, name: 'Mark Anthony', department: 'Engineering', branch: 'MAIN OFFICE', totalDays: 22, present: 22, late: 0, absent: 0, totalHours: 176.00 },
-  { id: 2, name: 'Jane Smith', department: 'Design', branch: 'CEBU BRANCH', totalDays: 22, present: 20, late: 2, absent: 0, totalHours: 168.50 },
-  { id: 3, name: 'Mike Johnson', department: 'Engineering', branch: 'MAIN OFFICE', totalDays: 22, present: 19, late: 1, absent: 2, totalHours: 155.25 },
-  { id: 4, name: 'Sarah Williams', department: 'HR', branch: 'MAKATI BRANCH', totalDays: 22, present: 22, late: 0, absent: 0, totalHours: 176.00 },
-  { id: 5, name: 'Robert Brown', department: 'Finance', branch: 'MAIN OFFICE', totalDays: 22, present: 18, late: 3, absent: 1, totalHours: 149.75 },
-  { id: 6, name: 'Emily Davis', department: 'Marketing', branch: 'CEBU BRANCH', totalDays: 22, present: 21, late: 1, absent: 0, totalHours: 170.00 },
-];
+const mockReportData = getReportData();
 
 export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,7 +49,43 @@ export default function ReportsPage() {
     ? Math.round(filteredData.reduce((sum, e) => sum + (e.present / e.totalDays) * 100, 0) / filteredData.length)
     : 0;
   const totalLate = filteredData.reduce((sum, e) => sum + e.late, 0);
+  const totalAbsent = filteredData.reduce((sum, e) => sum + e.absent, 0);
   const totalHoursRendered = filteredData.reduce((sum, e) => sum + e.totalHours, 0);
+
+  const handleExport = () => {
+    const headers = ['Employee', 'Department', 'Branch', 'Total Days', 'Present', 'Late', 'Absent', 'Total Hours'];
+    const rows = filteredData.map(e => [
+      e.name,
+      e.department,
+      e.branch,
+      e.totalDays,
+      e.present,
+      e.late,
+      e.absent,
+      e.totalHours.toFixed(2)
+    ]);
+
+    // Append summary row
+    rows.push([]);
+    rows.push(['--- SUMMARY ---']);
+    rows.push(['Total Employees', totalRecords]);
+    rows.push(['Avg. Attendance', `${avgAttendance}%`]);
+    rows.push(['Total Late', totalLate]);
+    rows.push(['Total Absent', totalAbsent]);
+    rows.push(['Total Hours', totalHoursRendered.toFixed(2)]);
+
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    const branchLabel = selectedBranch === 'all' ? 'All-Branches' : selectedBranch.replace(/\s+/g, '-');
+    const deptLabel = selectedDept === 'all' ? 'All-Depts' : selectedDept;
+    link.download = `Report_${branchLabel}_${deptLabel}_${startDate}_to_${endDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -68,7 +95,7 @@ export default function ReportsPage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Reports</h2>
           <p className="text-muted-foreground text-sm mt-1">Generate and export attendance reports</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 gap-2 w-full sm:w-auto">
+        <Button onClick={handleExport} className="bg-primary hover:bg-primary/90 gap-2 w-full sm:w-auto">
           <Download className="w-4 h-4" />
           Export Report
         </Button>
@@ -79,7 +106,7 @@ export default function ReportsPage() {
         <Card className="bg-card border-border p-4 sm:p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-muted-foreground text-xs sm:text-sm font-medium">Total Records</p>
+              <p className="text-muted-foreground text-xs sm:text-sm font-medium">Total Employees</p>
               <p className="text-2xl sm:text-3xl font-bold text-foreground mt-1 sm:mt-2">{totalRecords}</p>
             </div>
             <div className="bg-primary/20 p-2 sm:p-3 rounded-lg">
