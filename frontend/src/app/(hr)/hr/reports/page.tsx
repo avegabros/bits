@@ -1,291 +1,187 @@
 "use client"
-import React, { useState, useEffect } from 'react';
-import { Download, Calendar, Search, ChevronRight } from 'lucide-react';
-
-interface EmployeeReport {
-  id: number;
-  name: string;
-  totalDays: number;
-  present: number;
-  late: number;
-  absent: number;
-  totalHours: number;
-}
+import React, { useState } from 'react';
+import { Download, Search, ChevronRight, X, Clock, AlertTriangle, CalendarCheck } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function ReportsPage() {
-  const [loading, setLoading] = useState(false);
-  const [reports, setReports] = useState<EmployeeReport[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [deptFilter, setDeptFilter] = useState('All Departments');
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState("2026-01-01");
+  const [toDate, setToDate] = useState("2026-01-30");
+  const [viewingDetails, setViewingDetails] = useState<any>(null);
 
-  // Date range — default to current month
-  const now = new Date();
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const today = (() => {
-    const d = new Date();
-    const offset = d.getTimezoneOffset();
-    return new Date(d.getTime() - (offset * 60 * 1000)).toISOString().split('T')[0];
-  })();
+  const reportData = [
+    { id: "EMP-001", name: "Mark Anthony", totalLeave: 0, totalAbsents: 0, totalHours: 176.00, totalOvertime: 5.5, totalUndertime: 0, totalLates: 0, 
+      details: [
+        { date: "2026-01-05", type: "Overtime", duration: "2h", remark: "Project Deadline" },
+        { date: "2026-01-12", type: "Overtime", duration: "3.5h", remark: "System Audit" }
+      ]
+    },
+    { id: "EMP-002", name: "Sarah Jenkins", totalLeave: 2, totalAbsents: 1, totalHours: 152.50, totalOvertime: 0, totalUndertime: 2.5, totalLates: 3,
+      details: [
+        { date: "2026-01-08", type: "Late", duration: "15m", remark: "Traffic" },
+        { date: "2026-01-10", type: "Absent", duration: "1 Day", remark: "No Call No Show" },
+        { date: "2026-01-15", type: "Leave", duration: "2 Days", remark: "Sick Leave" }
+      ]
+    },
+    { id: "EMP-003", name: "Ariadne Arsolon", totalLeave: 1, totalAbsents: 0, totalHours: 168.00, totalOvertime: 2.0, totalUndertime: 0.5, totalLates: 1,
+      details: [
+        { date: "2026-01-03", type: "Late", duration: "10m", remark: "Biometric Error" },
+        { date: "2026-01-20", type: "Leave", duration: "1 Day", remark: "Vacation" }
+      ]
+    },
+  ];
 
-  const [startDate, setStartDate] = useState(firstOfMonth);
-  const [endDate, setEndDate] = useState(today);
-
-  const fetchReport = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) { window.location.href = '/login'; return; }
-
-      // Fetch employees and attendance for the date range
-      const [empRes, attRes] = await Promise.all([
-        fetch('/api/employees', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=5000`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      ]);
-
-      if (empRes.status === 401 || attRes.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        return;
-      }
-
-      const empData = await empRes.json();
-      const attData = await attRes.json();
-
-      const employees = empData.success ? (empData.employees || empData.data || []) : [];
-      const attendance = attData.success ? (attData.data || []) : [];
-
-      // Extract unique departments
-      const depts = Array.from(new Set(employees.map((e: any) => e.department).filter(Boolean))) as string[];
-      setDepartments(depts);
-
-      // Group attendance by employee
-      const empMap = new Map<number, { name: string; dept: string; present: number; late: number; hours: number }>();
-
-      employees.forEach((emp: any) => {
-        empMap.set(emp.id, {
-          name: `${emp.firstName} ${emp.lastName}`,
-          dept: emp.department || '',
-          present: 0,
-          late: 0,
-          hours: 0,
-        });
-      });
-
-      attendance.forEach((r: any) => {
-        const entry = empMap.get(r.employeeId);
-        if (!entry) return;
-
-        const checkIn = r.checkInTime ? new Date(r.checkInTime) : null;
-        const checkOut = r.checkOutTime ? new Date(r.checkOutTime) : null;
-
-        if (checkIn) {
-          const h = checkIn.getHours();
-          const m = checkIn.getMinutes();
-          if (h > 8 || (h === 8 && m > 0)) {
-            entry.late++;
-          }
-          entry.present++;
-        }
-
-        if (checkIn && checkOut) {
-          entry.hours += (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-        }
-      });
-
-      // Compute total working days in range
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(endDate + 'T00:00:00');
-      let workingDays = 0;
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const day = d.getDay();
-        if (day !== 0 && day !== 6) workingDays++;
-      }
-
-      const result: EmployeeReport[] = [];
-      empMap.forEach((val, id) => {
-        result.push({
-          id,
-          name: val.name,
-          totalDays: workingDays,
-          present: val.present,
-          late: val.late,
-          absent: workingDays - val.present,
-          totalHours: Math.round(val.hours * 100) / 100,
-        });
-      });
-
-      // Filter by department if applicable
-      if (deptFilter !== 'All Departments') {
-        const filtered = result.filter(r => {
-          const emp = employees.find((e: any) => e.id === r.id);
-          return emp?.department === deptFilter;
-        });
-        setReports(filtered);
-      } else {
-        setReports(result);
-      }
-    } catch (error) {
-      console.error('Error fetching report:', error);
-    } finally {
-      setLoading(false);
-    }
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
-
-  useEffect(() => {
-    fetchReport();
-  }, [startDate, endDate, deptFilter]);
-
-  const filteredReports = reports.filter(r =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const handleExport = () => {
-    const headers = ['Employee', 'Total Days', 'Present', 'Late', 'Absent', 'Total Hours'];
-    const csvData = filteredReports.map(r =>
-      [r.name, r.totalDays, r.present, r.late, r.absent, r.totalHours.toFixed(2)].join(',')
-    );
-    const csv = [headers.join(','), ...csvData].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Attendance_Report_${startDate}_to_${endDate}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const excelData = reportData.map(row => ({
+      'Employee ID': row.id,
+      'Employee Name': row.name,
+      'Total Leave Days': row.totalLeave,
+      'Total Absents': row.totalAbsents,
+      'Total Lates': row.totalLates,
+      'Total Overtime (Hrs)': row.totalOvertime,
+      'Total Undertime (Hrs)': row.totalUndertime,
+      'Total Rendered Hours': row.totalHours
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    worksheet['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance Summary");
+    XLSX.writeFile(workbook, `Attendance_Summary_${fromDate}_to_${toDate}.xlsx`);
   };
 
-  const dateLabel = (() => {
-    const s = new Date(startDate + 'T00:00:00');
-    const e = new Date(endDate + 'T00:00:00');
-    return `${s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  })();
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="h-screen flex flex-col overflow-hidden space-y-4 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Attendance Reports</h1>
-          <p className="text-slate-500 text-sm font-medium">Generate and export historical employee records</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">Attendance Reports</h1>
+          <p className="text-slate-500 text-[11px] font-medium mt-1">Generate and export historical employee records</p>
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all"
-        >
-          <Download size={18} />
-          Export Report
+        <button onClick={handleExport} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-xs shadow-lg shadow-red-600/20 hover:bg-red-700 active:scale-95 transition-all">
+          <Download size={16} /> Export {formatDate(fromDate)} - {formatDate(toDate)}
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Start Date</label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 outline-none"
-              />
-            </div>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm shrink-0">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">From</label>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none" />
           </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">End Date</label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 outline-none"
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">To</label>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none" />
           </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department</label>
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 outline-none"
-            >
-              <option>All Departments</option>
-              {departments.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Department</label>
+            <select className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none"><option>All Departments</option></select>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Search Staff</label>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Employee name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 outline-none"
-              />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" placeholder="Search employees..." className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Report Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-            Report: {dateLabel}
-          </span>
-          <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded font-bold">
-            {loading ? '...' : `${filteredReports.length} Employees`}
-          </span>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Preview: {formatDate(fromDate)} — {formatDate(toDate)}</span>
+          <span className="text-[9px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black uppercase tracking-tighter">{reportData.length} Records Found</span>
         </div>
-        <table className="w-full text-left">
-          <thead className="bg-white text-slate-400 text-[10px] uppercase font-bold tracking-widest border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4">Employee</th>
-              <th className="px-6 py-4">Working Days</th>
-              <th className="px-6 py-4">Present</th>
-              <th className="px-6 py-4">Late</th>
-              <th className="px-6 py-4">Absent</th>
-              <th className="px-6 py-4">Total Hrs</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">
-                  Generating report...
-                </td>
-              </tr>
-            ) : filteredReports.length > 0 ? (
-              filteredReports.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50 transition">
-                  <td className="px-6 py-4 text-sm font-bold text-slate-700">{r.name}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{r.totalDays}</td>
-                  <td className="px-6 py-4 text-sm text-emerald-600 font-bold">{r.present}</td>
-                  <td className="px-6 py-4 text-sm text-amber-600 font-bold">{r.late}</td>
-                  <td className="px-6 py-4 text-sm text-red-500 font-bold">{r.absent > 0 ? r.absent : 0}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-slate-600">{r.totalHours.toFixed(2)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-                  No data for selected period
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="flex-1 overflow-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
+             <thead className="bg-white text-slate-400 text-[9px] uppercase font-bold tracking-widest border-b border-slate-100 sticky top-0 z-10">
+               <tr>
+                 <th className="px-6 py-3 bg-white">ID</th>
+                 <th className="px-6 py-3 bg-white">Employee</th>
+                 <th className="px-6 py-3 text-center bg-white">Leave</th>
+                 <th className="px-6 py-3 text-center bg-white">Absents</th>
+                 <th className="px-6 py-3 text-center bg-white">Lates</th>
+                 <th className="px-6 py-3 text-center bg-white">OT</th>
+                 <th className="px-6 py-3 text-center bg-white">UT</th>
+                 <th className="px-6 py-3 text-center bg-white">Total (Hrs)</th>
+                 <th className="px-6 py-3 text-right bg-white">Action</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-50">
+                {reportData.map((emp) => (
+                  <tr key={emp.id} className="hover:bg-red-50/30 transition-colors group cursor-default">
+                    <td className="px-6 py-3 font-bold text-slate-400 uppercase tracking-widest">{emp.id}</td>
+                    <td className="px-6 py-3 font-bold text-slate-700 underline decoration-red-100 underline-offset-4">{emp.name}</td>
+                    <td className="px-6 py-3 text-center font-medium text-slate-500">{emp.totalLeave}</td>
+                    <td className="px-6 py-3 text-center font-medium text-red-500">{emp.totalAbsents}</td>
+                    <td className="px-6 py-3 text-center font-medium text-orange-500">{emp.totalLates}</td>
+                    <td className="px-6 py-3 text-center font-bold text-blue-600">+{emp.totalOvertime}h</td>
+                    <td className="px-6 py-3 text-center font-bold text-amber-600">-{emp.totalUndertime}h</td>
+                    <td className="px-6 py-3 text-center font-mono text-slate-600 font-bold">{emp.totalHours.toFixed(2)}</td>
+                    <td className="px-6 py-3 text-right">
+                      <button onClick={() => setViewingDetails(emp)} className="p-1.5 text-slate-300 group-hover:text-red-600 transition-colors">
+                        <ChevronRight size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+             </tbody>
+          </table>
+        </div>
       </div>
+
+      {viewingDetails && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="font-bold text-sm leading-tight tracking-tight">{viewingDetails.name}</h3>
+                <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest mt-0.5">{viewingDetails.id} • Activity Breakdown</p>
+              </div>
+              <button onClick={() => setViewingDetails(null)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors"><X size={18} /></button>
+            </div>
+            
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "Leave", val: viewingDetails.totalLeave, color: "text-slate-600" },
+                  { label: "Absent", val: viewingDetails.totalAbsents, color: "text-red-600" },
+                  { label: "Lates", val: viewingDetails.totalLates, color: "text-orange-600" },
+                  { label: "OT/UT", val: `${viewingDetails.totalOvertime}/${viewingDetails.totalUndertime}`, color: "text-blue-600" }
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-slate-50 p-2 rounded-lg border border-slate-100 text-center">
+                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">{stat.label}</p>
+                    <p className={`text-xs font-bold ${stat.color}`}>{stat.val}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Historical Logs</p>
+                <div className="space-y-1.5">
+                  {viewingDetails.details.map((detail: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-1.5 rounded-lg ${detail.type === 'Leave' ? 'bg-blue-100 text-blue-600' : detail.type === 'Absent' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                          {detail.type === 'Leave' ? <CalendarCheck size={14} /> : <AlertTriangle size={14} />}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-700">{detail.type}: {detail.duration}</p>
+                          <p className="text-[9px] text-slate-400 font-medium">{detail.date}</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">{detail.remark}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            
+          </div>
+        </div>
+      )}
     </div>
   );
 }

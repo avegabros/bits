@@ -1,22 +1,14 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Shield, Bell, Lock, Eye, EyeOff, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { Shield, Lock, Eye, EyeOff, Save, CheckCircle } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [notifications, setNotifications] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [error, setError] = useState('');
-
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
+  
   const [userData, setUserData] = useState({
-    name: "HR User",
-    role: "HR"
+    name: "mwehehe",
+    role: "HR Payroll Officer"
   });
 
   useEffect(() => {
@@ -27,49 +19,14 @@ export default function SettingsPage() {
   }, [showToast]);
 
   useEffect(() => {
-    try {
-      const employee = localStorage.getItem('employee');
-      if (employee) {
-        const parsed = JSON.parse(employee);
-        setUserData({
-          name: `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'HR User',
-          role: parsed.role === 'HR' ? 'HR Payroll Officer' : parsed.role
-        });
-      }
-    } catch { /* fallback */ }
+    const savedData = localStorage.getItem('userData');
+    if (savedData) {
+      setUserData(JSON.parse(savedData));
+    }
   }, []);
 
-  const handleChangePassword = async () => {
-    setError('');
-    if (!currentPassword) { setError('Current password is required'); return; }
-    if (newPassword.length < 8) { setError('New password must be at least 8 characters'); return; }
-    if (newPassword !== confirmPassword) { setError('Passwords do not match'); return; }
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/users/change-password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setToastMessage('Password updated successfully!');
-        setShowToast(true);
-      } else {
-        setError(data.message || 'Failed to change password');
-      }
-    } catch (err) {
-      console.error('Error changing password:', err);
-      setError('Failed to change password');
-    }
+  const handleSave = () => {
+    setShowToast(true);
   };
 
   return (
@@ -78,113 +35,57 @@ export default function SettingsPage() {
         <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
           Account Settings
         </h2>
+        <button 
+          onClick={handleSave}
+          className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95"
+        >
+          <Save size={18} /> Save Changes
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-
-          {/* Notifications Section */}
+          
           <div className="bg-white border border-slate-200 p-8 shadow-sm rounded-3xl">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Bell size={16} /> Preferences
+              <Lock size={16} /> Security & Password
             </h3>
-
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <div>
-                <p className="font-bold text-slate-800">System Notifications</p>
-                <p className="text-xs text-slate-500 font-medium">Receive alerts for attendance and report updates</p>
-              </div>
-              <button
-                onClick={() => setNotifications(!notifications)}
-                className={`relative w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 ${notifications ? 'bg-emerald-500' : 'bg-slate-300'}`}
-              >
-                <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${notifications ? 'translate-x-6' : 'translate-x-0'}`} />
-              </button>
-            </div>
-          </div>
-
-          {/* Security Section */}
-          <div className="bg-white border border-slate-200 p-8 shadow-sm rounded-3xl">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Lock size={16} /> Change Password
-            </h3>
-
+            
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Current Password</label>
-                <div className="relative">
-                  <input
-                    type={showCurrent ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20"
-                  />
-                  <button
-                    onClick={() => setShowCurrent(!showCurrent)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">New Password</label>
                 <div className="relative">
-                  <input
-                    type={showNew ? "text" : "password"}
-                    placeholder="Min. 8 characters"
-                    value={newPassword}
-                    onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="New password"
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20"
                   />
-                  <button
-                    onClick={() => setShowNew(!showNew)}
+                  <button 
+                    onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Confirm New Password</label>
-                <input
-                  type={showNew ? "text" : "password"}
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20"
-                />
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-100 rounded-xl p-3">
-                  <AlertCircle size={16} className="shrink-0" />
-                  {error}
-                </div>
-              )}
-
-              <button
-                onClick={handleChangePassword}
-                className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95 mt-2"
-              >
-                <Save size={18} /> Update Password
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Right Col: Session Info */}
         <div className="space-y-6">
           <div className="bg-slate-900 p-8 text-white rounded-3xl shadow-sm">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
               <Shield size={16} className="text-red-500" /> Security Status
             </h3>
             <div className="space-y-4">
-              <div className="pb-4 border-b border-white/10">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Account</p>
-                <p className="text-sm font-black text-white tracking-tight mt-1">{userData.name}</p>
-              </div>
               <div className="pb-4 border-b border-white/10">
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Account Role</p>
                 <p className="text-sm font-black text-red-500 uppercase tracking-tighter">
@@ -193,20 +94,19 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Last Login</p>
-                <p className="text-sm font-medium">Today at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                <p className="text-sm font-medium">Today at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Toast */}
       {showToast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 z-50">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-500 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 z-50">
           <div className="bg-emerald-500 p-1 rounded-full">
             <CheckCircle size={16} className="text-white" />
           </div>
-          <span className="text-sm font-bold tracking-tight">{toastMessage}</span>
+          <span className="text-sm font-bold tracking-tight">Changes saved successfully!</span>
         </div>
       )}
     </div>
