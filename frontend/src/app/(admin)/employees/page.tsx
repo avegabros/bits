@@ -1,8 +1,7 @@
 'use client'
 
 import React from "react"
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,12 +9,28 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
-import { employees as mockEmployees, departments, branches, type Employee } from '@/lib/mock-data'
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload, AlertTriangle } from 'lucide-react'
+
+type Employee = {
+  id: number
+  zkId: number | null
+  employeeNumber: string | null
+  firstName: string
+  lastName: string
+  email: string | null
+  role: string
+  department: string | null
+  position: string | null
+  branch: string | null
+  contactNumber: string | null
+  hireDate: string | null
+  employmentStatus: 'ACTIVE' | 'INACTIVE' | 'TERMINATED'
+  createdAt: string
+}
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState(mockEmployees)
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDept, setSelectedDept] = useState<string>('all')
   const [selectedBranch, setSelectedBranch] = useState<string>('all')
@@ -23,21 +38,59 @@ export default function EmployeesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+
+  // Confirm move-to-inactive dialog
+  const [confirmDeactivate, setConfirmDeactivate] = useState<Employee | null>(null)
+  const [isDeactivating, setIsDeactivating] = useState(false)
+
   const [newEmployee, setNewEmployee] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     contactNumber: '',
     department: '',
     position: '',
     branch: '',
-    bio: ''
+    email: '',
   })
 
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 10
 
+  const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean))) as string[]
+  const branches = Array.from(new Set(employees.map(e => e.branch).filter(Boolean))) as string[]
+
+  const fetchEmployees = async () => {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/employees', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
+      }
+      const data = await res.json()
+      if (data.success) {
+        // Active employees page only shows ACTIVE
+        setEmployees(data.employees.filter((e: Employee) => e.employmentStatus === 'ACTIVE'))
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
+
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.contactNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase()
+    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
+      (emp.contactNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesDept = selectedDept === 'all' || emp.department === selectedDept
     const matchesBranch = selectedBranch === 'all' || emp.branch === selectedBranch
     return matchesSearch && matchesDept && matchesBranch
@@ -49,31 +102,109 @@ export default function EmployeesPage() {
     currentPage * rowsPerPage
   )
 
-  const handleAddEmployee = () => {
-    if (newEmployee.name && newEmployee.contactNumber && newEmployee.department && newEmployee.position && newEmployee.branch) {
-      const employee = {
-        id: employees.length + 1,
-        ...newEmployee,
-        status: 'active' as const,
-        joinDate: new Date().toISOString().split('T')[0]
-      } as Employee
-      setEmployees([...employees, employee])
-      setNewEmployee({ name: '', contactNumber: '', department: '', position: '', branch: '', bio: '' })
-      setIsAddOpen(false)
+  const handleAddEmployee = async () => {
+    if (newEmployee.firstName && newEmployee.lastName && newEmployee.department && newEmployee.position && newEmployee.branch) {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/employees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            firstName: newEmployee.firstName,
+            lastName: newEmployee.lastName,
+            contactNumber: newEmployee.contactNumber || undefined,
+            department: newEmployee.department,
+            position: newEmployee.position,
+            branch: newEmployee.branch,
+            email: newEmployee.email || undefined,
+          })
+        })
+        const data = await res.json()
+        if (data.success) {
+          await fetchEmployees()
+          setNewEmployee({ firstName: '', lastName: '', contactNumber: '', department: '', position: '', branch: '', email: '' })
+          setIsAddOpen(false)
+        } else {
+          alert('Failed to add employee: ' + (data.message || 'Unknown error'))
+        }
+      } catch (error) {
+        console.error('Error adding employee:', error)
+        alert('Failed to add employee')
+      }
     }
   }
 
-  const deleteEmployee = (id: number) => {
-    setEmployees(employees.filter(emp => emp.id !== id))
+  const handleMoveToInactive = async () => {
+    if (!confirmDeactivate) return
+    setIsDeactivating(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/employees/${confirmDeactivate.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.success) {
+        await fetchEmployees()
+        setConfirmDeactivate(null)
+      } else {
+        alert('Failed to deactivate employee: ' + (data.message || 'Unknown error'))
+      }
+    } catch (error) {
+      console.error('Error deactivating employee:', error)
+      alert('Failed to deactivate employee')
+    } finally {
+      setIsDeactivating(false)
+    }
   }
 
   return (
     <div className="space-y-6">
+      {/* Confirm Move-to-Inactive Dialog */}
+      {confirmDeactivate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Move to Inactive?</h3>
+                <p className="text-sm text-muted-foreground">This action can be undone from the Inactive list.</p>
+              </div>
+            </div>
+            <p className="text-sm text-foreground mb-6">
+              <span className="font-medium">{confirmDeactivate.firstName} {confirmDeactivate.lastName}</span> will be moved to the Inactive employee list and removed from the active roster.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-border text-foreground hover:bg-secondary"
+                onClick={() => setConfirmDeactivate(null)}
+                disabled={isDeactivating}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleMoveToInactive}
+                disabled={isDeactivating}
+              >
+                {isDeactivating ? 'Moving...' : 'Move to Inactive'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Employees</h2>
-          <p className="text-muted-foreground text-sm mt-1">Manage your workforce and employee records</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Active Employees</h2>
+          <p className="text-muted-foreground text-sm mt-1">Manage your active workforce and employee records</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           {/* Import Excel Button */}
@@ -128,7 +259,6 @@ export default function EmployeesPage() {
                     className="flex-1 bg-primary hover:bg-primary/90"
                     disabled={!importFile || isImporting}
                     onClick={() => {
-                      // TODO: Implement actual Excel upload to backend
                       setIsImporting(true)
                       setTimeout(() => {
                         setIsImporting(false)
@@ -157,13 +287,34 @@ export default function EmployeesPage() {
                 <DialogTitle className="text-foreground">Register New Employee</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-foreground">First Name</Label>
+                    <Input
+                      placeholder="John"
+                      className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                      value={newEmployee.firstName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-foreground">Last Name</Label>
+                    <Input
+                      placeholder="Doe"
+                      className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                      value={newEmployee.lastName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label className="text-foreground">Full Name</Label>
+                  <Label className="text-foreground">Email</Label>
                   <Input
-                    placeholder="John Doe"
+                    type="email"
+                    placeholder="john@company.com"
                     className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    value={newEmployee.name}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                    value={newEmployee.email}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, email: e.target.value })}
                   />
                 </div>
                 <div>
@@ -178,16 +329,12 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label className="text-foreground">Department</Label>
-                  <Select value={newEmployee.department} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, department: value })}>
-                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-secondary border-border">
-                      {departments.map(dept => (
-                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder="Engineering"
+                    className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                    value={newEmployee.department}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, department: e.target.value })}
+                  />
                 </div>
                 <div>
                   <Label className="text-foreground">Position</Label>
@@ -200,25 +347,11 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label className="text-foreground">Branch</Label>
-                  <Select value={newEmployee.branch} onValueChange={(value: string) => setNewEmployee({ ...newEmployee, branch: value })}>
-                    <SelectTrigger className="mt-1 bg-secondary border-border text-foreground">
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-secondary border-border">
-                      {branches.map(branch => (
-                        <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-foreground">Bio</Label>
-                  <Textarea
-                    placeholder="Employee bio..."
+                  <Input
+                    placeholder="MAIN OFFICE"
                     className="mt-1 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    rows={3}
-                    value={newEmployee.bio}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEmployee({ ...newEmployee, bio: e.target.value })}
+                    value={newEmployee.branch}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
                   />
                 </div>
                 <Button onClick={handleAddEmployee} className="w-full bg-primary hover:bg-primary/90">
@@ -274,7 +407,7 @@ export default function EmployeesPage() {
       {/* Employees Table */}
       <Card className="bg-card border-border overflow-hidden rounded-2xl shadow-lg">
         <div className="p-4 border-b border-border bg-secondary/20">
-          <p className="text-sm text-muted-foreground">Showing {paginatedEmployees.length} of {filteredEmployees.length} employees</p>
+          <p className="text-sm text-muted-foreground">Showing {paginatedEmployees.length} of {filteredEmployees.length} active employees</p>
         </div>
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
           <table className="w-full">
@@ -285,62 +418,69 @@ export default function EmployeesPage() {
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Contact</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Department</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Position</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedEmployees.map((employee, index) => (
-                <tr
-                  key={employee.id}
-                  className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
-                >
-                  <td className="px-6 py-4 text-sm text-muted-foreground font-mono">#{employee.id.toString().padStart(3, '0')}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                        {employee.name.charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{employee.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{employee.contactNumber}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
-                      {employee.department}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-foreground">{employee.position}</td>
-                  <td className="px-6 py-4">
-                    <Badge className={employee.status === 'active'
-                      ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                      : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'}>
-                      <span className={`w-2 h-2 rounded-full mr-2 ${employee.status === 'active' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
-                      {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">{employee.joinDate}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 rounded-lg">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-                        onClick={() => deleteEmployee(employee.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading employees...</td>
                 </tr>
-              ))}
+              ) : paginatedEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No active employees found.</td>
+                </tr>
+              ) : (
+                paginatedEmployees.map((employee, index) => {
+                  const fullName = `${employee.firstName} ${employee.lastName}`
+                  return (
+                    <tr
+                      key={employee.id}
+                      className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
+                    >
+                      <td className="px-6 py-4 text-sm text-muted-foreground font-mono">#{employee.id.toString().padStart(3, '0')}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                            {employee.firstName.charAt(0)}
+                          </div>
+                          <span className="text-sm font-medium text-foreground">{fullName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{employee.contactNumber || '-'}</td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
+                          {employee.department || '-'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-foreground">{employee.position || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-CA') : '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 rounded-lg">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 rounded-lg"
+                            onClick={() => setConfirmDeactivate(employee)}
+                            title="Move to Inactive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>

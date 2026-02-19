@@ -29,11 +29,12 @@ services:
       DB_NAME: db_bits
       DB_USER: root
       DB_PASSWORD: root
+      JWT_SECRET: your-secret-key-change-this-in-production
     volumes:
       - ./backend:/app
       - /app/node_modules
       - /app/dist
-    command: npm run dev
+    command: npm run dev:watch
     ports:
       - "3001:3001"
     depends_on:
@@ -83,7 +84,8 @@ services:
 
 volumes:
   postgres_data:
-
+    external: true
+    name: project_postgres_data
 
 networks:
   bits_network:

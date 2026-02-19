@@ -46,6 +46,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
                 employeeNumber: employeeNumber || null,
                 branch: branch || null,
                 hireDate: hireDate ? new Date(hireDate) : null,
+                updatedAt: new Date(),
             }
         });
 
@@ -119,6 +120,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             success: true,
             message: 'Login successful',
             accessToken,
+            token: accessToken, // Alias for frontend compatibility
             refreshToken,
             employee: {
                 id: employee.id,

@@ -13,7 +13,10 @@
     "sync-employees": "ts-node src/scripts/syncEmployeesToDevice.ts",
     "export-employees-csv": "ts-node src/scripts/exportEmployeesToCSV.ts",
     "enroll-fingerprint": "ts-node src/scripts/enrollFingerprint.ts",
-    "sync-employees-from-device": "ts-node src/scripts/syncEmployeesFromDevice.ts"
+    "sync-employees-from-device": "ts-node src/scripts/syncEmployeesFromDevice.ts",
+    "debug-device-users": "ts-node src/scripts/debugDeviceUsers.ts",
+    "retroactive-checkout": "ts-node src/scripts/retroactive-auto-checkout.ts",
+    "fix-timezone": "ts-node src/scripts/fix-timezone-data.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

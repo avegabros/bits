@@ -20,7 +20,8 @@ async function testRoleBasedAccess() {
                     lastName: 'Employee',
                     email: 'employee@test.com',
                     password: hashedPassword,
-                    role: 'USER'
+                    role: 'USER',
+                    updatedAt: new Date()
                 }
             });
             console.log('  ✓ Created USER employee:', newUser.email);
@@ -58,7 +59,8 @@ async function testRoleBasedAccess() {
                     lastName: 'Manager',
                     email: 'hr@test.com',
                     password: hashedPassword,
-                    role: 'HR'
+                    role: 'HR',
+                    updatedAt: new Date()
                 }
             });
             console.log('  ✓ Created HR employee:', hrEmployee.email);
@@ -99,7 +101,8 @@ async function testRoleBasedAccess() {
                     lastName: 'Admin',
                     email: 'admin@test.com',
                     password: hashedPassword,
-                    role: 'ADMIN'
+                    role: 'ADMIN',
+                    updatedAt: new Date()
                 }
             });
             console.log('  ✓ Created ADMIN employee:', adminEmployee.email);

@@ -7,7 +7,7 @@ export default function HRPage() {
     const router = useRouter()
 
     useEffect(() => {
-        // Redirect to HR dashboard
+        
         router.replace('/hr/dashboard')
     }, [router])
 

@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,20 +17,162 @@ import {
   ChevronLeft,
   Building2
 } from 'lucide-react';
-import { branches, departments, getReportData } from '@/lib/mock-data';
 
-const mockReportData = getReportData();
+// Types matching backend response
+type Employee = {
+  id: number
+  firstName: string
+  lastName: string
+  department: string | null
+  branch: string | null
+  position: string | null
+  employmentStatus: string
+}
+
+type AttendanceRecord = {
+  id: number
+  employeeId: number
+  date: string
+  checkInTime: string
+  checkOutTime: string | null
+  status: string
+  employee: Employee
+}
+
+type ReportRow = {
+  id: number
+  name: string
+  department: string
+  branch: string
+  totalDays: number
+  present: number
+  late: number
+  absent: number
+  totalHours: number
+}
 
 export default function ReportsPage() {
+  const [reportData, setReportData] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState('all');
-  const [startDate, setStartDate] = useState('2026-01-01');
-  const [endDate, setEndDate] = useState('2026-01-30');
+
+  // Default to current month
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  const filteredData = mockReportData.filter(emp => {
+  // Derive filter options from data
+  const departments = Array.from(new Set(reportData.map(e => e.department).filter(Boolean)));
+  const branches = Array.from(new Set(reportData.map(e => e.branch).filter(Boolean)));
+
+  // Fetch report data: employees + attendance records for the date range
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Fetch employees and attendance in parallel
+      const [empRes, attRes] = await Promise.all([
+        fetch('/api/employees', { headers }),
+        fetch(`/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=10000`, { headers })
+      ]);
+
+      if (empRes.status === 401 || attRes.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return;
+      }
+
+      const empData = await empRes.json();
+      const attData = await attRes.json();
+
+      if (!empData.success || !attData.success) {
+        console.error('Failed to fetch data:', empData.message, attData.message);
+        setLoading(false);
+        return;
+      }
+
+      const employees: Employee[] = empData.employees;
+      const records: AttendanceRecord[] = attData.data;
+
+      // Calculate working days in the date range (weekdays only)
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
+      let totalWorkingDays = 0;
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const day = d.getDay();
+        if (day !== 0 && day !== 6) totalWorkingDays++;
+      }
+
+      // Group attendance records by employeeId
+      const attendanceByEmployee = new Map<number, AttendanceRecord[]>();
+      records.forEach((rec: AttendanceRecord) => {
+        const existing = attendanceByEmployee.get(rec.employeeId) || [];
+        existing.push(rec);
+        attendanceByEmployee.set(rec.employeeId, existing);
+      });
+
+      // Build report rows
+      const rows: ReportRow[] = employees
+        .filter((emp: Employee) => emp.employmentStatus === 'ACTIVE')
+        .map((emp: Employee) => {
+          const empRecords = attendanceByEmployee.get(emp.id) || [];
+
+          // Count statuses
+          let present = 0;
+          let late = 0;
+          let totalHours = 0;
+
+          empRecords.forEach((rec: AttendanceRecord) => {
+            const isLate = rec.status === 'late' || new Date(rec.checkInTime).getHours() >= 9;
+            if (isLate) {
+              late++;
+            }
+            present++;
+
+            // Calculate hours worked
+            if (rec.checkOutTime) {
+              const checkIn = new Date(rec.checkInTime).getTime();
+              const checkOut = new Date(rec.checkOutTime).getTime();
+              totalHours += (checkOut - checkIn) / (1000 * 60 * 60);
+            }
+          });
+
+          const absent = Math.max(0, totalWorkingDays - present);
+
+          return {
+            id: emp.id,
+            name: `${emp.firstName} ${emp.lastName}`,
+            department: emp.department || '-',
+            branch: emp.branch || '-',
+            totalDays: totalWorkingDays,
+            present,
+            late,
+            absent,
+            totalHours: parseFloat(totalHours.toFixed(2))
+          };
+        });
+
+      setReportData(rows);
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportData();
+  }, [startDate, endDate]);
+
+  const filteredData = reportData.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = selectedDept === 'all' || emp.department === selectedDept;
     const matchesBranch = selectedBranch === 'all' || emp.branch === selectedBranch;
@@ -46,7 +188,7 @@ export default function ReportsPage() {
   // Summary stats
   const totalRecords = filteredData.length;
   const avgAttendance = filteredData.length > 0
-    ? Math.round(filteredData.reduce((sum, e) => sum + (e.present / e.totalDays) * 100, 0) / filteredData.length)
+    ? Math.round(filteredData.reduce((sum, e) => sum + (e.totalDays > 0 ? (e.present / e.totalDays) * 100 : 0), 0) / filteredData.length)
     : 0;
   const totalLate = filteredData.reduce((sum, e) => sum + e.late, 0);
   const totalAbsent = filteredData.reduce((sum, e) => sum + e.absent, 0);
@@ -237,49 +379,59 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedData.map((employee, index) => (
-                <tr
-                  key={employee.id}
-                  className={`hover:bg-primary/5 transition-colors cursor-pointer ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
-                >
-                  <td className="px-4 sm:px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                        {employee.name.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-foreground block truncate">{employee.name}</span>
-                        <span className="text-xs text-muted-foreground sm:hidden">{employee.department}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
-                    <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
-                      {employee.department}
-                    </Badge>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4">
-                    <span className="text-sm text-green-400 font-bold">{employee.present}</span>
-                    <span className="text-xs text-muted-foreground">/{employee.totalDays}</span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4">
-                    <span className={`text-sm font-medium ${employee.late > 0 ? 'text-yellow-400' : 'text-muted-foreground'}`}>
-                      {employee.late}
-                    </span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-                    <span className={`text-sm font-medium ${employee.absent > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
-                      {employee.absent}
-                    </span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 text-sm font-mono text-foreground">{employee.totalHours.toFixed(2)}</td>
-                  <td className="px-4 sm:px-6 py-4 text-right">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </td>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading report data...</td>
                 </tr>
-              ))}
+              ) : paginatedData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No records found.</td>
+                </tr>
+              ) : (
+                paginatedData.map((employee, index) => (
+                  <tr
+                    key={employee.id}
+                    className={`hover:bg-primary/5 transition-colors cursor-pointer ${index % 2 === 0 ? 'bg-transparent' : 'bg-secondary/10'}`}
+                  >
+                    <td className="px-4 sm:px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                          {employee.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-foreground block truncate">{employee.name}</span>
+                          <span className="text-xs text-muted-foreground sm:hidden">{employee.department}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
+                      <Badge variant="outline" className="bg-secondary/50 text-foreground border-border">
+                        {employee.department}
+                      </Badge>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className="text-sm text-green-400 font-bold">{employee.present}</span>
+                      <span className="text-xs text-muted-foreground">/{employee.totalDays}</span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className={`text-sm font-medium ${employee.late > 0 ? 'text-yellow-400' : 'text-muted-foreground'}`}>
+                        {employee.late}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+                      <span className={`text-sm font-medium ${employee.absent > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                        {employee.absent}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm font-mono text-foreground">{employee.totalHours.toFixed(2)}</td>
+                    <td className="px-4 sm:px-6 py-4 text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg">
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

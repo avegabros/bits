@@ -8,7 +8,9 @@ import { prisma } from './lib/prisma';
 import attendanceRoutes from './routes/attendance_routes';
 import authRoutes from './routes/auth_routes';
 import employeeRoutes from './routes/employee_routes';
+import userRoutes from './routes/user_routes';
 import { startCronJobs } from './lib/cronJobs';
+import { repairMissingCheckouts } from './services/attendance.service';
 
 dotenv.config();
 
@@ -27,6 +29,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -81,6 +84,9 @@ process.on('uncaughtException', (error) => {
 
 app.listen(port, () => {
   console.log(`Backend server running on port ${port}`);
+
+  // Run startup repair for missing checkouts
+  repairMissingCheckouts();
 
   // Initialize automated cron jobs
   startCronJobs();

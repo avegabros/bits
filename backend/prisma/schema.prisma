@@ -7,11 +7,105 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUMS ---
-enum Role {
-  USER
-  ADMIN
-  HR
+model Attendance {
+  id           Int       @id @default(autoincrement())
+  employeeId   Int
+  date         DateTime
+  checkInTime  DateTime
+  checkOutTime DateTime?
+  status       String    @default("present")
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt DateTime   @updatedAt
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model AttendanceLog {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime
+  status     Int
+  employeeId Int
+  deviceId   Int?
+  createdAt  DateTime @default(now())
+  Device     Device?  @relation(fields: [deviceId], references: [id])
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([timestamp, employeeId])
+  @@index([deviceId])
+  @@index([employeeId])
+  @@index([timestamp])
+}
+
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Employee  Employee[]
+}
+
+model Device {
+  id            Int             @id @default(autoincrement())
+  name          String
+  ip            String          @unique
+  port          Int             @default(4370)
+  location      String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  AttendanceLog AttendanceLog[]
+
+  @@index([isActive])
+}
+
+model Employee {
+  id               Int              @id @default(autoincrement())
+  zkId             Int?             @unique
+  firstName        String
+  lastName         String
+  role             Role             @default(USER)
+  email            String?          @unique
+  password         String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  
+  // Secondary Info
+  department       String?
+  position         String?
+  branch           String?
+  contactNumber    String?
+  employeeNumber   String?          @unique
+  hireDate         DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime
+
+  // Relations (Unused for now)
+  departmentId     Int?
+  shiftId          Int?
+  Attendance       Attendance[]
+  AttendanceLog    AttendanceLog[]
+  Department       Department?      @relation(fields: [departmentId], references: [id])
+  Shift            Shift?           @relation(fields: [shiftId], references: [id])
+
+  @@index([departmentId])
+  @@index([email])
+  @@index([employeeNumber])
+  @@index([employmentStatus])
+  @@index([role])
+}
+
+model Shift {
+  id        Int        @id @default(autoincrement())
+  name      String
+  startTime String
+  endTime   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Employee  Employee[]
 }
 
 enum EmploymentStatus {
@@ -20,127 +114,8 @@ enum EmploymentStatus {
   TERMINATED
 }
 
-// --- MODELS ---
-
-// Represents physical ZKTeco machines
-model Device {
-  id        Int             @id @default(autoincrement())
-  name      String          // e.g. "Main Entrance"
-  ip        String          @unique // e.g. "192.168.1.201"
-  port      Int             @default(4370)
-  location  String?
-  isActive  Boolean         @default(true)
-  logs      AttendanceLog[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-
-  @@index([isActive])
-}
-
-// Organizational Departments
-model Department {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique // e.g. "IT", "HR"
-  employees Employee[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-}
-
-// Work Shifts (for calculating lateness)
-model Shift {
-  id        Int        @id @default(autoincrement())
-  name      String     // e.g. "Morning 9-6"
-  startTime String     // "08:30"
-  endTime   String     // "18:30"
-  employees Employee[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-}
-
-// Users/Employees
-model Employee {
-  id               Int                 @id @default(autoincrement())
-  zkId             Int?                @unique // The User ID inside the K14 device
-  employeeNumber   String?             @unique // Company employee ID (e.g. "AVG-26020-6001")
-  
-  // Personal Information
-  firstName        String
-  lastName         String
-  email            String?             @unique // For login
-  contactNumber    String?             // Phone number for HR contact
-  
-  // Authentication
-  password         String?             // Hashed password
-  role             Role                @default(USER)
-  
-  // Work Details
-  department       String?             // Simple department name (e.g. "Engineering", "HR")
-  position         String?             // Job title (e.g. "Senior Developer", "Manager")
-  branch           String?             // Work location (e.g. "Main Branch", "North Branch")
-
-  // Employment Status
-  hireDate         DateTime?           // Date employee was hired
-  employmentStatus EmploymentStatus    @default(ACTIVE)
-  
-  // Relationships
-  departmentId     Int?
-  departmentRel    Department?         @relation(fields: [departmentId], references: [id])
-  
-  shiftId          Int?
-  shift            Shift?              @relation(fields: [shiftId], references: [id])
-  
-  logs             AttendanceLog[]
-  attendances      Attendance[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-
-  @@index([email])
-  @@index([employeeNumber])
-  @@index([employmentStatus])
-  @@index([role])
-  @@index([departmentId])
-}
-
-// Clock-in/out records (raw device logs)
-model AttendanceLog {
-  id         Int      @id @default(autoincrement())
-  timestamp  DateTime
-  status     Int      // 0 = Check-in, 1 = Check-out, etc. (From Device)
-  
-  employeeId Int
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  
-  deviceId   Int?
-  device     Device?  @relation(fields: [deviceId], references: [id])
-  
-  createdAt  DateTime @default(now())
-
-  // Ensure we don't save the same punch twice from the same user at the exact same second
-  @@unique([timestamp, employeeId])
-  @@index([employeeId])
-  @@index([timestamp])
-  @@index([deviceId])
-}
-
-// Processed attendance records (check-in/check-out pairs)
-model Attendance {
-  id           Int       @id @default(autoincrement())
-  
-  employeeId   Int
-  employee     Employee  @relation(fields: [employeeId], references: [id])
-  
-  date         DateTime  // Date of attendance (normalized to midnight for grouping)
-  checkInTime  DateTime  // Actual check-in timestamp
-  checkOutTime DateTime? // Actual check-out timestamp (null if not checked out yet)
-  
-  status       String    @default("present") // present, late, absent, incomplete
-  notes        String?   // For manual corrections or issues
-  
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  
-  @@unique([employeeId, date])
-  @@index([employeeId])
-  @@index([date])
-  @@index([status])
+enum Role {
+  USER
+  ADMIN
+  HR
 }

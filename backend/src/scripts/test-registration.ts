@@ -10,7 +10,8 @@ async function testRegistration() {
             lastName: 'User',
             email: 'test@example.com',
             password: 'password123',
-            role: 'USER' as const,
+            role: 'USER' as any,
+            updatedAt: new Date(),
         };
 
         console.log('📝 Creating user:', `${testUser.firstName} ${testUser.lastName}`);
@@ -36,6 +37,7 @@ async function testRegistration() {
                 email: testUser.email,
                 password: hashedPassword,
                 role: testUser.role,
+                updatedAt: new Date(),
             }
         });
 

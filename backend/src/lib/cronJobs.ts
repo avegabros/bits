@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { syncZkData } from '../services/zkServices';
-import { autoCloseIncompleteAttendance } from '../services/attendance.service';
+import { autoCloseIncompleteAttendance, autoCheckoutEmployees } from '../services/attendance.service';
 
 /**
  * Initialize all cron jobs for automated attendance tracking
@@ -34,6 +34,18 @@ export const startCronJobs = () => {
         }
     });
 
-    console.log('[CronJobs] ✓ Periodic sync scheduled (every 1 minute)');
+    // Job 3: Auto-checkout employees at 11:59 PM (sets checkout to 5:00 PM)
+    cron.schedule('59 23 * * *', async () => {
+        console.log('[CronJob] Running automatic checkout at end of day...');
+        try {
+            const count = await autoCheckoutEmployees();
+            console.log(`[CronJob] Auto-checkout completed: ${count} employees checked out at 5:00 PM`);
+        } catch (error) {
+            console.error('[CronJob] Auto-checkout error:', error);
+        }
+    });
+
+    console.log('[CronJobs] ✓ Periodic sync scheduled (every 10 seconds)');
     console.log('[CronJobs] ✓ Midnight cleanup scheduled (00:00 daily)');
+    console.log('[CronJobs] ✓ Auto-checkout scheduled (23:59 daily)');
 };
