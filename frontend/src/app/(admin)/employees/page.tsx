@@ -1,7 +1,6 @@
 'use client'
 
 import React from "react"
-
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,10 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Upload, AlertTriangle } from 'lucide-react'
 
-// Employee type matching backend response
 type Employee = {
   id: number
   zkId: number | null
@@ -41,6 +38,11 @@ export default function EmployeesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+
+  // Confirm move-to-inactive dialog
+  const [confirmDeactivate, setConfirmDeactivate] = useState<Employee | null>(null)
+  const [isDeactivating, setIsDeactivating] = useState(false)
+
   const [newEmployee, setNewEmployee] = useState({
     firstName: '',
     lastName: '',
@@ -54,32 +56,25 @@ export default function EmployeesPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 10
 
-  // Derive unique departments and branches from the fetched data
   const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean))) as string[]
   const branches = Array.from(new Set(employees.map(e => e.branch).filter(Boolean))) as string[]
 
-  // Fetch employees from backend
   const fetchEmployees = async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
       const res = await fetch('/api/employees', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-
       if (res.status === 401) {
         localStorage.removeItem('token')
         window.location.href = '/login'
         return
       }
-
       const data = await res.json()
       if (data.success) {
-        setEmployees(data.employees)
-      } else {
-        console.error('Failed to fetch employees:', data.message)
+        // Active employees page only shows ACTIVE
+        setEmployees(data.employees.filter((e: Employee) => e.employmentStatus === 'ACTIVE'))
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -127,10 +122,8 @@ export default function EmployeesPage() {
             email: newEmployee.email || undefined,
           })
         })
-
         const data = await res.json()
         if (data.success) {
-          // Refresh the list from backend
           await fetchEmployees()
           setNewEmployee({ firstName: '', lastName: '', contactNumber: '', department: '', position: '', branch: '', email: '' })
           setIsAddOpen(false)
@@ -144,36 +137,74 @@ export default function EmployeesPage() {
     }
   }
 
-  const deleteEmployee = async (id: number) => {
+  const handleMoveToInactive = async () => {
+    if (!confirmDeactivate) return
+    setIsDeactivating(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/employees/${id}`, {
+      const res = await fetch(`/api/employees/${confirmDeactivate.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-
       const data = await res.json()
       if (data.success) {
-        // Refresh the list from backend
         await fetchEmployees()
+        setConfirmDeactivate(null)
       } else {
-        alert('Failed to delete employee: ' + (data.message || 'Unknown error'))
+        alert('Failed to deactivate employee: ' + (data.message || 'Unknown error'))
       }
     } catch (error) {
-      console.error('Error deleting employee:', error)
-      alert('Failed to delete employee')
+      console.error('Error deactivating employee:', error)
+      alert('Failed to deactivate employee')
+    } finally {
+      setIsDeactivating(false)
     }
   }
 
   return (
     <div className="space-y-6">
+      {/* Confirm Move-to-Inactive Dialog */}
+      {confirmDeactivate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Move to Inactive?</h3>
+                <p className="text-sm text-muted-foreground">This action can be undone from the Inactive list.</p>
+              </div>
+            </div>
+            <p className="text-sm text-foreground mb-6">
+              <span className="font-medium">{confirmDeactivate.firstName} {confirmDeactivate.lastName}</span> will be moved to the Inactive employee list and removed from the active roster.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-border text-foreground hover:bg-secondary"
+                onClick={() => setConfirmDeactivate(null)}
+                disabled={isDeactivating}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleMoveToInactive}
+                disabled={isDeactivating}
+              >
+                {isDeactivating ? 'Moving...' : 'Move to Inactive'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Employees</h2>
-          <p className="text-muted-foreground text-sm mt-1">Manage your workforce and employee records</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Active Employees</h2>
+          <p className="text-muted-foreground text-sm mt-1">Manage your active workforce and employee records</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           {/* Import Excel Button */}
@@ -228,7 +259,6 @@ export default function EmployeesPage() {
                     className="flex-1 bg-primary hover:bg-primary/90"
                     disabled={!importFile || isImporting}
                     onClick={() => {
-                      // TODO: Implement actual Excel upload to backend
                       setIsImporting(true)
                       setTimeout(() => {
                         setIsImporting(false)
@@ -377,7 +407,7 @@ export default function EmployeesPage() {
       {/* Employees Table */}
       <Card className="bg-card border-border overflow-hidden rounded-2xl shadow-lg">
         <div className="p-4 border-b border-border bg-secondary/20">
-          <p className="text-sm text-muted-foreground">Showing {paginatedEmployees.length} of {filteredEmployees.length} employees</p>
+          <p className="text-sm text-muted-foreground">Showing {paginatedEmployees.length} of {filteredEmployees.length} active employees</p>
         </div>
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
           <table className="w-full">
@@ -388,7 +418,6 @@ export default function EmployeesPage() {
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Contact</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Department</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Position</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
               </tr>
@@ -396,16 +425,15 @@ export default function EmployeesPage() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">Loading employees...</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading employees...</td>
                 </tr>
               ) : paginatedEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No employees found.</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No active employees found.</td>
                 </tr>
               ) : (
                 paginatedEmployees.map((employee, index) => {
                   const fullName = `${employee.firstName} ${employee.lastName}`
-                  const statusLower = employee.employmentStatus.toLowerCase()
                   return (
                     <tr
                       key={employee.id}
@@ -427,14 +455,6 @@ export default function EmployeesPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-sm text-foreground">{employee.position || '-'}</td>
-                      <td className="px-6 py-4">
-                        <Badge className={statusLower === 'active'
-                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                          : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'}>
-                          <span className={`w-2 h-2 rounded-full mr-2 ${statusLower === 'active' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
-                          {employee.employmentStatus.charAt(0) + employee.employmentStatus.slice(1).toLowerCase()}
-                        </Badge>
-                      </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-CA') : '-'}
                       </td>
@@ -449,8 +469,9 @@ export default function EmployeesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-                            onClick={() => deleteEmployee(employee.id)}
+                            className="h-8 w-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 rounded-lg"
+                            onClick={() => setConfirmDeactivate(employee)}
+                            title="Move to Inactive"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
