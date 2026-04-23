@@ -84,8 +84,8 @@ export function UserAccountAddEditModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-md mx-4 p-0 rounded-2xl overflow-hidden shadow-xl">
-        <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
+      <DialogContent showCloseButton={false} className="bg-white border-0 w-[calc(100%-2rem)] sm:max-w-md p-0 rounded-2xl overflow-hidden shadow-xl max-h-[90vh] flex flex-col">
+        <div className="bg-red-600 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
           <div>
             <DialogTitle className="text-white font-bold text-lg">
               {editingUser ? 'Edit User Account' : 'Add New User'}
@@ -94,13 +94,13 @@ export function UserAccountAddEditModal({
               {editingUser ? 'Update user details' : 'Create a new user account'}
             </DialogDescription>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors p-1" aria-label="Close modal">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
         
-        <div className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="px-4 sm:px-6 py-5 space-y-4 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">First Name</label>
               <input
@@ -197,10 +197,10 @@ export function UserAccountAddEditModal({
           )}
         </div>
         
-        <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-6 py-4 border-t border-slate-100 shrink-0">
           <button
             disabled={isSaving}
-            className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50 py-2.5 sm:py-0"
             onClick={onClose}
           >
             Discard
@@ -208,7 +208,7 @@ export function UserAccountAddEditModal({
           <button 
             disabled={isSaving}
             onClick={handleSave} 
-            className="px-8 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+            className="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center min-w-[120px]"
           >
             {isSaving ? 'Processing...' : (editingUser ? 'Save Changes' : 'Create User')}
           </button>
