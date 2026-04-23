@@ -59,9 +59,17 @@ export const createDevice = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'IP address is required' });
         }
 
-        const existing = await prisma.device.findUnique({ where: { ip: ip.trim() } });
-        if (existing) {
+        const existingIp = await prisma.device.findUnique({ where: { ip: ip.trim() } });
+        if (existingIp) {
             return res.status(409).json({ success: false, message: `A device with IP ${ip} already exists` });
+        }
+
+        // Check for duplicate name (case-insensitive)
+        const existingName = await prisma.device.findFirst({
+            where: { name: { equals: name.trim(), mode: 'insensitive' } }
+        });
+        if (existingName) {
+            return res.status(409).json({ success: false, message: `A device with the name "${name.trim()}" already exists` });
         }
 
         const device = await prisma.device.create({
@@ -112,6 +120,19 @@ export const updateDevice = async (req: Request, res: Response) => {
             const conflict = await prisma.device.findUnique({ where: { ip: ip.trim() } });
             if (conflict) {
                 return res.status(409).json({ success: false, message: `A device with IP ${ip} already exists` });
+            }
+        }
+
+        // Check if name is being changed to one that's already in use (case-insensitive)
+        if (name && name.trim() !== existing.name) {
+            const nameConflict = await prisma.device.findFirst({
+                where: { 
+                    name: { equals: name.trim(), mode: 'insensitive' },
+                    id: { not: id }
+                }
+            });
+            if (nameConflict) {
+                return res.status(409).json({ success: false, message: `A device with the name "${name.trim()}" already exists` });
             }
         }
 
@@ -320,6 +341,14 @@ export const reconcileDevice = async (req: Request, res: Response) => {
     const id = parseInt(String(req.params.id));
     if (isNaN(id)) {
         return res.status(400).json({ success: false, message: 'Invalid device ID' });
+    }
+
+    const device = await prisma.device.findUnique({ where: { id } });
+    if (!device) {
+        return res.status(404).json({ success: false, message: 'Device not found' });
+    }
+    if (!device.isActive) {
+        return res.status(400).json({ success: false, message: 'Cannot reconcile an offline device. Please ensure the device is online and tested.' });
     }
 
     // Treat any truthy string ("true", "1", "yes") as dry-run
