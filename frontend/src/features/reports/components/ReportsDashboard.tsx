@@ -89,7 +89,7 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
   }
 
   return (
-    <div className="space-y-6 pb-6 p-4 lg:p-6">
+    <div className="">
       {/* Individual Employee Report Modal */}
       {selectedEmployee && (
         <EmployeeModal

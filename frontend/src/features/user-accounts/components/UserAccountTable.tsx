@@ -34,7 +34,12 @@ export function UserAccountTable({
 }: UserAccountTableProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
+      <div
+        className="overflow-x-auto scrollbar-table"
+        tabIndex={0}
+        role="region"
+        aria-label="User accounts table — scroll horizontally"
+      >
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
             <tr>

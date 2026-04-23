@@ -60,7 +60,7 @@ export function EmployeeLayout({ children }: { children: React.ReactNode }) {
 
             {/* Main Content Area */}
             <div className={`h-[calc(100vh-4rem)] mt-16 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-68'}`}>
-                <main id="main-content" className="h-full overflow-y-auto scrollbar-hide p-4 md:p-8">
+                <main id="main-content" className="h-full overflow-y-auto scrollbar-light p-4 md:p-8">
                     {children}
                 </main>
             </div>

@@ -94,7 +94,12 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-x-auto scrollbar-table"
+              tabIndex={0}
+              role="region"
+              aria-label="Device sync status table — scroll horizontally"
+            >
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/50">

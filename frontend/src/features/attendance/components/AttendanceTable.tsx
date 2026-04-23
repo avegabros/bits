@@ -85,7 +85,13 @@ export function AttendanceTable({
       </div>
 
       {/* Desktop Table View */}
-      <div ref={dragScrollRef} className="overflow-x-auto scrollbar-slim cursor-grab active:cursor-grabbing hidden lg:block">
+      <div
+        ref={dragScrollRef}
+        className="overflow-x-auto scrollbar-table cursor-grab active:cursor-grabbing hidden lg:block"
+        tabIndex={0}
+        role="region"
+        aria-label="Attendance records table — scroll horizontally"
+      >
         <AttendanceDesktopTable
           loading={loading}
           sortedRecords={sortedRecords}
