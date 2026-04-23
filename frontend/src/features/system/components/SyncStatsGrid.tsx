@@ -34,7 +34,7 @@ export function SyncStatsGrid({
             {/* ── Stats ─────────────────────────────────────────── */}
             <div className="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {/* Current Interval */}
-                <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+                <div className="bg-slate-50 rounded-lg px-3 py-2.5 transition-shadow hover:shadow-sm hover:bg-white border border-transparent hover:border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1 mb-1">
                         <Activity className="h-3 w-3" /> Interval
                     </div>
@@ -44,12 +44,12 @@ export function SyncStatsGrid({
                         </span>
                         {status.shiftAwareMode && status.currentMode === 'PEAK' && (
                             <Badge className="text-[9px] px-1.5 py-0 h-4 font-black bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
-                                PEAK ⚡
+                                PEAK
                             </Badge>
                         )}
                         {status.shiftAwareMode && status.currentMode === 'OFF-PEAK' && (
                             <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-black border">
-                                OFF-PEAK 💤
+                                OFF-PEAK
                             </Badge>
                         )}
                         {!status.shiftAwareMode && (
@@ -64,7 +64,7 @@ export function SyncStatsGrid({
                 </div>
 
                 {/* Last Synchronized */}
-                <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+                <div className="bg-slate-50 rounded-lg px-3 py-2.5 transition-shadow hover:shadow-sm hover:bg-white border border-transparent hover:border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1 mb-1">
                         <Clock className="h-3 w-3" /> Last Sync
                     </div>
@@ -77,7 +77,7 @@ export function SyncStatsGrid({
                 </div>
 
                 {/* Health Monitor */}
-                <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+                <div className="bg-slate-50 rounded-lg px-3 py-2.5 transition-shadow hover:shadow-sm hover:bg-white border border-transparent hover:border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1 mb-1">
                         <HeartPulse className="h-3 w-3" /> Health Monitor
                     </div>
@@ -93,7 +93,7 @@ export function SyncStatsGrid({
                             <span className="text-sm font-bold text-slate-400">Disabled</span>
                         </div>
                     )}
-                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    <div className="text-[10px] text-slate-500 font-medium mt-0.5">
                         {status.healthCheck?.isActive
                             ? `Last: ${status.healthCheck.lastCheckAt ? format(new Date(status.healthCheck.lastCheckAt), 'HH:mm:ss') : 'Pending...'}`
                             : 'Offline'
@@ -103,7 +103,7 @@ export function SyncStatsGrid({
             </div>
 
             {/* ── Action Buttons ─────────────────────────────────── */}
-            <div className="flex flex-row lg:flex-col gap-2 lg:w-44 shrink-0">
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:w-44 shrink-0">
                 <Button
                     onClick={onManualSync}
                     disabled={syncing || syncingTime || !status.globalSyncEnabled}
@@ -134,7 +134,7 @@ export function SyncStatsGrid({
                     disabled={clearingLogs || syncing || syncingTime}
                     variant="outline"
                     size="sm"
-                    className="flex-1 lg:flex-none text-xs font-bold h-8 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    className="flex-1 lg:flex-none text-xs font-bold h-8 border-red-200 text-red-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors duration-200"
                 >
                     {clearingLogs ? (
                         <><Timer className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Clearing...</>
@@ -142,6 +142,11 @@ export function SyncStatsGrid({
                         <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Clear Logs</>
                     )}
                 </Button>
+                {!status.globalSyncEnabled && (
+                    <p className="text-[10px] text-slate-400 text-center font-medium mt-1 lg:text-left">
+                        Enable global sync first
+                    </p>
+                )}
             </div>
         </div>
     );

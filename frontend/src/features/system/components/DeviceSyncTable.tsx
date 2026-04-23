@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { MonitorSmartphone, CloudOff, Wifi } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { useState } from 'react';
 
 interface Device {
     id: number;
@@ -32,7 +33,11 @@ function Skeleton({ className }: { className?: string }) {
 export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyncTableProps) {
     const { toast } = useToast();
 
+    const [togglingId, setTogglingId] = useState<number | null>(null);
+
     const toggleDeviceSync = async (id: number, currentEnabled: boolean) => {
+        if (togglingId !== null) return;
+        setTogglingId(id);
         try {
             const res = await axios.patch(`/api/devices/${id}/toggle`, {}, { withCredentials: true });
             if (res.data.success) {
@@ -48,6 +53,8 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
                 description: error.response?.data?.message || 'Failed to update device',
                 variant: 'destructive',
             });
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -110,7 +117,11 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
                             </tr>
                         ) : (
                             devices.map((device) => (
-                                <tr key={device.id} className="hover:bg-slate-50/50 transition-colors">
+                                <tr key={device.id} className={`hover:bg-slate-50/50 transition-colors ${
+                                    !device.isActive && device.syncEnabled
+                                        ? 'bg-amber-50/40 hover:bg-amber-50/60'
+                                        : ''
+                                }`}>
                                     <td className="px-5 py-3">
                                         <span className="text-sm font-bold text-slate-800">{device.name}</span>
                                     </td>
@@ -133,6 +144,11 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
                                                     Sync Failed
                                                 </Badge>
                                             )}
+                                            {!device.isActive && device.syncEnabled && (
+                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-amber-300 bg-amber-50 text-amber-700">
+                                                    Unreachable
+                                                </Badge>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-5 py-3">
@@ -149,6 +165,7 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
                                         <Switch
                                             checked={device.syncEnabled}
                                             onCheckedChange={() => toggleDeviceSync(device.id, device.syncEnabled)}
+                                            disabled={togglingId === device.id}
                                             aria-label={`Toggle sync for ${device.name}`}
                                         />
                                     </td>

@@ -28,7 +28,7 @@ export function LogMaintenanceConfigSection({
                     <div className="flex items-center justify-center w-6 h-6 rounded-md bg-purple-100">
                         <HardDrive className="h-3 w-3 text-purple-600" />
                     </div>
-                    <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Log Maintenance</h3>
+                    <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Log Maintenance</h3>
                 </div>
                 <Switch
                     id="logBufferMaintenance"
@@ -38,8 +38,8 @@ export function LogMaintenanceConfigSection({
             </div>
 
             {/* Body */}
-            <div className="px-4 py-3 flex-1">
-                <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-3">
+            <div className="px-4 py-4 flex-1">
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
                     ZKTeco devices have limited memory. This clears old logs from device memory during off-hours to prevent capacity issues and reduce sync bandwidth.
                 </p>
 
@@ -76,13 +76,13 @@ export function LogMaintenanceConfigSection({
                                         onChange({ logBufferMaintenanceHour: clamped });
                                     }}
                                     className="w-16 text-center"
-                                />
-                                <span className="text-[10px] text-slate-400 font-medium">:00</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-medium">
-                                {logBufferMaintenanceHour === 0 ? 'Midnight' : logBufferMaintenanceHour <= 11 ? `${logBufferMaintenanceHour}:00 AM` : logBufferMaintenanceHour === 12 ? '12:00 PM' : `${logBufferMaintenanceHour - 12}:00 PM`} PHT
-                            </p>
+                            />
+                            <span className="text-xs text-slate-500">:00</span>
                         </div>
+                        <p className="text-xs text-slate-500">
+                            {logBufferMaintenanceHour === 0 ? 'Midnight' : logBufferMaintenanceHour <= 11 ? `${logBufferMaintenanceHour}:00 AM` : logBufferMaintenanceHour === 12 ? '12:00 PM' : `${logBufferMaintenanceHour - 12}:00 PM`} PHT
+                        </p>
+                    </div>
                     </div>
                 )}
             </div>

@@ -102,13 +102,13 @@ export function SystemDashboard() {
     });
 
     return (
-        <div className="flex flex-col gap-3 min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] lg:overflow-y-auto">
+        <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] lg:overflow-y-auto pb-32 pt-4 px-4 lg:px-8">
             {/* ── Header ────────────────────────────────────────────────── */}
-            <div className="shrink-0">
-                <h1 className="text-lg lg:text-xl font-black text-slate-900 tracking-tight">
+            <div className="shrink-0 border-l-4 border-slate-900 pl-4">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                     System Configuration
                 </h1>
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                <p className="text-sm text-slate-500 mt-1">
                     Monitor background sync activity, adjust polling intervals, and manage device connectivity.
                 </p>
             </div>

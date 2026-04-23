@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { DurationInput } from './DurationInput';
 import { ShiftTimelineViz } from './ShiftTimelineViz';
-import { Zap, Info } from 'lucide-react';
+import { Zap, Info, Clock, Moon, AlertTriangle } from 'lucide-react';
 
 interface ShiftAwareConfigSectionProps {
     defaultIntervalSec: number;
@@ -39,10 +39,10 @@ export function ShiftAwareConfigSection({
                         <Zap className="h-3.5 w-3.5 text-amber-600" />
                     </div>
                     <div>
-                        <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        <h3 className="text-sm font-semibold text-slate-800 tracking-tight">
                             Shift-Aware Sync
                         </h3>
-                        <p className="text-[10px] text-slate-400 font-semibold">
+                        <p className="text-xs text-slate-500 mt-0.5">
                             Automatically adjusts polling speed based on shift schedules
                         </p>
                     </div>
@@ -75,8 +75,8 @@ export function ShiftAwareConfigSection({
 
                     {!shiftAwareSyncEnabled && (
                         <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3 py-2.5 border border-blue-100 lg:max-w-xs lg:mt-5">
-                            <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
-                            <p className="text-[10px] text-blue-600 font-medium leading-relaxed">
+                            <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                            <p className="text-xs text-blue-700 font-medium leading-relaxed">
                                 Enable <strong>Shift-Aware Sync</strong> to automatically poll faster during clock-in/clock-out rush hours and slower during quiet periods. This reduces server load while keeping attendance responsive.
                             </p>
                         </div>
@@ -88,8 +88,8 @@ export function ShiftAwareConfigSection({
                     <div className="space-y-5 border-t border-slate-100 pt-5">
                         {/* How it works explanation */}
                         <div className="bg-slate-50 rounded-lg px-4 py-3 border border-slate-100">
-                            <p className="text-[11px] text-slate-600 font-semibold leading-relaxed">
-                                <strong className="text-slate-800">How it works:</strong> The system reads your active shift schedules and creates two &quot;rush hour&quot; windows per shift — one around <strong>clock-in time</strong> and one around <strong>clock-out time</strong>. During these windows, the system polls devices at the <em>Peak Interval</em> for faster attendance capture. Outside these windows, it slows down to the <em>Off-Peak Interval</em> to conserve resources.
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                                <strong className="text-slate-800 font-semibold">How it works:</strong> The system reads your active shift schedules and creates two &quot;rush hour&quot; windows per shift — one around <strong>clock-in time</strong> and one around <strong>clock-out time</strong>. During these windows, the system polls devices at the <em>Peak Interval</em> for faster attendance capture. Outside these windows, it slows down to the <em>Off-Peak Interval</em> to conserve resources.
                             </p>
                         </div>
 
@@ -100,31 +100,34 @@ export function ShiftAwareConfigSection({
                         />
 
                         {/* Peak / Off-Peak Intervals */}
-                        {shiftAwareSyncEnabled && highFreqIntervalSec > lowFreqIntervalSec && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-600">
-                                <p className="text-xs font-bold flex items-center gap-2">
-                                    <Zap className="h-4 w-4" />
-                                    Peak Interval ({highFreqIntervalSec}s) must be less than or equal to Off-Peak Interval ({lowFreqIntervalSec}s).
-                                </p>
-                                <p className="text-[10px] text-red-500 font-medium mt-1">
-                                    Peak polling needs to be faster during rush hours, meaning its interval in seconds must be smaller.
-                                </p>
-                            </div>
-                        )}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 mb-1 text-slate-700">
+                                    <Zap className="h-4 w-4 text-amber-500" />
+                                    <span className="text-sm font-semibold">Peak Interval</span>
+                                </div>
                                 <DurationInput
-                                    label="⚡ Peak Interval"
+                                    label=""
                                     description="Faster polling during shift start/end rush hours. Captures taps within seconds."
                                     totalSeconds={highFreqIntervalSec}
                                     minTotalSeconds={limits?.HIGH_FREQ_INTERVAL_MIN_SEC}
                                     maxTotalSeconds={limits?.HIGH_FREQ_INTERVAL_MAX_SEC}
                                     onChange={(sec) => onChange({ highFreqIntervalSec: sec })}
                                 />
+                                {shiftAwareSyncEnabled && highFreqIntervalSec > lowFreqIntervalSec && (
+                                    <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                                        Must be less than Off-Peak ({lowFreqIntervalSec}s)
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 mb-1 text-slate-700">
+                                    <Moon className="h-4 w-4 text-indigo-500" />
+                                    <span className="text-sm font-semibold">Off-Peak Interval</span>
+                                </div>
                                 <DurationInput
-                                    label="💤 Off-Peak Interval"
+                                    label=""
                                     description="Slower polling when no shift activity is expected. Saves server resources."
                                     totalSeconds={lowFreqIntervalSec}
                                     minTotalSeconds={limits?.LOW_FREQ_INTERVAL_MIN_SEC}
@@ -133,32 +136,38 @@ export function ShiftAwareConfigSection({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="buffer" className={`text-sm font-medium ${isBufferError ? 'text-red-600' : ''}`}>
-                                    🕐 Buffer Window
+                                <Label htmlFor="buffer" className={`text-sm font-semibold flex items-center gap-1.5 ${isBufferError ? 'text-red-600' : 'text-slate-700'}`}>
+                                    <Clock className="h-4 w-4 text-emerald-500" />
+                                    Buffer Window
                                 </Label>
-                                <Input
-                                    id="buffer"
-                                    type="number"
-                                    min={bufferMin}
-                                    max={bufferMax}
-                                    value={shiftBufferMinutes}
-                                    onChange={(e) => {
-                                        const raw = parseInt(e.target.value);
-                                        onChange({ shiftBufferMinutes: isNaN(raw) ? 0 : raw });
-                                    }}
-                                    className={`font-mono ${isBufferError ? 'border-red-300 focus-visible:ring-red-200' : ''}`}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="buffer"
+                                        type="number"
+                                        min={bufferMin}
+                                        max={bufferMax}
+                                        value={shiftBufferMinutes}
+                                        onChange={(e) => {
+                                            const raw = parseInt(e.target.value);
+                                            onChange({ shiftBufferMinutes: isNaN(raw) ? 0 : raw });
+                                        }}
+                                        className={`font-mono pr-12 ${isBufferError ? 'border-red-300 focus-visible:ring-red-200' : ''}`}
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium pointer-events-none select-none">
+                                        min
+                                    </span>
+                                </div>
                                 {isBufferError ? (
                                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 mt-2">
-                                        <p className="text-xs font-bold">
+                                        <p className="text-sm font-semibold">
                                             Invalid Buffer
                                         </p>
-                                        <p className="text-[10px] text-red-500 font-medium mt-0.5">
+                                        <p className="text-xs text-red-500 mt-0.5">
                                             Must be between {bufferMin} and {bufferMax} minutes.
                                         </p>
                                     </div>
                                 ) : (
-                                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                                    <p className="text-xs text-slate-500 leading-relaxed">
                                         Minutes before and after each shift boundary to activate peak mode ({bufferMin} to {bufferMax} min). A 30-minute buffer on an 8:00 AM shift means peak starts at 7:30 AM.
                                     </p>
                                 )}
