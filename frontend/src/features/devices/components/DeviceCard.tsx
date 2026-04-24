@@ -194,7 +194,8 @@ export function DeviceCard({
                         variant="outline"
                         size="sm"
                         onClick={() => onConfirmReconcile(device)}
-                        disabled={isTesting || isToggling || isReconciling}
+                        disabled={isTesting || isToggling || isReconciling || !device.isActive}
+                        title={!device.isActive ? "Device must be online to reconcile" : ""}
                         className="flex-1 gap-1.5 border-border text-xs text-primary hover:bg-primary/10 border-primary/20"
                     >
                         {isReconciling

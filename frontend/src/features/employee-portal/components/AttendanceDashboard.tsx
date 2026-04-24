@@ -93,7 +93,12 @@ export function AttendanceDashboard() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto scrollbar-table"
+            tabIndex={0}
+            role="region"
+            aria-label="My attendance records — scroll horizontally"
+          >
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-widest text-slate-500">
                 <tr>

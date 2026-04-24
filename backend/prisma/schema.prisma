@@ -104,7 +104,7 @@ model Branch {
 
 model Device {
   id                            Int                             @id @default(autoincrement())
-  name                          String
+  name                          String                          @unique
   ip                            String                          @unique
   port                          Int                             @default(4370)
   location                      String?

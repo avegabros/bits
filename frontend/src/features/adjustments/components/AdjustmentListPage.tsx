@@ -91,7 +91,13 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
 
             {/* Table + Pagination */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div ref={dragScrollRef} className="overflow-x-auto scrollbar-hide">
+                <div
+                  ref={dragScrollRef}
+                  className="overflow-x-auto scrollbar-table"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Adjustments table — scroll horizontally"
+                >
                     <AdjustmentTable
                         loading={loading}
                         sortedAdjustments={sortedAdjustments}

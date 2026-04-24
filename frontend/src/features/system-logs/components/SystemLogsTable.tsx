@@ -50,7 +50,12 @@ export function SystemLogsTable({ logs }: SystemLogsTableProps) {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div
+              className="flex-1 overflow-y-auto scrollbar-light min-h-0"
+              tabIndex={0}
+              role="region"
+              aria-label="System log entries — scroll vertically"
+            >
                 {logs.map(log => {
                     const { date, time } = formatTimestamp(log.timestamp)
                     const isExpanded = expandedLogId === log.id

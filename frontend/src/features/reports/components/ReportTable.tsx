@@ -49,7 +49,13 @@ export const ReportTable: React.FC<ReportTableProps> = ({
         </h3>
       </div>
 
-      <div ref={dragScrollRef} className="overflow-x-auto scrollbar-hide">
+      <div
+        ref={dragScrollRef}
+        className="overflow-x-auto scrollbar-table"
+        tabIndex={0}
+        role="region"
+        aria-label="Report records table — scroll horizontally"
+      >
         <table className="w-full text-left text-sm min-w-[900px]">
           <thead className="text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
             <tr>

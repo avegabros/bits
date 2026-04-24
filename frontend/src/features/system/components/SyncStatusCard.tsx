@@ -64,12 +64,14 @@ export function SyncStatusCard({ status, loading, onStatusRefresh }: SyncStatusC
                 {/* ── Header Row ───────────────────────────────────── */}
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-900">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-300 ${
+                            status.globalSyncEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                        }`}>
                             <Server className="h-4 w-4 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-slate-800 tracking-tight">Sync Engine</h2>
-                            <p className="text-[10px] text-slate-400 font-semibold">Background device synchronization service</p>
+                            <h2 className="text-base font-semibold text-slate-800 tracking-tight">Sync Engine</h2>
+                            <p className="text-xs text-slate-500 mt-0.5">Background device synchronization service</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -77,16 +79,20 @@ export function SyncStatusCard({ status, loading, onStatusRefresh }: SyncStatusC
                             variant={status.globalSyncEnabled ? 'default' : 'destructive'}
                             className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 ${
                                 status.globalSyncEnabled
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1.5'
                                     : ''
                             }`}
                         >
-                            {status.globalSyncEnabled ? '● ACTIVE' : '○ DISABLED'}
+                            {status.globalSyncEnabled && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                            )}
+                            {status.globalSyncEnabled ? 'ACTIVE' : 'DISABLED'}
                         </Badge>
                         <Switch
                             checked={status.globalSyncEnabled}
                             onCheckedChange={handleToggle}
                             disabled={toggling}
+                            className={toggling ? 'opacity-50 cursor-not-allowed' : ''}
                             aria-label="Toggle Global Sync"
                         />
                     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, Zap, Moon } from 'lucide-react';
+import { Clock, Zap, Moon, Info } from 'lucide-react';
 
 interface ShiftData {
     id: number;
@@ -158,59 +158,62 @@ export function ShiftTimelineViz({ bufferMinutes, enabled }: ShiftTimelineVizPro
             </div>
 
             {/* Timeline Bar */}
-            <div className="relative h-10 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                {/* Off-peak base (the gray background) */}
+            <div className="relative h-10 bg-slate-100 rounded-lg border border-slate-200">
+                {/* Inner clip layer: contains peaks + hour grid */}
+                <div className="absolute inset-0 rounded-lg overflow-hidden">
+                    {/* Off-peak base (the gray background) */}
 
-                {/* Peak windows */}
-                {peakWindows.map((w, i) => {
-                    const left = minToPercent(w.startMin);
-                    let width: number;
-                    if (w.startMin <= w.endMin) {
-                        width = minToPercent(w.endMin) - left;
-                    } else {
-                        // Cross-midnight
-                        width = (100 - left) + minToPercent(w.endMin);
-                    }
+                    {/* Peak windows */}
+                    {peakWindows.map((w, i) => {
+                        const left = minToPercent(w.startMin);
+                        let width: number;
+                        if (w.startMin <= w.endMin) {
+                            width = minToPercent(w.endMin) - left;
+                        } else {
+                            // Cross-midnight
+                            width = (100 - left) + minToPercent(w.endMin);
+                        }
 
-                    const isClockIn = w.type === 'clock-in';
-                    const bgColor = isClockIn
-                        ? 'bg-emerald-400/40 border-emerald-500/30'
-                        : 'bg-blue-400/40 border-blue-500/30';
+                        const isClockIn = w.type === 'clock-in';
+                        const bgColor = isClockIn
+                            ? 'bg-emerald-400/40 border-emerald-500/30'
+                            : 'bg-blue-400/40 border-blue-500/30';
 
-                    return (
-                        <div
-                            key={i}
-                            className={`absolute top-0 h-full ${bgColor} border-l border-r`}
-                            style={{ left: `${left}%`, width: `${Math.min(width, 100)}%` }}
-                            title={`${w.shiftName} — ${isClockIn ? 'Clock-In Rush' : 'Clock-Out Rush'} (${formatMinutes(w.startMin)} – ${formatMinutes(w.endMin)})`}
-                        >
-                            <div className="h-full flex items-center justify-center">
-                                {width > 5 && (
-                                    <span className={`text-[9px] font-black uppercase tracking-wider ${isClockIn ? 'text-emerald-700' : 'text-blue-700'}`}>
-                                        {isClockIn ? '⚡ IN' : '⚡ OUT'}
-                                    </span>
-                                )}
+                        return (
+                            <div
+                                key={i}
+                                className={`absolute top-0 h-full ${bgColor} border-l border-r`}
+                                style={{ left: `${left}%`, width: `${Math.min(width, 100)}%` }}
+                                title={`${w.shiftName} — ${isClockIn ? 'Clock-In Rush' : 'Clock-Out Rush'} (${formatMinutes(w.startMin)} – ${formatMinutes(w.endMin)})`}
+                            >
+                                <div className="h-full flex items-center justify-center">
+                                    {width > 5 && (
+                                        <span className={`text-[9px] font-black uppercase tracking-wider ${isClockIn ? 'text-emerald-700' : 'text-blue-700'}`}>
+                                            {isClockIn ? 'IN' : 'OUT'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
 
-                {/* Current time indicator */}
+                    {/* Hour markers */}
+                    {hourMarkers.map(h => (
+                        <div
+                            key={h}
+                            className="absolute top-0 h-full border-l border-slate-200/60"
+                            style={{ left: `${(h / 24) * 100}%` }}
+                        />
+                    ))}
+                </div>
+
+                {/* Current time indicator - needle lives outside the clip layer */}
                 <div
                     className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
                     style={{ left: `${currentPercent}%` }}
                 >
-                    <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white shadow" />
+                    <div className="absolute -top-1.5 -left-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white shadow-sm" />
                 </div>
-
-                {/* Hour markers */}
-                {hourMarkers.map(h => (
-                    <div
-                        key={h}
-                        className="absolute top-0 h-full border-l border-slate-200/60"
-                        style={{ left: `${(h / 24) * 100}%` }}
-                    />
-                ))}
             </div>
 
             {/* Hour labels */}
@@ -218,14 +221,14 @@ export function ShiftTimelineViz({ bufferMinutes, enabled }: ShiftTimelineVizPro
                 {hourMarkers.map(h => (
                     <span
                         key={h}
-                        className="absolute text-[9px] text-slate-400 font-mono font-bold -translate-x-1/2"
+                        className="absolute text-[10px] text-slate-500 font-mono font-bold -translate-x-1/2"
                         style={{ left: `${(h / 24) * 100}%` }}
                     >
                         {h.toString().padStart(2, '0')}
                     </span>
                 ))}
                 <span
-                    className="absolute text-[9px] text-slate-400 font-mono font-bold"
+                    className="absolute text-[10px] text-slate-500 font-mono font-bold"
                     style={{ right: 0 }}
                 >
                     24
@@ -253,9 +256,12 @@ export function ShiftTimelineViz({ bufferMinutes, enabled }: ShiftTimelineVizPro
             </div>
 
             {peakWindows.length === 0 && (
-                <p className="text-xs text-amber-600 font-medium bg-amber-50 rounded-lg px-3 py-2 border border-amber-100">
-                    No active shifts found for {currentDay}. The system will use the default sync interval all day.
-                </p>
+                <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2.5 border border-amber-100">
+                    <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                        No active shifts found for <strong>{currentDay}</strong>. The system will use the default sync interval all day.
+                    </p>
+                </div>
             )}
         </div>
     );

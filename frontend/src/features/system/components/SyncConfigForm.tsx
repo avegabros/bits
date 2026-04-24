@@ -40,77 +40,98 @@ export function SyncConfigForm() {
 
     return (
         <>
-            <form onSubmit={handleSubmit} className="space-y-3">
-                {/* ── Section 2: Shift-Aware Sync (full width) ──────────── */}
-                <ShiftAwareConfigSection
-                    defaultIntervalSec={config.defaultIntervalSec}
-                    shiftAwareSyncEnabled={config.shiftAwareSyncEnabled}
-                    highFreqIntervalSec={config.highFreqIntervalSec}
-                    lowFreqIntervalSec={config.lowFreqIntervalSec}
-                    shiftBufferMinutes={config.shiftBufferMinutes}
-                    limits={limits}
-                    onChange={handleChange}
-                />
-
-                {/* ── Section 3: Background Services (4-column grid) ────── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <AttendanceRulesSection
-                        globalMinCheckoutMinutes={config.globalMinCheckoutMinutes}
-                        limits={limits}
-                        onChange={handleChange}
-                    />
-                    <TimeSyncConfigSection
-                        autoTimeSyncEnabled={config.autoTimeSyncEnabled}
-                        timeSyncIntervalSec={config.timeSyncIntervalSec}
-                        limits={limits}
-                        onChange={handleChange}
-                    />
-                    <HealthMonitorConfigSection
-                        healthCheckEnabled={config.healthCheckEnabled}
-                        healthCheckIntervalSec={config.healthCheckIntervalSec}
-                        limits={limits}
-                        onChange={handleChange}
-                    />
-                    <LogMaintenanceConfigSection
-                        logBufferMaintenanceEnabled={config.logBufferMaintenanceEnabled}
-                        logBufferMaintenanceSchedule={config.logBufferMaintenanceSchedule}
-                        logBufferMaintenanceHour={config.logBufferMaintenanceHour}
-                        limits={limits}
-                        onChange={handleChange}
-                    />
+            <form onSubmit={handleSubmit} className="space-y-8 pb-20">
+                {/* ── Group 1: Data Synchronization ───────────────────────── */}
+                <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-slate-800 tracking-tight border-l-[3px] border-slate-800 pl-3">Data Synchronization</h2>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                        <div className="lg:col-span-2">
+                            <ShiftAwareConfigSection
+                                defaultIntervalSec={config.defaultIntervalSec}
+                                shiftAwareSyncEnabled={config.shiftAwareSyncEnabled}
+                                highFreqIntervalSec={config.highFreqIntervalSec}
+                                lowFreqIntervalSec={config.lowFreqIntervalSec}
+                                shiftBufferMinutes={config.shiftBufferMinutes}
+                                limits={limits}
+                                onChange={handleChange}
+                            />
+                        </div>
+                        <div className="lg:col-span-2">
+                            <AttendanceRulesSection
+                                globalMinCheckoutMinutes={config.globalMinCheckoutMinutes}
+                                limits={limits}
+                                onChange={handleChange}
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {/* ── Save Bar ──────────────────────────────────────────── */}
-                <div className="flex items-center justify-between bg-white rounded-xl border border-slate-100 shadow-sm px-5 py-3">
-                    <div className="text-xs text-slate-400 font-semibold">
-                        {isDirty ? (
-                            <span className="text-amber-600 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                Unsaved changes
-                            </span>
-                        ) : (
-                            'All changes saved'
-                        )}
+                {/* ── Group 2: Device Maintenance ─────────────────────────── */}
+                <div className="space-y-4 mt-8">
+                    <h2 className="text-lg font-semibold text-slate-800 tracking-tight border-l-[3px] border-slate-800 pl-3">Device Maintenance</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <HealthMonitorConfigSection
+                            healthCheckEnabled={config.healthCheckEnabled}
+                            healthCheckIntervalSec={config.healthCheckIntervalSec}
+                            limits={limits}
+                            onChange={handleChange}
+                        />
+                        <TimeSyncConfigSection
+                            autoTimeSyncEnabled={config.autoTimeSyncEnabled}
+                            timeSyncIntervalSec={config.timeSyncIntervalSec}
+                            limits={limits}
+                            onChange={handleChange}
+                        />
                     </div>
-                    <div className="flex gap-2">
-                        {isDirty && (
-                            <Button 
-                                type="button" 
-                                variant="ghost" 
-                                disabled={saving} 
-                                onClick={handleDiscard}
-                                className="text-xs font-bold h-8 px-4 text-slate-500 hover:text-slate-700"
-                            >
-                                Discard Changes
-                            </Button>
-                        )}
-                        <Button type="submit" disabled={saving || !isDirty} size="sm" className="text-xs font-bold h-8 px-5">
-                            {saving ? (
-                                'Saving...'
+                </div>
+
+                {/* ── Group 3: System Housekeeping ────────────────────────── */}
+                <div className="space-y-4 mt-8">
+                    <h2 className="text-lg font-semibold text-slate-800 tracking-tight border-l-[3px] border-slate-800 pl-3">System Housekeeping</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <LogMaintenanceConfigSection
+                            logBufferMaintenanceEnabled={config.logBufferMaintenanceEnabled}
+                            logBufferMaintenanceSchedule={config.logBufferMaintenanceSchedule}
+                            logBufferMaintenanceHour={config.logBufferMaintenanceHour}
+                            limits={limits}
+                            onChange={handleChange}
+                        />
+                    </div>
+                </div>
+
+                {/* ── Sticky Save Bar ───────────────────────────────────── */}
+                <div className="fixed bottom-0 left-0 lg:left-64 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 flex items-center justify-between">
+                    <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
+                        <div className="text-sm font-medium">
+                            {isDirty ? (
+                                <span className="text-amber-600 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                    Unsaved changes
+                                </span>
                             ) : (
-                                <><Save className="h-3.5 w-3.5 mr-1.5" /> Save Configuration</>
+                                <span className="text-slate-500">All changes saved</span>
                             )}
-                        </Button>
+                        </div>
+                        <div className="flex gap-3">
+                            {isDirty && (
+                                <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    disabled={saving} 
+                                    onClick={handleDiscard}
+                                    className="text-sm font-semibold h-10 px-4 text-slate-500 hover:text-slate-700"
+                                >
+                                    Discard Changes
+                                </Button>
+                            )}
+                            <Button type="submit" disabled={saving || !isDirty} className="text-sm font-semibold h-10 px-6">
+                                {saving ? (
+                                    'Saving...'
+                                ) : (
+                                    <><Save className="h-4 w-4 mr-2" /> Save Configuration</>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </form>

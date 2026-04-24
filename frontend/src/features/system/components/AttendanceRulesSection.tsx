@@ -36,12 +36,12 @@ export function AttendanceRulesSection({
                 <div className="flex items-center justify-center w-6 h-6 rounded-md bg-rose-100">
                     <ShieldCheck className="h-3 w-3 text-rose-600" />
                 </div>
-                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Attendance Rules</h3>
+                <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Attendance Rules</h3>
             </div>
 
             {/* Body */}
-            <div className="px-4 py-3 flex-1 space-y-3">
-                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+            <div className="px-4 py-4 flex-1 space-y-4">
+                <p className="text-xs text-slate-500 leading-relaxed">
                     Prevents accidental double-taps from being treated as a check-out. An employee must wait at least this long after check-in before a tap counts as check-out.
                 </p>
 
@@ -63,18 +63,18 @@ export function AttendanceRulesSection({
                         <span className="text-xs text-slate-400 font-semibold">minutes</span>
                     </div>
                     {isMinError && (
-                        <p className="text-[10px] text-red-500 font-bold">
+                        <p className="text-xs text-red-500 font-semibold">
                             Must be at least {minLimit} minutes.
                         </p>
                     )}
                     {isMaxError && (
-                        <p className="text-[10px] text-red-500 font-bold">
+                        <p className="text-xs text-red-500 font-semibold">
                             Cannot exceed {maxLimit} minutes ({formatMinutesHuman(maxLimit)}).
                         </p>
                     )}
                     {!isError && (
-                        <p className="text-[10px] text-slate-400 font-medium">
-                            Currently: <strong className="text-slate-600">{formatMinutesHuman(globalMinCheckoutMinutes)}</strong> • Max: {formatMinutesHuman(maxLimit)}
+                        <p className="text-xs text-slate-500">
+                            Currently: <strong className="text-slate-700 font-semibold">{formatMinutesHuman(globalMinCheckoutMinutes)}</strong> • Max: {formatMinutesHuman(maxLimit)}
                         </p>
                     )}
                 </div>
