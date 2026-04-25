@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+    getEmployeeById,
     getAllEmployees,
     syncEmployeesToDeviceController,
     deleteEmployee,
@@ -181,6 +182,29 @@ router.get('/export', exportEmployees);
  *         description: Excel template file download
  */
 router.get('/export-template', exportTemplate);
+
+/**
+ * @swagger
+ * /api/employees/{id}:
+ *   get:
+ *     summary: Get a single employee by ID (profile view)
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Employee ID
+ *     responses:
+ *       200:
+ *         description: Employee details
+ *       404:
+ *         description: Employee not found
+ */
+router.get('/:id', getEmployeeById);
 
 /**
  * @swagger

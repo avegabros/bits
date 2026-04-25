@@ -144,6 +144,7 @@ model Employee {
   password            String?
   needsPasswordChange Boolean          @default(false)
   employmentStatus    EmploymentStatus @default(ACTIVE)
+  profilePicture      String?          // Relative URL: "/api/uploads/avatars/{id}.webp"
 
   // Secondary Info
   position       String?

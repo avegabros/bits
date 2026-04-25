@@ -38,6 +38,7 @@ export interface Employee {
   contactNumber: string | null
   hireDate: string | null
   employmentStatus: EmploymentStatus
+  profilePicture: string | null
   createdAt: string
   updatedAt?: string
 }
