@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 
 interface DataTablePaginationProps {
@@ -25,6 +25,12 @@ export function DataTablePagination({
   className = ''
 }: DataTablePaginationProps) {
   
+  const [inputValue, setInputValue] = useState(String(currentPage))
+
+  useEffect(() => {
+    setInputValue(String(currentPage))
+  }, [currentPage])
+
   const startRange = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const endRange = Math.min(currentPage * pageSize, totalCount)
 
@@ -55,8 +61,8 @@ export function DataTablePagination({
             type="number"
             min={1}
             max={totalPages || 1}
-            defaultValue={currentPage}
-            key={currentPage} // Reset value when page changes externally
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             disabled={loading || totalPages <= 1}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

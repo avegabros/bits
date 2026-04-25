@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/useToast';
 import { useEmployees } from './useEmployees';
 import { formatFullName, Employee } from '../utils/employee-types';
@@ -45,6 +45,23 @@ export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOpti
 
   // ── Scan / enroll state ─────────────────────────────────────────────────────
   const [scanModal, setScanModal] = useState({ open: false, employeeName: '', countdown: 60 });
+
+  // ── Scan modal countdown ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!scanModal.open) return;
+
+    const interval = setInterval(() => {
+      setScanModal(prev => {
+        if (prev.countdown <= 1) {
+          clearInterval(interval);
+          return { ...prev, open: false, countdown: 60 };
+        }
+        return { ...prev, countdown: prev.countdown - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [scanModal.open]);
   const [enrollStatus, setEnrollStatus] = useState<Record<number, 'idle' | 'loading' | 'success' | 'error'>>({});
   const [enrollMsg, setEnrollMsg] = useState<Record<number, string>>({});
 

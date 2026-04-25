@@ -36,7 +36,7 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     }
   }, [statusFilter]);
 
-  const fetchDependencies = async () => {
+  const fetchDependencies = useCallback(async () => {
     try {
       const [deptRes, branchRes, shiftRes] = await Promise.all([
         fetch('/api/departments'),
@@ -54,12 +54,12 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     } catch (e) {
       console.error('Error fetching dependencies:', e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchEmployees();
     fetchDependencies();
-  }, [fetchEmployees]);
+  }, [fetchEmployees, fetchDependencies]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
