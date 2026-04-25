@@ -241,25 +241,25 @@ export function AdminDetailView({
 
                                     if (!record) {
                                         const statusColor = missingStatus === 'Upcoming' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                                                            missingStatus === 'Absent' ? 'bg-red-50 text-red-600 border-red-200' :
-                                                            'bg-slate-100 text-slate-500 border-slate-200';
+                                            missingStatus === 'Absent' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                'bg-slate-100 text-slate-500 border-slate-200';
 
                                         return (
                                             <tr key={loopDateStr} className="hover:bg-slate-50/50 transition-colors duration-200">
                                                 <td className="px-5 py-3.5">
-                                                   <p className="font-bold text-slate-700 text-xs">
-                                                      {loopDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
-                                                   </p>
+                                                    <p className="font-bold text-slate-700 text-xs">
+                                                        {loopDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                                                    </p>
                                                 </td>
                                                 <td colSpan={6} className="px-5 py-3.5 text-center">
-                                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                      {isFuture ? 'Scheduled' : 'No Record'}
-                                                   </span>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        {isFuture ? 'Scheduled' : 'No Record'}
+                                                    </span>
                                                 </td>
                                                 <td className="px-5 py-3.5">
-                                                   <span className={`inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${statusColor}`}>
-                                                      {missingStatus}
-                                                   </span>
+                                                    <span className={`inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${statusColor}`}>
+                                                        {missingStatus}
+                                                    </span>
                                                 </td>
                                             </tr>
                                         );
@@ -330,28 +330,28 @@ export function AdminDetailView({
                                             </td>
                                             <td className="px-5 py-3.5">
                                                 <div className="flex flex-col items-start gap-1">
-                                                {statusType === 'in-progress' ? (
-                                                    <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100/50 text-slate-400 border border-slate-200 shrink-0">In Progress</span>
-                                                ) : statusType === 'early-out' ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100/70 text-slate-400 border border-slate-200 shrink-0">Early Out</span>
-                                                        <span className="text-[8px] font-bold text-slate-400 uppercase pl-1">Left early</span>
-                                                    </div>
-                                                ) : statusType === 'anomaly' ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-50/20 text-rose-600/60 border border-rose-100 shrink-0"><AlertTriangle className="w-3 h-3 mr-1" />Anomaly</span>
-                                                        <span className="text-[8px] font-bold text-rose-400/80 uppercase pl-1">Out of shift</span>
-                                                    </div>
-                                                ) : statusType === 'missing-checkout' || statusType === 'incomplete' ? (
-                                                    <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Missing Out</span>
-                                                ) : statusType === 'late' ? (
-                                                    <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Late</span>
-                                                ) : (
-                                                    <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50/30 text-emerald-600/70 border border-emerald-100 shrink-0">On Time</span>
-                                                )}
-                                                {record && (record.checkin_updated || record.checkout_updated) && (
-                                                    <span title={record.notes || 'Manually adjusted'} className="inline-flex items-center justify-center w-28 h-5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-100/50 text-slate-400/80 border border-slate-200 shrink-0 cursor-help mt-0.5">Edited</span>
-                                                )}
+                                                    {statusType === 'in-progress' ? (
+                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100/50 text-slate-400 border border-slate-200 shrink-0">In Progress</span>
+                                                    ) : statusType === 'early-out' ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100/70 text-slate-400 border border-slate-200 shrink-0">Early Out</span>
+                                                            <span className="text-[8px] font-bold text-slate-400 uppercase pl-1">Left early</span>
+                                                        </div>
+                                                    ) : statusType === 'anomaly' ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-50/20 text-rose-600/60 border border-rose-100 shrink-0"><AlertTriangle className="w-3 h-3 mr-1" />Anomaly</span>
+                                                            <span className="text-[8px] font-bold text-rose-400/80 uppercase pl-1">Out of shift</span>
+                                                        </div>
+                                                    ) : statusType === 'missing-checkout' || statusType === 'incomplete' ? (
+                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Missing Out</span>
+                                                    ) : statusType === 'late' ? (
+                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Late</span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50/30 text-emerald-600/70 border border-emerald-100 shrink-0">On Time</span>
+                                                    )}
+                                                    {record && (record.checkin_updated || record.checkout_updated) && (
+                                                        <span title={record.notes || 'Manually adjusted'} className="inline-flex items-center justify-center w-28 h-5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-100/50 text-slate-400/80 border border-slate-200 shrink-0 cursor-help mt-0.5">Edited</span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
