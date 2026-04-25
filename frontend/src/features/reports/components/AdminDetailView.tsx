@@ -179,16 +179,18 @@ export function AdminDetailView({
                         <div className="flex items-center gap-2.5 px-3 py-1.5 bg-white rounded-full border border-slate-200/80 shadow-sm">
                             <Calendar className="w-3.5 h-3.5 text-slate-400" />
                             <span className="text-[10px] font-black text-slate-500/80 uppercase tracking-widest">
-                                {new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', {
+                                {new Date(startDate + 'T00:00:00Z').toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     year: 'numeric',
+                                    timeZone: 'UTC',
                                 })}
                                 <span className="mx-2 text-slate-300">/</span>
-                                {new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', {
+                                {new Date(endDate + 'T00:00:00Z').toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     year: 'numeric',
+                                    timeZone: 'UTC',
                                 })}
                             </span>
                         </div>
@@ -246,7 +248,7 @@ export function AdminDetailView({
                                             <tr key={loopDateStr} className="hover:bg-slate-50/50 transition-colors duration-200">
                                                 <td className="px-5 py-3.5">
                                                    <p className="font-bold text-slate-700 text-xs">
-                                                      {loopDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                                      {loopDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
                                                    </p>
                                                 </td>
                                                 <td colSpan={6} className="px-5 py-3.5 text-center">
@@ -273,6 +275,7 @@ export function AdminDetailView({
                                                         weekday: 'short',
                                                         month: 'short',
                                                         day: 'numeric',
+                                                        timeZone: 'UTC',
                                                     })}
                                                 </p>
                                             </td>

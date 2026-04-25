@@ -41,11 +41,11 @@ export interface HRTableRowData {
 
 function getDatesInRange(start: string, end: string): Date[] {
     const dates = [];
-    const currentDate = new Date(start + 'T00:00:00');
-    const endDateObj = new Date(end + 'T00:00:00');
+    const currentDate = new Date(start + 'T00:00:00Z');
+    const endDateObj = new Date(end + 'T00:00:00Z');
     while (currentDate <= endDateObj) {
         dates.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
     return dates;
 }
@@ -56,7 +56,7 @@ function buildTableRows(
     employee: ReportRow
 ): TableRowData[] {
     return calendarDates.map(loopDate => {
-        const loopDateStr = loopDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        const loopDateStr = loopDate.toISOString().split('T')[0];
         const record = records.find(r => {
             const rDateStr = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             return rDateStr === loopDateStr;
@@ -77,7 +77,7 @@ function buildTableRows(
         if (!record) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             isFuture = loopDateStr > todayStr;
-            const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short' });
+            const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
             isWorkingDay = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(dayName);
             if (employee.shift?.workDays) {
                 try {

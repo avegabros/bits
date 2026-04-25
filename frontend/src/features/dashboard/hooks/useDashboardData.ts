@@ -129,8 +129,9 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 });
 
                 const late = dayAtts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-                const present = dayAtts.filter(a => a.checkInTime && (!a.lateMinutes || a.lateMinutes === 0)).length;
-                const absent = dateStr <= todayPHTStr ? Math.max(0, activeCount - present - late) : 0;
+                // Present = everyone who checked in (on-time + late)
+                const present = dayAtts.filter(a => a.checkInTime).length;
+                const absent = dateStr <= todayPHTStr ? Math.max(0, activeCount - present) : 0;
                 return { day, present, late, absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
@@ -163,10 +164,11 @@ export function useDashboardData(role: 'admin' | 'hr') {
             setBranchPresence(bPresence);
 
             const todayLate = atts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-            const todayPresent = atts.filter(a => a.checkInTime && (!a.lateMinutes || a.lateMinutes === 0)).length;
+            // Present = everyone who checked in (on-time + late)
+            const todayPresent = atts.filter(a => a.checkInTime).length;
             setTotalPresent(todayPresent);
             setTotalLate(todayLate);
-            setTotalAbsent(Math.max(0, activeCount - todayPresent - todayLate));
+            setTotalAbsent(Math.max(0, activeCount - todayPresent));
 
             const events: LiveRecord[] = [];
             for (const r of atts) {
@@ -240,11 +242,9 @@ export function useDashboardData(role: 'admin' | 'hr') {
         setActivity(prev => [newEntry, ...prev].slice(0, 15));
 
         if (payload.type === 'check-in') {
-            if (isLate) {
-                setTotalLate(prev => prev + 1);
-            } else {
-                setTotalPresent(prev => prev + 1);
-            }
+            // Present = all check-ins; Late is an additional subset indicator
+            setTotalPresent(prev => prev + 1);
+            if (isLate) setTotalLate(prev => prev + 1);
             setTotalAbsent(prev => Math.max(0, prev - 1));
         }
     }, []);

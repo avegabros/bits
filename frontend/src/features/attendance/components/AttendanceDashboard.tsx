@@ -45,8 +45,8 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">Attendance Logs</h1>
           <p className="text-slate-500 text-sm font-medium mt-0.5">
-            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+            {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
             })}
           </p>
         </div>
@@ -58,8 +58,8 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
             <CalendarIcon className="w-4 h-4 text-red-500" />
             <span>
               {selectedDate === getTodayDate()
-                ? 'Today, ' + new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                : new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                ? 'Today, ' + new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                : new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </span>
           </button>
           <button onClick={exportToCSV}

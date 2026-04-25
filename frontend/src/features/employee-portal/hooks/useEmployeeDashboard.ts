@@ -54,8 +54,9 @@ export function useEmployeeDashboard() {
 
         records.forEach(r => {
           if (r.checkInTime) {
-            if (r.status.toLowerCase() === 'late') late++
-            else present++
+            // Present = all days worked (on-time + late)
+            present++;
+            if (r.status.toLowerCase() === 'late') late++;
 
             // Use the backend-computed totalHours (break-aware) instead
             // of raw checkOut − checkIn which inflates hours.

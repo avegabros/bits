@@ -34,7 +34,7 @@ const DAYS = [
 ];
 
 const fmtFullDate = (d: Date) =>
-  `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 
 export const handleExport = (
   filteredData: ReportRow[],
@@ -43,8 +43,8 @@ export const handleExport = (
   exportSource: 'admin-panel' | 'hr-panel' = 'admin-panel'
 ) => {
   const allRows: (string | number)[][] = [];
-  const s = new Date(startDate + 'T00:00:00');
-  const e = new Date(endDate + 'T00:00:00');
+  const s = new Date(startDate + 'T00:00:00Z');
+  const e = new Date(endDate + 'T00:00:00Z');
 
   allRows.push(['Period', `${fmtFullDate(s)} to ${fmtFullDate(e)}`]);
   allRows.push(['Total Employees', filteredData.length]);
@@ -148,8 +148,8 @@ export const handleExportIndividual = (
   ]);
   allRows.push([]);
 
-  const s = new Date(startDate + 'T00:00:00');
-  const e = new Date(endDate + 'T00:00:00');
+  const s = new Date(startDate + 'T00:00:00Z');
+  const e = new Date(endDate + 'T00:00:00Z');
   allRows.push(['Period', `${fmtFullDate(s)} — ${fmtFullDate(e)}`]);
   allRows.push([]);
 
@@ -193,9 +193,9 @@ export const handleExportIndividual = (
   const cursor = new Date(s);
   while (cursor <= e) {
     totalCalendarDays++;
-    const dayOfWeek = cursor.getDay();
-    const dateKey = cursor.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    const dayShort = cursor.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayOfWeek = cursor.getUTCDay();
+    const dateKey = cursor.toISOString().split('T')[0];
+    const dayShort = cursor.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
     const r = recordsByDate.get(dateKey);
 
     if (r) {
@@ -273,7 +273,7 @@ export const handleExportIndividual = (
     }
 
     // Advance cursor by one day
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   allRows.push([]);

@@ -28,10 +28,10 @@ export const formatHrsMins = (hrs: number) => {
 };
 
 export const formatDateShort = (d: string) => {
-  const date = new Date(d + 'T00:00:00');
-  return `${String(date.getDate()).padStart(2, '0')}/${String(
-    date.getMonth() + 1
-  ).padStart(2, '0')}/${date.getFullYear()}`;
+  const date = new Date(d + 'T00:00:00Z');
+  return `${String(date.getUTCDate()).padStart(2, '0')}/${String(
+    date.getUTCMonth() + 1
+  ).padStart(2, '0')}/${date.getUTCFullYear()}`;
 };
 
 export const formatShiftTime = (t: string) => {

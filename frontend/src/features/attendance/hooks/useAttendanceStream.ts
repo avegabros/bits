@@ -72,6 +72,17 @@ export function useAttendanceStream({
 }: UseAttendanceStreamOptions): void {
     const esRef = useRef<EventSource | null>(null)
 
+    // ── Stable callback refs ────────────────────────────────────────────
+    // Store the latest callbacks in refs so the EventSource connection
+    // never tears down when the parent re-renders with new closures.
+    const onRecordRef = useRef(onRecord)
+    const onConnectedRef = useRef(onConnected)
+
+    useEffect(() => {
+        onRecordRef.current = onRecord
+        onConnectedRef.current = onConnected
+    }, [onRecord, onConnected])
+
     const connect = useCallback(() => {
         if (esRef.current) {
             esRef.current.close()
@@ -83,13 +94,13 @@ export function useAttendanceStream({
 
         es.addEventListener('connected', () => {
             console.log(`[SSE] Attendance stream connected to ${endpoint}`)
-            onConnected?.()
+            onConnectedRef.current?.()
         })
 
         es.addEventListener('attendance', (event: MessageEvent) => {
             try {
                 const payload: AttendanceStreamPayload = JSON.parse(event.data)
-                onRecord(payload)
+                onRecordRef.current(payload)
             } catch (err) {
                 console.error('[SSE] Failed to parse attendance event:', err)
             }
@@ -99,7 +110,7 @@ export function useAttendanceStream({
             // Browser EventSource auto-retries — just log for visibility.
             console.warn('[SSE] Attendance stream error — browser will retry')
         }
-    }, [onRecord, onConnected])
+    }, [endpoint])
 
     useEffect(() => {
         if (!enabled) {

@@ -213,6 +213,10 @@ export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOpti
     const value = editForm[field]?.trim();
     if (!value) return;
     if (field === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return;
+    // Guard: skip API call for incomplete phone numbers (must be exactly 11 digits)
+    if (field === 'contactNumber' && value.replace(/\D/g, '').length !== 11) return;
+    // Guard: skip API call for incomplete employee IDs
+    if (field === 'employeeNumber' && value.length < 2) return;
     
     try {
       const res = await fetch(`/api/employees/check-duplicate?field=${field}&value=${encodeURIComponent(value)}&excludeId=${editingEmployee?.id}`);

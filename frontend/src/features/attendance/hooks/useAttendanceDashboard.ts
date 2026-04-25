@@ -105,6 +105,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const dateInputRef = useRef<HTMLInputElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const dragScrollRef = useHorizontalDragScroll()
 
   // ── Sort ──────────────────────────────────────────────────────────────────
@@ -173,6 +174,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   // ── Data Fetching ─────────────────────────────────────────────────────────
   const fetchRecords = useCallback(async () => {
+    // Abort any in-flight request to prevent race conditions
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const { signal } = controller
+
     setLoading(true)
     setError(null)
     try {
@@ -183,7 +192,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
       })
       if (statusFilter !== 'all') params.append('status', statusFilter)
 
-      const res = await fetch(`/api/attendance?${params}`, { credentials: 'include' })
+      const res = await fetch(`/api/attendance?${params}`, { credentials: 'include', signal })
       if (res.status === 401) { window.location.href = '/login'; return }
 
       const data = await res.json()
@@ -239,7 +248,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         // Fetch all active employees to inject absent rows
         let allEmployees: RawEmployee[] = []
         try {
-          const empRes = await fetch('/api/employees?limit=9999', { credentials: 'include' })
+          const empRes = await fetch('/api/employees?limit=9999', { credentials: 'include', signal })
           const empData = await empRes.json()
           if (empData.success) allEmployees = (empData.employees || empData.data || []).filter((e: RawEmployee) =>
             (e.role === 'USER' || !e.role) && (e.employmentStatus === 'ACTIVE' || !e.employmentStatus)
@@ -291,9 +300,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         setError(data.message || 'Failed to fetch attendance')
       }
     } catch (e: unknown) {
+      // Silently ignore aborted requests — they are intentional cancellations
+      if (e instanceof DOMException && e.name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Network error')
     } finally {
-      setLoading(false)
+      // Only clear loading if this controller is still the active one
+      if (abortControllerRef.current === controller) {
+        setLoading(false)
+      }
     }
   }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter])
 
@@ -410,8 +424,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   const exportToCSV = useCallback(() => {
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const date = new Date(selectedDate + 'T00:00:00')
-    const formattedDate = `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+    const date = new Date(selectedDate + 'T00:00:00Z')
+    const formattedDate = `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`
     const branchLabel = branchFilter === 'All Branches' ? 'All Branches' : branchFilter
     const deptLabel = deptFilter === 'All Departments' ? 'All Departments' : deptFilter
 

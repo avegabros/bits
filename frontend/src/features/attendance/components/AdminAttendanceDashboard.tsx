@@ -44,8 +44,8 @@ function AdminAttendanceContent() {
           <div>
             <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">Biometric Attendance</h2>
             <p className="text-muted-foreground text-sm font-medium">
-              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+              {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
               })}
             </p>
           </div>
@@ -69,8 +69,8 @@ function AdminAttendanceContent() {
             <CalendarIcon className="w-4 h-4 text-primary" />
             <span>
               {selectedDate === getTodayDate()
-                ? `Today, ${new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                : new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                ? `Today, ${new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                : new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </span>
           </button>
           <button

@@ -97,6 +97,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
             params.set('limit', String(itemsPerPage))
             if (searchQuery) params.set('search', searchQuery)
             if (statusFilter) params.set('status', statusFilter)
+            if (logDate) params.set('date', logDate)
 
             const res = await fetch(`/api/attendance/adjustments?${params.toString()}`, { credentials: 'include' })
             if (res.status === 401) { window.location.href = '/login'; return }
@@ -112,13 +113,12 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         } finally {
             setLoading(false)
         }
-    }, [currentPage, searchQuery, statusFilter])
+    }, [currentPage, searchQuery, statusFilter, logDate])
 
     // Fetch on filter/page change
     useEffect(() => { fetchAdjustments() }, [fetchAdjustments])
 
     // ⚠️ FILTER RESET: page resets to 1 when any filter changes
-    // logDate only resets pagination (not sent to API) — the page change then triggers re-fetch
     useEffect(() => { setCurrentPage(1) }, [searchQuery, statusFilter, logDate])
 
     // ── Actions ───────────────────────────────────────────────────────────────

@@ -704,10 +704,19 @@ export const getAdjustments = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 15;
     const statusFilter = (req.query.status as string) || '';
     const search = (req.query.search as string) || '';
+    const dateStr = (req.query.date as string) || '';
     const skip = (page - 1) * limit;
 
     const where: Prisma.AttendanceAdjustmentWhereInput = {};
     if (statusFilter) where.status = statusFilter;
+
+    if (dateStr) {
+      const start = new Date(dateStr);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(dateStr);
+      end.setUTCHours(23, 59, 59, 999);
+      where.attendance = { ...((where.attendance as object) || {}), date: { gte: start, lte: end } };
+    }
 
     if (search) {
       where.OR = [

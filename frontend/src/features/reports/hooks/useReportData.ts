@@ -25,20 +25,21 @@ function countWorkingDays(
     scheduledDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   }
 
-  const start = new Date(rangeStart + 'T00:00:00');
-  // Cap end date at today so future dates are never counted
+  // Use strict UTC to prevent local-timezone off-by-one errors
+  const start = new Date(rangeStart + 'T00:00:00Z');
+  // Cap end date at today (PHT) so future dates are never counted
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const cappedEnd = rangeEnd > todayStr ? todayStr : rangeEnd;
-  const end = new Date(cappedEnd + 'T00:00:00');
+  const end = new Date(cappedEnd + 'T00:00:00Z');
 
   let count = 0;
   const cursor = new Date(start);
   while (cursor <= end) {
-    const dayName = DAY_NAMES[cursor.getDay()];
+    const dayName = DAY_NAMES[cursor.getUTCDay()];
     if (scheduledDays.includes(dayName)) {
       count++;
     }
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return count;
 }
