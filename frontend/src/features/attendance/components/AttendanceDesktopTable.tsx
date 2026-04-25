@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, Edit2, Fingerprint, PenLine, AlertTriangle } from 'lucide-react'
+import { AlertCircle, Edit2, Fingerprint, PenLine, AlertTriangle, Trash2 } from 'lucide-react'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { fmtHours, formatLate, fmtMins } from '../utils/attendance-formatters'
 import { AttendanceRecord } from '../types'
@@ -13,6 +13,7 @@ interface AttendanceDesktopTableProps {
   currentPage: number
   rowsPerPage: number
   handleEditClick: (row: AttendanceRecord) => void
+  handleDeleteClick?: (row: AttendanceRecord) => void
 }
 
 export function AttendanceDesktopTable({
@@ -24,6 +25,7 @@ export function AttendanceDesktopTable({
   currentPage,
   rowsPerPage,
   handleEditClick,
+  handleDeleteClick,
 }: AttendanceDesktopTableProps) {
   return (
     <table className="w-full text-left border-collapse min-w-[1100px] bg-card">
@@ -205,9 +207,16 @@ export function AttendanceDesktopTable({
               </td>
               {/* Actions */}
               <td className="px-4 py-4 text-center">
-                <button onClick={() => handleEditClick(row)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all">
-                  <Edit2 size={16} />
-                </button>
+                <div className="flex items-center justify-center gap-1">
+                  <button onClick={() => handleEditClick(row)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
+                    <Edit2 size={16} />
+                  </button>
+                  {handleDeleteClick && typeof row.id === 'number' && (
+                    <button onClick={() => handleDeleteClick(row)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-600/10 rounded-lg transition-all" title="Delete Record">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))

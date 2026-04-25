@@ -20,10 +20,10 @@ export interface LiveRecord {
     employee: string;
     department: string;
     branch: string;
-    eventType: 'check-in' | 'check-out';
+    eventType: 'check-in' | 'check-out' | 'delete';
     time: string;
     eventTs: number;
-    status: 'on-time' | 'late' | 'absent' | 'undertime';
+    status: 'on-time' | 'late' | 'absent' | 'undertime' | 'deleted';
     shiftType: string;
 }
 
@@ -110,11 +110,11 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const emps = allEmps.filter((e: any) => e.role === 'USER' || !e.role);
             const atts: any[] = (ad.success ? (ad.data || []) : []).filter((a: any) => {
                 const emp = a.employee || a.Employee || {};
-                return emp.role === 'USER' || !emp.role;
+                return (emp.role === 'USER' || !emp.role) && a.status !== 'pending';
             });
             const weekAtts: any[] = (wd.success ? (wd.data || []) : []).filter((a: any) => {
                 const emp = a.employee || a.Employee || {};
-                return emp.role === 'USER' || !emp.role;
+                return (emp.role === 'USER' || !emp.role) && a.status !== 'pending';
             });
 
             const activeCount = emps.filter(e => e.employmentStatus === 'ACTIVE').length;
@@ -223,19 +223,29 @@ export function useDashboardData(role: 'admin' | 'hr') {
         const isLate = payload.record.lateMinutes > 0;
         const isUndertime = payload.record.undertimeMinutes > 0;
 
+        if (payload.record.status === 'pending') return;
+
+        let eventType: 'check-in' | 'check-out' | 'delete' = 'check-out';
+        if (payload.type === 'check-in') eventType = 'check-in';
+        if (payload.type === 'delete') eventType = 'delete';
+
+        let timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+        let eventTs = Date.now();
+        if (payload.type !== 'delete') {
+            const timeDate = new Date(payload.type === 'check-in' ? payload.record.checkInTime : payload.record.checkOutTime!);
+            timeStr = timeDate.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+            eventTs = timeDate.getTime();
+        }
+
         const newEntry: LiveRecord = {
-            id: `stream-${payload.record.id}-${payload.type}-${payload.record.checkOutTime ?? 'in'}`,
+            id: `stream-${payload.record.id}-${payload.type}-${Date.now()}`,
             employee: empName,
             department: emp?.Department?.name || '—',
             branch: emp?.Branch?.name || '—',
-            eventType: payload.type === 'check-in' ? 'check-in' : 'check-out',
-            time: new Date(payload.type === 'check-in' ? payload.record.checkInTime : payload.record.checkOutTime!).toLocaleTimeString('en-US', {
-                timeZone: 'Asia/Manila',
-                hour: '2-digit',
-                minute: '2-digit',
-            }),
-            eventTs: new Date(payload.type === 'check-in' ? payload.record.checkInTime : payload.record.checkOutTime!).getTime(),
-            status: payload.type === 'check-in' ? (isLate ? 'late' : 'on-time') : (isUndertime ? 'undertime' : 'on-time'),
+            eventType,
+            time: timeStr,
+            eventTs,
+            status: payload.type === 'delete' ? 'deleted' : payload.type === 'check-in' ? (isLate ? 'late' : 'on-time') : (isUndertime ? 'undertime' : 'on-time'),
             shiftType: 'MORNING',
         };
 
@@ -246,6 +256,10 @@ export function useDashboardData(role: 'admin' | 'hr') {
             setTotalPresent(prev => prev + 1);
             if (isLate) setTotalLate(prev => prev + 1);
             setTotalAbsent(prev => Math.max(0, prev - 1));
+        } else if (payload.type === 'delete') {
+            setTotalPresent(prev => Math.max(0, prev - 1));
+            if (isLate) setTotalLate(prev => Math.max(0, prev - 1));
+            setTotalAbsent(prev => prev + 1);
         }
     }, []);
 

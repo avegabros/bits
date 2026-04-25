@@ -36,8 +36,10 @@ model Attendance {
 
 model AttendanceAdjustment {
   id            Int @id @default(autoincrement())
-  attendanceId  Int
+  attendanceId  Int?
   submittedById Int
+
+  type String @default("UPDATE") // UPDATE, DELETE
 
   // Snapshot of original values at time of request
   originalCheckIn  DateTime?
@@ -46,6 +48,10 @@ model AttendanceAdjustment {
   // Requested new values
   requestedCheckIn  DateTime?
   requestedCheckOut DateTime?
+
+  // Snapshot of employee info (survives attendance deletion)
+  employeeName   String?
+  employeeBranch String?
 
   reason String // Required — why the adjustment is needed
 
@@ -58,7 +64,7 @@ model AttendanceAdjustment {
   reviewedAt  DateTime?
 
   // Relations
-  attendance  Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  attendance  Attendance? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
   submittedBy Employee   @relation("AdjustmentSubmittedBy", fields: [submittedById], references: [id])
   reviewedBy  Employee?  @relation("AdjustmentReviewedBy", fields: [reviewedById], references: [id])
 

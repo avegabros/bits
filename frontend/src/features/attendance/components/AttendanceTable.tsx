@@ -16,6 +16,7 @@ interface AttendanceTableProps {
   totalPages: number
   rowsPerPage: number;
   handleEditClick: (row: AttendanceRecord) => void;
+  handleDeleteClick?: (row: AttendanceRecord) => void;
   showStatsHeader?: boolean;
   stats?: {
     onTime: number;
@@ -38,6 +39,7 @@ export function AttendanceTable({
   totalPages,
   rowsPerPage,
   handleEditClick,
+  handleDeleteClick,
   showStatsHeader,
   stats,
   dragScrollRef,
@@ -81,6 +83,7 @@ export function AttendanceTable({
           currentPage={currentPage}
           rowsPerPage={rowsPerPage}
           handleEditClick={handleEditClick}
+          handleDeleteClick={handleDeleteClick}
         />
       </div>
 
@@ -101,6 +104,7 @@ export function AttendanceTable({
           currentPage={currentPage}
           rowsPerPage={rowsPerPage}
           handleEditClick={handleEditClick}
+          handleDeleteClick={handleDeleteClick}
         />
       </div>
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Edit2, Fingerprint, PenLine, AlertTriangle } from 'lucide-react'
+import { Edit2, Fingerprint, PenLine, AlertTriangle, Trash2 } from 'lucide-react'
 import { fmtHours, formatLate, fmtMins } from '../utils/attendance-formatters'
 import { AttendanceRecord } from '../types'
 
@@ -10,6 +10,7 @@ interface AttendanceMobileCardsProps {
   currentPage: number
   rowsPerPage: number
   handleEditClick: (row: AttendanceRecord) => void
+  handleDeleteClick?: (row: AttendanceRecord) => void
 }
 
 export function AttendanceMobileCards({
@@ -19,6 +20,7 @@ export function AttendanceMobileCards({
   currentPage,
   rowsPerPage,
   handleEditClick,
+  handleDeleteClick,
 }: AttendanceMobileCardsProps) {
   if (loading) {
     return (
@@ -67,9 +69,14 @@ export function AttendanceMobileCards({
                   Edited
                 </span>
               )}
-              <button onClick={() => handleEditClick(row)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all">
+              <button onClick={() => handleEditClick(row)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
                 <Edit2 size={14} />
               </button>
+              {handleDeleteClick && typeof row.id === 'number' && (
+                <button onClick={() => handleDeleteClick(row)} className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-600/10 rounded-lg transition-all" title="Delete Record">
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
