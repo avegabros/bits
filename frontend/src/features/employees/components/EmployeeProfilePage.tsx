@@ -13,6 +13,8 @@ import { Employee, formatFullName, formatTime, formatPhoneNumber } from '../util
 import { Avatar } from '@/components/ui/avatar'
 import { EmployeeEditModal } from './EmployeeEditModal'
 import { useEmployees } from '../hooks/useEmployees'
+import { ProfilePictureUpload } from '@/features/employee-portal/components/ProfilePictureUpload'
+import { employeesApi } from '@/lib/api'
 
 interface EmployeeProfilePageProps {
   employeeId: number
@@ -138,11 +140,21 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
         <div className="h-1.5 bg-gradient-to-r from-red-500 via-red-600 to-red-700" />
         <div className="p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <Avatar
-              src={employee.profilePicture || null}
+            <ProfilePictureUpload
+              currentUrl={employee.profilePicture || null}
               initials={initials}
-              size="xl"
-              className="ring-4 ring-white shadow-lg"
+              onUpload={async (file) => {
+                const res = await employeesApi.uploadProfilePicture(employee.id, file)
+                if (res.success) {
+                  refresh()
+                }
+              }}
+              onDelete={async () => {
+                const res = await employeesApi.deleteProfilePicture(employee.id)
+                if (res.success) {
+                  refresh()
+                }
+              }}
             />
             <div className="flex-1 text-center sm:text-left">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">

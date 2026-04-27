@@ -1,5 +1,5 @@
 import multer from 'multer';
-import { Request } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -19,3 +19,24 @@ export const uploadAvatar = multer({
     }
   },
 });
+
+/**
+ * Multer error handler middleware.
+ * Converts multer-specific errors into clean JSON responses.
+ */
+export const handleMulterError = (err: Error, _req: Request, res: Response, next: NextFunction): void => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({ success: false, message: 'File too large. Maximum size is 5 MB.' });
+      return;
+    }
+    res.status(400).json({ success: false, message: err.message });
+    return;
+  }
+  if (err) {
+    // fileFilter error (invalid MIME type)
+    res.status(400).json({ success: false, message: err.message });
+    return;
+  }
+  next();
+};
