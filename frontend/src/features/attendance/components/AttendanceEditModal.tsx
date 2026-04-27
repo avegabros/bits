@@ -38,11 +38,11 @@ export function AttendanceEditModal({
   return (
     <>
       <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
-          <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+          <div className="p-4 sm:p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
             <h3 className="font-bold text-lg leading-tight tracking-tight">Manual Time Changes</h3>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <p className="text-sm font-bold text-slate-800 leading-none">{editingLog.employeeName}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">
@@ -78,7 +78,7 @@ export function AttendanceEditModal({
                 Status will be automatically determined based on the employee&apos;s assigned shift schedule and the recorded time-in / time-out.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-emerald-500" /> Clock In</label>
                 <input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)}
@@ -122,12 +122,12 @@ export function AttendanceEditModal({
             )}
 
           </div>
-          <div className="p-5 bg-slate-50 flex gap-3 shrink-0">
-            <button onClick={() => setShowCancelModal(true)} className="flex-1 px-4 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
+          <div className="p-4 sm:p-5 bg-slate-50 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 shrink-0">
+            <button onClick={() => setShowCancelModal(true)} className="flex-1 px-4 py-3 sm:py-3.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
             <button
               onClick={handleApplyChanges}
               disabled={actionLoading || !editReason.trim()}
-              className="flex-1 px-4 py-3.5 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 sm:py-3.5 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {actionLoading && <Loader2 size={15} className="animate-spin" />}
               {String(editingLog.id).startsWith('absent-') ? 'Create Manual Record' : 'Apply Changes'}
