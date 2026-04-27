@@ -28,17 +28,15 @@ export function AttendanceDesktopTable({
   handleDeleteClick,
 }: AttendanceDesktopTableProps) {
   return (
-    <table className="w-full text-left border-collapse min-w-[1100px] bg-card">
+    <table className="w-full text-left border-collapse min-w-[900px] bg-card">
       <thead className="bg-secondary/50 backdrop-blur-sm border-b border-border">
         <tr>
           <SortableHeader label="Employee"    sortKey="employeeName"     currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
-          <SortableHeader label="Department"  sortKey="department"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
-          <SortableHeader label="Branch"      sortKey="branchName"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
           <SortableHeader label="Shift"       sortKey="shiftCode"        currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="Clock In"    sortKey="checkIn"          currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
-          <SortableHeader label="Clock Out"   sortKey="checkOut"         currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
+          <SortableHeader label="Clock In"    sortKey="checkIn"          currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="Clock Out"   sortKey="checkOut"         currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
           <SortableHeader label="Late"        sortKey="lateMinutes"      currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-yellow-500" />
-          <SortableHeader label="Reg Hrs"       sortKey="totalHours"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="Reg Hrs"     sortKey="totalHours"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
           <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
           <SortableHeader label="UT"          sortKey="undertimeMinutes" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-red-500" />
           <SortableHeader label="Status"      sortKey="status"           currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
@@ -47,14 +45,14 @@ export function AttendanceDesktopTable({
       </thead>
       <tbody className="divide-y divide-border">
         {loading ? (
-          <tr><td colSpan={12} className="px-6 py-16 text-center">
+          <tr><td colSpan={10} className="px-6 py-16 text-center">
             <div className="flex flex-col items-center gap-2 text-slate-400">
               <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
               <span className="text-sm font-medium">Loading attendance...</span>
             </div>
           </td></tr>
         ) : sortedRecords.length === 0 ? (
-          <tr><td colSpan={12} className="px-6 py-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No attendance records found</td></tr>
+          <tr><td colSpan={10} className="px-6 py-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No attendance records found</td></tr>
         ) : (
           sortedRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map(row => (
             <tr key={row.id} className="hover:bg-primary/5 transition-colors duration-200 group cursor-default">
@@ -63,13 +61,9 @@ export function AttendanceDesktopTable({
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground leading-tight uppercase tracking-tight">{row.employeeName}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-0.5">{row.branchName}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-0.5">{row.department}{row.branchName ? ` · ${row.branchName}` : ''}</p>
                 </div>
               </td>
-              {/* Department */}
-              <td className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none outline-none">{row.department}</td>
-              {/* Branch */}
-              <td className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none outline-none">{row.branchName}</td>
               {/* Shift */}
               <td className="px-4 py-4 text-center">
                 {row.shiftCode ? (
@@ -79,8 +73,8 @@ export function AttendanceDesktopTable({
                 )}
               </td>
               {/* Clock In */}
-              <td className="px-4 py-4 text-sm font-mono font-bold">
-                <div className="flex flex-col">
+              <td className="px-4 py-4 text-sm font-mono font-bold text-center">
+                <div className="flex flex-col items-center">
                   <span className={`${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</span>
                   {row.gracePeriodApplied && (
                     <span className="text-[9px] text-slate-400 mt-0.5" title="Check-in was late but within allowed grace period">Grace Period</span>
@@ -94,9 +88,9 @@ export function AttendanceDesktopTable({
                 </div>
               </td>
               {/* Clock Out */}
-              <td className="px-4 py-4 text-sm font-mono text-muted-foreground font-bold">
+              <td className="px-4 py-4 text-sm font-mono text-muted-foreground font-bold text-center">
                 {row.isEarlyPunch ? (
-                  <div className="flex flex-col">
+                  <div className="flex flex-col items-center">
                     {row.isShiftActive ? (
                       <span className="inline-flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
                         <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>Active
@@ -113,19 +107,19 @@ export function AttendanceDesktopTable({
                     <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>Active
                   </span>
                 ) : row.displayStatus === 'missing_checkout' || row.isMissingCheckout ? (
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col items-center gap-1">
                     <span className="inline-flex items-center gap-1 text-amber-600 font-bold text-[10px] uppercase tracking-wider whitespace-nowrap" title={row.notes ?? undefined}>
                       <AlertCircle className="w-3 h-3" /> No checkout
                     </span>
                   </div>
                 ) : row.checkOut === '—' && row.isMissingCheckout ? (
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col items-center gap-1">
                     <span className="inline-flex items-center gap-1 text-amber-600 font-bold text-[10px] uppercase tracking-wider whitespace-nowrap" title={row.notes ?? undefined}>
                       <AlertCircle className="w-3 h-3" /> No checkout
                     </span>
                   </div>
                 ) : (
-                  <div className="flex flex-col">
+                  <div className="flex flex-col items-center">
                     <span className="inline-flex items-center gap-1">
                       {row.checkoutSource === 'auto_closed' && (
                         <span title="Auto-closed (estimated)"><AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" /></span>

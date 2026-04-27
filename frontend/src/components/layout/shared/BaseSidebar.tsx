@@ -93,12 +93,12 @@ export function BaseSidebar({
       ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
 
       /* Desktop View: Floating card */
-      lg:top-24 lg:bottom-4 lg:left-4 lg:rounded-[20px] lg:translate-x-0
+      lg:top-20 lg:bottom-4 lg:left-4 lg:rounded-[20px] lg:translate-x-0
       ${collapsed ? 'lg:w-20' : expandedWidth}
     `}>
 
       {/* Header Section */}
-      <div className="flex items-center h-20 shrink-0 px-7 justify-start relative">
+      <div className="flex items-center h-16 shrink-0 px-7 justify-start relative">
         <div className="w-6 flex items-center justify-center shrink-0">
           <button
             onClick={onToggleCollapse}
@@ -124,10 +124,9 @@ export function BaseSidebar({
       <nav 
         aria-label="Sidebar navigation"
         role="navigation"
-        className="flex-1 mt-2 relative flex flex-col min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide-hover scrollbar-slim"
-        style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 8px, black calc(100% - 16px), transparent)' }}
+        className="flex-1 -mt-[30px] relative z-10 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide-hover scrollbar-slim"
       >
-        <ul ref={listRef} className="relative pb-4">
+        <ul ref={listRef} className="relative pb-4 pt-[30px]">
 
           {/* Sliding indicator */}
           {indicator && activeIndex >= 0 && (

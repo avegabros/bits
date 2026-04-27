@@ -20,12 +20,14 @@ export const SortableHeader = ({
 }: SortableHeaderProps) => {
   const isActive = currentSortKey === sortKey;
 
+  const isCentered = className?.includes('text-center');
+
   return (
     <th 
       className={`${className} cursor-pointer group hover:bg-slate-100 transition-colors select-none`}
       onClick={() => onSort(sortKey)}
     >
-      <div className="flex items-center gap-1.5 w-fit">
+      <div className={`flex items-center gap-1.5 w-fit ${isCentered ? 'mx-auto' : ''}`}>
         <span>{label}</span>
         <span className="text-slate-400 opacity-50 group-hover:opacity-100 transition-opacity">
           {isActive && currentSortOrder === 'asc' && <ChevronUp className="w-4 h-4 text-slate-700" />}
