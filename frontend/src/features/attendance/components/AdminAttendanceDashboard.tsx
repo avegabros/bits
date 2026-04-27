@@ -89,6 +89,13 @@ function AdminAttendanceContent() {
         </div>
       )}
 
+      {selectedDate > getTodayDate() && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-sm font-medium px-4 py-3 rounded-xl">
+          <span>🗓️</span>
+          <span>You are viewing a future date — attendance has not been recorded yet.</span>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <AttendanceStats stats={stats} variant="admin" />
 

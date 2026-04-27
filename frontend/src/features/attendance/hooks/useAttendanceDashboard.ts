@@ -280,8 +280,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         } catch { /* ignore */ }
 
         const presentIds = new Set(mapped.map(r => r.employeeId))
-        const absentRows: AttendanceRecord[] = dateIsHoliday
-          ? [] // On holidays, no one is injected as absent
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+        const isFutureDate = selectedDate > todayStr
+
+        const absentRows: AttendanceRecord[] = (dateIsHoliday || isFutureDate)
+          ? [] // On holidays or future dates, no one is injected as absent
           : allEmployees
             .filter((e: RawEmployee) => !presentIds.has(e.id))
             .map((e: RawEmployee) => ({
