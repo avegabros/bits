@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, UserCheck, Timer, UserX } from 'lucide-react';
+import { Users, UserCheck, Timer, UserX, CalendarDays } from 'lucide-react';
 
 export interface DashboardStatCardsProps {
     role: 'admin' | 'hr';
@@ -10,9 +10,11 @@ export interface DashboardStatCardsProps {
     totalPresent: number;
     totalLate: number;
     totalAbsent: number;
+    totalHoliday?: number;
+    holidayName?: string | null;
 }
 
-export function DashboardStatCards({ role, totalEmployees, totalPresent, totalLate, totalAbsent }: DashboardStatCardsProps) {
+export function DashboardStatCards({ role, totalEmployees, totalPresent, totalLate, totalAbsent, totalHoliday = 0, holidayName }: DashboardStatCardsProps) {
     const router = useRouter();
     const basePath = role === 'admin' ? '' : '/hr';
 
@@ -20,7 +22,11 @@ export function DashboardStatCards({ role, totalEmployees, totalPresent, totalLa
         { label: 'Employees', value: totalEmployees, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', accent: 'border-blue-100', path: `${basePath}/employees` },
         { label: 'On Time', value: totalPresent, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50', accent: 'border-emerald-100', path: `${basePath}/attendance?status=Present` },
         { label: 'Late', value: totalLate, icon: Timer, color: 'text-amber-600', bg: 'bg-amber-50', accent: 'border-amber-100', path: `${basePath}/attendance?status=Late` },
-        { label: 'Absent', value: totalAbsent, icon: UserX, color: 'text-rose-600', bg: 'bg-rose-50', accent: 'border-rose-100', path: `${basePath}/attendance?status=Absent` },
+        // Show Holiday card instead of Absent when it's a holiday
+        ...(totalHoliday > 0
+            ? [{ label: '🎉 Holiday', value: totalHoliday, icon: CalendarDays, color: 'text-indigo-600', bg: 'bg-indigo-50', accent: 'border-indigo-100', path: `${basePath}/attendance?status=Holiday` }]
+            : [{ label: 'Absent', value: totalAbsent, icon: UserX, color: 'text-rose-600', bg: 'bg-rose-50', accent: 'border-rose-100', path: `${basePath}/attendance?status=Absent` }]
+        ),
     ];
 
     return (
@@ -36,6 +42,13 @@ export function DashboardStatCards({ role, totalEmployees, totalPresent, totalLa
                     </div>
                 </div>
             ))}
+            {/* Holiday name banner */}
+            {holidayName && (
+                <div className="col-span-2 lg:col-span-4 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Today is {holidayName}</p>
+                </div>
+            )}
         </div>
     );
 }

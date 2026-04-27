@@ -242,10 +242,11 @@ export function AdminDetailView({
                                     if (!record) {
                                         const statusColor = missingStatus === 'Upcoming' ? 'bg-blue-50 text-blue-600 border-blue-200' :
                                             missingStatus === 'Absent' ? 'bg-red-50 text-red-600 border-red-200' :
-                                                'bg-slate-100 text-slate-500 border-slate-200';
+                                                missingStatus === 'Holiday' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+                                                    'bg-slate-100 text-slate-500 border-slate-200';
 
                                         return (
-                                            <tr key={loopDateStr} className="hover:bg-slate-50/50 transition-colors duration-200">
+                                            <tr key={loopDateStr} className={`hover:bg-slate-50/50 transition-colors duration-200 ${missingStatus === 'Holiday' ? 'bg-indigo-50/30' : ''}`}>
                                                 <td className="px-5 py-3.5">
                                                     <p className="font-bold text-slate-700 text-xs">
                                                         {loopDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
@@ -253,7 +254,7 @@ export function AdminDetailView({
                                                 </td>
                                                 <td colSpan={6} className="px-5 py-3.5 text-center">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                        {isFuture ? 'Scheduled' : 'No Record'}
+                                                        {isFuture ? 'Scheduled' : missingStatus === 'Holiday' ? '🎉 Holiday' : 'No Record'}
                                                     </span>
                                                 </td>
                                                 <td className="px-5 py-3.5">

@@ -91,6 +91,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
   const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
 
+  // ── Holiday State (used for CSV export only) ──────────────────────────────
+  const [isHolidayDate, setIsHolidayDate] = useState(false)
+
   // ── Pagination ────────────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -185,6 +188,27 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     setLoading(true)
     setError(null)
     try {
+      // Check if the selected date is a holiday
+      const [year] = selectedDate.split('-')
+      let dateIsHoliday = false
+      let dateHolidayName: string | null = null
+      try {
+        const holidayRes = await fetch(`/api/holidays?year=${year}`, { credentials: 'include', signal })
+        if (holidayRes.ok) {
+          const holidayData = await holidayRes.json()
+          if (holidayData.success && holidayData.holidays) {
+            const match = holidayData.holidays.find((h: { date: string; name: string }) =>
+              new Date(h.date).toISOString().split('T')[0] === selectedDate
+            )
+            if (match) {
+              dateIsHoliday = true
+              dateHolidayName = match.name
+            }
+          }
+        }
+      } catch { /* ignore holiday fetch errors */ }
+      setIsHolidayDate(dateIsHoliday)
+
       const params = new URLSearchParams({
         startDate: selectedDate,
         endDate: selectedDate,
@@ -218,7 +242,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
           const gracePeriodApplied: boolean = log.gracePeriodApplied ?? false
           const computedStatus = isEarlyOut ? 'early-out' : isAnomaly ? 'anomaly' : lateMinutes > 0 ? 'late' : undertimeMinutes > 0 ? 'undertime' : (log.status || 'present')
           const hasMissingCheckout = log.checkOutTime === null && log.status === 'incomplete';
-          
+
           let displayStatus = isShiftActive ? 'IN_PROGRESS' : hasMissingCheckout ? 'missing_checkout' : computedStatus
           if (isPending) displayStatus = 'pending'
 
@@ -231,7 +255,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
             checkIn: isPending ? '—' : checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }),
             checkOut: isPending ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
-            status: isPending ? 'pending' : computedStatus, 
+            status: isPending ? 'pending' : computedStatus,
             displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes, shiftCode,
             isNightShift: emp?.Shift?.isNightShift ?? false,
             isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
@@ -256,22 +280,24 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         } catch { /* ignore */ }
 
         const presentIds = new Set(mapped.map(r => r.employeeId))
-        const absentRows: AttendanceRecord[] = allEmployees
-          .filter((e: RawEmployee) => !presentIds.has(e.id))
-          .map((e: RawEmployee) => ({
-            id: `absent-${e.id}`,
-            employeeId: e.id,
-            employeeName: `${e.firstName} ${e.lastName}`,
-            department: e.Department?.name || 'General',
-            branchName: e.Branch?.name || '—',
-            date: selectedDate,
-            checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
-            lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
-            shiftCode: e.Shift?.shiftCode ?? null,
-            isNightShift: e.Shift?.isNightShift ?? false,
-            isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
-            isEarlyPunch: false, isMissingCheckout: false,
-          }))
+        const absentRows: AttendanceRecord[] = dateIsHoliday
+          ? [] // On holidays, no one is injected as absent
+          : allEmployees
+            .filter((e: RawEmployee) => !presentIds.has(e.id))
+            .map((e: RawEmployee) => ({
+              id: `absent-${e.id}`,
+              employeeId: e.id,
+              employeeName: `${e.firstName} ${e.lastName}`,
+              department: e.Department?.name || 'General',
+              branchName: e.Branch?.name || '—',
+              date: selectedDate,
+              checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
+              lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
+              shiftCode: e.Shift?.shiftCode ?? null,
+              isNightShift: e.Shift?.isNightShift ?? false,
+              isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
+              isEarlyPunch: false, isMissingCheckout: false,
+            }))
 
         let full = (statusFilter === 'all' || statusFilter === 'absent')
           ? [...mapped, ...absentRows]
@@ -384,16 +410,16 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     setActionLoading(true)
     try {
       const isAbsentRecord = String(editingLog.id).startsWith('absent-')
-      
-      const body: EditRequestBody = { 
+
+      const body: EditRequestBody = {
         reason: editReason,
       }
-      
+
       if (isAbsentRecord) {
         body.employeeId = editingLog.employeeId
         body.date = editingLog.date
       }
-      
+
       if (editCheckIn) body.checkInTime = `${editingLog.date}T${editCheckIn}:00+08:00`
       if (editCheckOut) body.checkOutTime = `${editingLog.date}T${editCheckOut}:00+08:00`
 
@@ -439,6 +465,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     allRows.push(['Branch', branchLabel])
     allRows.push(['Department', deptLabel])
     allRows.push(['Date', formattedDate])
+    if (isHolidayDate) allRows.push(['⚠️ This date is a Holiday'])
     allRows.push(['Generated', new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })])
     allRows.push([])
     allRows.push(['SUMMARY'])
@@ -446,12 +473,13 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     allRows.push(['Present', presentCount, '', 'Overtime Total', `${stats.totalOT}h`])
     allRows.push(['Late', lateCount, '', 'Undertime Total', `${stats.totalUT}h`])
     allRows.push(['Absent', absentCount])
+    if (isHolidayDate) allRows.push(['Note', '⚠️ This is a holiday — absent tracking is suspended for this date'])
     allRows.push(['Missing Checkout', incompleteCount])
     allRows.push([])
     allRows.push(['#', 'Employee', 'Branch', 'Department', 'Shift', 'Check In', 'Check Out', 'Checkout Source', 'Hours Worked', 'Late By', 'Overtime', 'Undertime', 'Status'])
 
     sortedRecords.forEach((r, i) => {
-      const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
+      const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : (isHolidayDate && r.status === 'absent') ? 'Holiday' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
       const checkoutSourceLabel = r.checkoutSource === 'device' ? '' : r.checkoutSource === 'manual' ? 'Manual' : r.checkoutSource === 'auto_closed' ? 'Auto-Closed' : r.displayStatus === 'missing_checkout' ? 'Missing' : ''
       allRows.push([
         i + 1, r.employeeName, r.branchName, r.department, r.shiftCode || 'No Shift',
@@ -487,7 +515,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         fileFormat: 'xlsx',
         fileName,
       }),
-    }).catch(() => {})
+    }).catch(() => { })
   }, [selectedDate, branchFilter, deptFilter, records, sortedRecords, stats, statusFilter, role])
 
   return {

@@ -7,6 +7,17 @@ import { auditBatch } from '../../shared/lib/auditHelpers';
 import { ATTENDANCE_LIMITS } from '../system/system.constants';
 
 /**
+ * Helper: Fetch all holidays within a date range and return a Set of
+ * date strings (YYYY-MM-DD) for O(1) lookup during report generation.
+ */
+export async function getHolidaySetForRange(startDate: Date, endDate: Date): Promise<Set<string>> {
+    const holidays = await prisma.holiday.findMany({
+        where: { date: { gte: startDate, lte: endDate } }
+    });
+    return new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
+}
+
+/**
  * Attendance Service - Strategy C (Grace Period Toggle)
  * 
  * This service processes raw AttendanceLog records into clean Attendance check-in/check-out pairs.

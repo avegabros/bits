@@ -7,6 +7,7 @@ import {
   formatHrsMins,
   getRecordStatusFromBackend,
 } from './formatters';
+import type { Holiday } from '@/features/holidays/hooks/useHolidays';
 
 const MONTHS = [
   'January',
@@ -115,7 +116,8 @@ export const handleExportIndividual = (
   startDate: string,
   endDate: string,
   records: AttendanceRecord[],
-  exportSource: 'admin-panel' | 'hr-panel' = 'admin-panel'
+  exportSource: 'admin-panel' | 'hr-panel' = 'admin-panel',
+  holidays?: Holiday[]
 ) => {
   const allRows: (string | number)[][] = [];
   allRows.push(['Employee', emp.name, '', 'Branch', emp.branch]);
@@ -188,6 +190,11 @@ export const handleExportIndividual = (
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
+  // Build a holiday date set for O(1) lookup
+  const holidayDateSet = new Set(
+    (holidays ?? []).map(h => new Date(h.date).toISOString().split('T')[0])
+  );
+
   // Walk every calendar day from startDate to endDate inclusive
   let totalCalendarDays = 0;
   const cursor = new Date(s);
@@ -257,7 +264,8 @@ export const handleExportIndividual = (
       // No record — determine status exactly like EmployeeModal
       const isFuture = dateKey > todayStr;
       const isWorkingDay = workDayNames.includes(dayShort);
-      const missingStatus = isFuture ? 'Upcoming' : isWorkingDay ? 'Absent' : 'Rest Day';
+      const isHoliday = holidayDateSet.has(dateKey);
+      const missingStatus = isFuture ? 'Upcoming' : isHoliday ? 'Holiday' : isWorkingDay ? 'Absent' : 'Rest Day';
 
       allRows.push([
         fmtFullDate(cursor),

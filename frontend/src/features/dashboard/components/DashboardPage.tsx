@@ -62,6 +62,8 @@ export function DashboardPage({ role }: DashboardPageProps) {
                 totalPresent={state.totalPresent}
                 totalLate={state.totalLate}
                 totalAbsent={state.totalAbsent}
+                totalHoliday={state.totalHoliday}
+                holidayName={state.holidayName}
             />
 
             {/* Main content */}

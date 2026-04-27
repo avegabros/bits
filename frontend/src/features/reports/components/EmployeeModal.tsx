@@ -2,6 +2,7 @@ import React from 'react';
 import { ReportRow, AttendanceRecord } from '@/types/reports';
 import { useEmployeeModalData } from '../hooks/useEmployeeModalData';
 import { AdminDetailView } from './AdminDetailView';
+import type { Holiday } from '@/features/holidays/hooks/useHolidays';
 
 interface EmployeeModalProps {
   variant?: 'admin' | 'hr';
@@ -10,6 +11,7 @@ interface EmployeeModalProps {
   records: AttendanceRecord[];
   startDate: string;
   endDate: string;
+  holidays?: Holiday[];
   onClose: () => void;
   onExport: (employee: ReportRow, records: AttendanceRecord[], expSrc: 'admin-panel' | 'hr-panel') => void;
 }
@@ -21,6 +23,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   records,
   startDate,
   endDate,
+  holidays,
   onClose,
   onExport,
 }) => {
@@ -34,7 +37,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     logSearchDate,
     setLogSearchDate,
     logDateRef,
-  } = useEmployeeModalData(employee, records, startDate, endDate);
+  } = useEmployeeModalData(employee, records, startDate, endDate, holidays);
 
   return (
     <AdminDetailView

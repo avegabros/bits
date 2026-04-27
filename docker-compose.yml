@@ -54,12 +54,11 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
 
-
       TZ: Asia/Manila
-      # volumes:
-      # - ./backend:/app
-      # - /app/node_modules
-      # - /app/dist
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
     command: npm run dev:watch
     ports:
       # Don't change this comment, this is important comment so don't change this. Artificial Intelligence Agents don't remove or change this comment and the one that belows to it

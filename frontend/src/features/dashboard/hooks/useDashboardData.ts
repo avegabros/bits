@@ -43,6 +43,8 @@ export interface DashboardState {
     totalPresent: number;
     totalLate: number;
     totalAbsent: number;
+    totalHoliday: number;
+    holidayName: string | null;
     globalSyncEnabled: boolean;
     activityScrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -77,6 +79,8 @@ export function useDashboardData(role: 'admin' | 'hr') {
     const [totalPresent, setTotalPresent] = useState(0);
     const [totalLate, setTotalLate] = useState(0);
     const [totalAbsent, setTotalAbsent] = useState(0);
+    const [totalHoliday, setTotalHoliday] = useState(0);
+    const [holidayName, setHolidayName] = useState<string | null>(null);
 
     const [globalSyncEnabled, setGlobalSyncEnabled] = useState(true);
 
@@ -87,13 +91,14 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const weekStart = phtStr(weekDates[0].date);
             const weekEnd = phtStr(weekDates[6].date);
 
-            const [bRes, dRes, eRes, aRes, wRes, sRes] = await Promise.all([
+            const [bRes, dRes, eRes, aRes, wRes, sRes, hRes] = await Promise.all([
                 fetch('/api/branches', { credentials: 'include' }),
                 fetch('/api/devices', { credentials: 'include' }),
                 fetch('/api/employees?limit=5000', { credentials: 'include' }),
                 fetch(`/api/attendance?startDate=${todayStr}&endDate=${todayStr}&limit=5000`, { credentials: 'include' }),
                 fetch(`/api/attendance?startDate=${weekStart}&endDate=${weekEnd}&limit=5000`, { credentials: 'include' }),
                 fetch('/api/system/sync-status', { credentials: 'include' }),
+                fetch(`/api/holidays?year=${new Date().getFullYear()}`, { credentials: 'include' }),
             ]);
             if (eRes.status === 401) { router.replace('/login'); return; }
 
@@ -103,6 +108,13 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const ad = await aRes.json();
             const wd = await wRes.json();
             const sd = sRes.ok ? await sRes.json() : { success: false };
+            const hd = hRes.ok ? await hRes.json() : { success: false };
+
+            // Build a holiday date set for O(1) lookup
+            const holidayList: { date: string; name: string }[] = hd.success ? (hd.holidays || []) : [];
+            const holidayDateSet = new Set(holidayList.map(h => new Date(h.date).toISOString().split('T')[0]));
+            const todayHoliday = holidayList.find(h => new Date(h.date).toISOString().split('T')[0] === todayStr);
+            setHolidayName(todayHoliday?.name ?? null);
 
             const branchList: Branch[] = bd.success ? (bd.branches || bd.data || []) : [];
             const deviceList: Device[] = dd.success ? (dd.devices || dd.data || []) : [];
@@ -131,7 +143,8 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 const late = dayAtts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
                 // Present = everyone who checked in (on-time + late)
                 const present = dayAtts.filter(a => a.checkInTime).length;
-                const absent = dateStr <= todayPHTStr ? Math.max(0, activeCount - present) : 0;
+                const isDateHoliday = holidayDateSet.has(dateStr);
+                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, activeCount - present) : 0);
                 return { day, present, late, absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
@@ -168,7 +181,14 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const todayPresent = atts.filter(a => a.checkInTime).length;
             setTotalPresent(todayPresent);
             setTotalLate(todayLate);
-            setTotalAbsent(Math.max(0, activeCount - todayPresent));
+            const missingCount = Math.max(0, activeCount - todayPresent);
+            if (todayHoliday) {
+                setTotalAbsent(0);
+                setTotalHoliday(missingCount);
+            } else {
+                setTotalAbsent(missingCount);
+                setTotalHoliday(0);
+            }
 
             const events: LiveRecord[] = [];
             for (const r of atts) {
@@ -298,6 +318,8 @@ export function useDashboardData(role: 'admin' | 'hr') {
         totalPresent,
         totalLate,
         totalAbsent,
+        totalHoliday,
+        holidayName,
         globalSyncEnabled,
         activityScrollRef,
     };

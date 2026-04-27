@@ -10,6 +10,7 @@ import { EmployeeModal } from './EmployeeModal';
 import { handleExport, handleExportIndividual } from '../lib/exportReport';
 import { formatDateShort } from '../lib/formatters';
 import { ReportRow } from '@/types/reports';
+import { useHolidays } from '@/features/holidays/hooks/useHolidays';
 
 export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) {
   // Use Asia/Manila for default dates to avoid shifting to previous day
@@ -39,6 +40,11 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
     startDate,
     endDate
   );
+
+  // Fetch holidays for the report date range so absent days on holidays
+  // are displayed as "Holiday" instead of "Absent"
+  const startYear = startDate ? parseInt(startDate.split('-')[0]) : new Date().getFullYear();
+  const { holidays } = useHolidays({ year: startYear });
 
   // Derived filter options
   const departments = Array.from(
@@ -104,9 +110,10 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
             )}
           startDate={startDate}
           endDate={endDate}
+          holidays={holidays}
           onClose={() => setSelectedEmployee(null)}
           onExport={(emp, recs, expSrc) =>
-            handleExportIndividual(emp, startDate, endDate, recs, expSrc)
+            handleExportIndividual(emp, startDate, endDate, recs, expSrc, holidays)
           }
         />
       )}

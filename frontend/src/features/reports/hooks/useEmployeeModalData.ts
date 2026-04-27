@@ -4,6 +4,7 @@ import { useMemo, useState, useRef } from 'react';
 import { ReportRow, AttendanceRecord } from '@/types/reports';
 import { getRecordStatusFromBackend } from '@/features/reports/lib/formatters';
 import { useTableSort } from '@/hooks/useTableSort';
+import type { Holiday } from '@/features/holidays/hooks/useHolidays';
 
 export interface TableRowData {
     loopDate: Date;
@@ -53,7 +54,8 @@ function getDatesInRange(start: string, end: string): Date[] {
 function buildTableRows(
     calendarDates: Date[],
     records: AttendanceRecord[],
-    employee: ReportRow
+    employee: ReportRow,
+    holidayMap?: Map<string, Holiday>
 ): TableRowData[] {
     return calendarDates.map(loopDate => {
         const loopDateStr = loopDate.toISOString().split('T')[0];
@@ -89,7 +91,14 @@ function buildTableRows(
                     }
                 } catch (e) {}
             }
-            missingStatus = isFuture ? 'Upcoming' : (isWorkingDay ? 'Absent' : 'Rest Day');
+
+            // Check if this date is a holiday
+            const holiday = holidayMap?.get(loopDateStr);
+            if (holiday) {
+                missingStatus = 'Holiday';
+            } else {
+                missingStatus = isFuture ? 'Upcoming' : (isWorkingDay ? 'Absent' : 'Rest Day');
+            }
             statusType = missingStatus;
         } else {
             checkInVal = new Date(record.checkInTime);
@@ -150,6 +159,7 @@ function buildHRTableRows(
         else if (typeLabel === 'EARLY OUT') colorClass = 'text-purple-600';
         else if (typeLabel === 'UPCOMING') colorClass = 'text-blue-400';
         else if (typeLabel === 'MISSING CHECKOUT') colorClass = 'text-amber-600';
+        else if (typeLabel === 'HOLIDAY') colorClass = 'text-indigo-500';
 
         const checkInStr = row.checkInVal ? row.checkInVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-";
         const checkOutStr = row.record?.isShiftActive ? "Active" : (row.checkOutVal ? row.checkOutVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-");
@@ -178,7 +188,8 @@ export function useEmployeeModalData(
     employee: ReportRow,
     records: AttendanceRecord[],
     startDate: string,
-    endDate: string
+    endDate: string,
+    holidays?: Holiday[]
 ) {
     const [logSearchDate, setLogSearchDate] = useState('');
     const logDateRef = useRef<HTMLInputElement>(null);
@@ -188,8 +199,19 @@ export function useEmployeeModalData(
             ? Math.min(Math.round((employee.present / employee.totalDays) * 100), 100)
             : 0;
 
+    const holidayMap = useMemo(() => {
+        const map = new Map<string, Holiday>();
+        if (holidays) {
+            for (const h of holidays) {
+                const dateStr = new Date(h.date).toISOString().split('T')[0];
+                map.set(dateStr, h);
+            }
+        }
+        return map;
+    }, [holidays]);
+
     const calendarDates = useMemo(() => getDatesInRange(startDate, endDate).reverse(), [startDate, endDate]);
-    const tableRows = useMemo(() => buildTableRows(calendarDates, records, employee), [calendarDates, records, employee]);
+    const tableRows = useMemo(() => buildTableRows(calendarDates, records, employee, holidayMap), [calendarDates, records, employee, holidayMap]);
     const hrTableRows = useMemo(() => buildHRTableRows(tableRows, employee, logSearchDate), [tableRows, employee, logSearchDate]);
 
     const { sortedData, sortKey, sortOrder, handleSort } = useTableSort<any>({

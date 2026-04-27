@@ -46,6 +46,7 @@ export type AuditEntity =
     | 'Shift'
     | 'Department'
     | 'Branch'
+    | 'Holiday'
     | 'Account'
     | 'System';
 

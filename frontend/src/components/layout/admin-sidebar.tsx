@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import {
-  Users, Clock, FileText, LayoutDashboard, UserCog, UserX, Building2, Fingerprint, RadioTower, ScrollText, Server, FileCheck
+  Users, Clock, FileText, LayoutDashboard, UserCog, UserX, Building2, Fingerprint, RadioTower, ScrollText, Server, FileCheck, CalendarDays
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { BaseSidebar, useSidebarCollapsed } from './shared/BaseSidebar'
@@ -55,6 +55,7 @@ export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }:
     { href: '/adjustments', matchPrefix: '/adjustments' },
     { href: '/employees', matchPrefix: '/employees' },
     { href: '/shifts' },
+    { href: '/holidays' },
     { href: '/organization' },
     { href: '/devices' },
     { href: '/reports', matchFn: () => isOnReports },
@@ -126,6 +127,9 @@ export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }:
 
       {/* Shifts */}
       <SidebarNavItem href="/shifts" label="Shifts" icon={Clock} active={pathname === '/shifts'} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Holidays */}
+      <SidebarNavItem href="/holidays" label="Holidays" icon={CalendarDays} active={pathname === '/holidays'} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
 
       {/* Organization */}
       <SidebarNavItem href="/organization" label="Organization" icon={Building2} active={pathname === '/organization'} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
