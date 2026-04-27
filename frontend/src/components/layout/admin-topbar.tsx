@@ -19,6 +19,7 @@ export function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [userName, setUserName] = useState('')
   const [deviceOnline, setDeviceOnline] = useState<boolean | null>(null)
+  const [holidayName, setHolidayName] = useState<string | null>(null)
 
   // ── SSE: real-time device status ────────────────────────────────────────
   // Replaces the previous 15-second polling interval with an SSE stream.
@@ -63,6 +64,23 @@ export function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fetch holiday name for today (fires once on mount)
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+    const [year] = today.split('-')
+    fetch(`/api/holidays?year=${year}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.holidays) {
+          const match = data.holidays.find((h: { date: string; name: string }) =>
+            new Date(h.date).toISOString().split('T')[0] === today
+          )
+          if (match) setHolidayName(match.name)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const handleLogout = async () => {
@@ -117,6 +135,14 @@ export function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
             {deviceOnline === null ? 'Checking...' : deviceOnline ? 'Device Online' : 'Device Offline'}
           </span>
         </div> */}
+
+        {/* Holiday Badge */}
+        {holidayName && (
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-full">
+            <span className="text-sm">📅</span>
+            <span className="text-xs font-semibold text-indigo-700">Today is {holidayName}</span>
+          </div>
+        )}
 
         {/* System Time */}
         <div className="hidden sm:block text-right border-l pl-6 border-gray-200">

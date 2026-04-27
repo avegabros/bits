@@ -13,6 +13,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [userName, setUserName] = useState('');
+  const [holidayName, setHolidayName] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -46,6 +47,23 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
     router.push('/login');
   };
 
+  // Fetch holiday name for today (fires once on mount)
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+    const [year] = today.split('-')
+    fetch(`/api/holidays?year=${year}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.holidays) {
+          const match = data.holidays.find((h: { date: string; name: string }) =>
+            new Date(h.date).toISOString().split('T')[0] === today
+          )
+          if (match) setHolidayName(match.name)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-40">
       <div className="flex items-center gap-4 flex-1">
@@ -62,6 +80,14 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
       </div>
 
       <div className="flex items-center gap-3 md:gap-6">
+        {/* Holiday Badge */}
+        {holidayName && (
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-full">
+            <span className="text-sm">📅</span>
+            <span className="text-xs font-semibold text-indigo-700">Today is {holidayName}</span>
+          </div>
+        )}
+
         <div className="hidden sm:block text-right border-l pl-6 border-slate-200">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">System Time</p>
           <p className="text-sm font-black text-slate-700 font-mono tracking-tighter">{mounted ? time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : ''}</p>
