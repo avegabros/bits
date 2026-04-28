@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, CalendarSearch, X, ChevronUp, ChevronDown, Loader2, Filter } from 'lucide-react';
+import { Search, X, ChevronUp, ChevronDown, Loader2, Filter } from 'lucide-react';
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 import { useTableSort } from '@/hooks/useTableSort';
 import { SortableHeader } from '@/components/ui/SortableHeader';
@@ -77,8 +77,8 @@ export function AdjustmentAuditLogsDashboard() {
 
   const {
     groupedLogs, loading, totalCount, totalPages, currentPage,
-    searchQuery, branchFilter, logDate, branches, itemsPerPage,
-    setCurrentPage, setSearchQuery, setBranchFilter, setLogDate
+    searchQuery, branchFilter, branches, itemsPerPage,
+    setCurrentPage, setSearchQuery, setBranchFilter
   } = useAdjustmentLogs({ initialEntityId: entityIdParam });
 
   const clearEntityFilter = () => {
@@ -88,7 +88,6 @@ export function AdjustmentAuditLogsDashboard() {
   };
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const logDateRef = useRef<HTMLInputElement>(null);
   const dragScrollRef = useHorizontalDragScroll();
 
   const { sortedData: sortedGroupedLogs, sortKey, sortOrder, handleSort } = useTableSort({
@@ -96,11 +95,7 @@ export function AdjustmentAuditLogsDashboard() {
   });
   const sortKeyStr = sortKey as string | null;
 
-  const formatDateLabel = (dateStr: string) => {
-    if (!dateStr) return "Select Date";
-    const [year, month, day] = dateStr.split("-");
-    return `${day}/${month}/${year}`;
-  };
+
 
   interface CustomSelectProps {
     value: string
@@ -182,35 +177,6 @@ export function AdjustmentAuditLogsDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 ml-auto">
-          <div className="relative">
-            <input
-              type="date"
-              ref={logDateRef}
-              value={logDate}
-              onChange={(e) => setLogDate(e.target.value)}
-              className="absolute opacity-0 pointer-events-none"
-            />
-            <button
-              onClick={() => {
-                if (logDateRef.current && 'showPicker' in logDateRef.current) {
-                  logDateRef.current.showPicker()
-                }
-              }}
-              className="min-w-[180px] flex items-center justify-between px-5 py-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none shadow-sm hover:border-red-200 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <CalendarSearch size={14} className="text-slate-400" />
-                <span>{formatDateLabel(logDate)}</span>
-              </div>
-              {logDate && (
-                <X
-                  size={14}
-                  className="text-slate-400 hover:text-red-500 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); setLogDate(""); }}
-                />
-              )}
-            </button>
-          </div>
           <CustomSelect id="branch" value={branchFilter} options={branches} onChange={setBranchFilter} />
         </div>
       </div>

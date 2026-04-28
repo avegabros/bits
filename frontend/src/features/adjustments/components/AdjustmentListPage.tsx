@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Search, CalendarSearch, Clock, AlertCircle, X, CheckCircle2, Loader2 } from 'lucide-react'
+import { Search, Clock, AlertCircle, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import ToastContainer from '@/components/ui/ToastContainer'
 import { useAdjustmentList } from '../hooks/useAdjustmentList'
@@ -15,7 +15,6 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
     const {
         searchQuery, setSearchQuery,
         statusFilter, setStatusFilter,
-        logDate, setLogDate, logDateRef,
         currentPage, setCurrentPage,
         itemsPerPage, totalCount, totalPages,
         loading, sortedAdjustments,
@@ -27,7 +26,6 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
         actionLoading,
         handleApprove, handleReject,
         isAdmin, pendingCount,
-        formatDateLabel,
         toasts, dismissToast,
     } = useAdjustmentList(role)
 
@@ -48,28 +46,6 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <Clock className="w-3.5 h-3.5 text-yellow-600" />
                             <span className="text-xs font-bold text-yellow-700">{pendingCount} pending</span>
-                        </div>
-                    )}
-                    {/* Date filter — HR only */}
-                    {!isAdmin && (
-                        <div className="relative">
-                            <input type="date" ref={logDateRef} value={logDate} onChange={(e) => setLogDate(e.target.value)}
-                                className="absolute opacity-0 pointer-events-none" />
-                            <button onClick={() => {
-                              if (logDateRef.current && 'showPicker' in logDateRef.current) {
-                                logDateRef.current.showPicker()
-                              }
-                            }}
-                                className="min-w-[180px] flex items-center justify-between px-5 py-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none shadow-sm hover:border-red-200 transition-all">
-                                <div className="flex items-center gap-3">
-                                    <CalendarSearch size={14} className="text-slate-400" />
-                                    <span>{formatDateLabel(logDate)}</span>
-                                </div>
-                                {logDate && (
-                                    <X size={14} className="text-slate-400 hover:text-red-500 transition-colors"
-                                        onClick={(e) => { e.stopPropagation(); setLogDate('') }} />
-                                )}
-                            </button>
                         </div>
                     )}
                     {/* Status filter pills */}

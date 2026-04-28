@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/useToast'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import { useTableSort } from '@/hooks/useTableSort'
@@ -50,8 +50,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
     // Filter state
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState(role === 'admin' ? 'pending' : '')
-    const [logDate, setLogDate] = useState('')
-    const logDateRef = useRef<HTMLInputElement>(null)
+
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1)
@@ -82,11 +81,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
     const isAdmin = role === 'admin'
     const pendingCount = (isAdmin && statusFilter === 'pending') ? totalCount : null
 
-    const formatDateLabel = (dateStr: string) => {
-        if (!dateStr) return 'Select Date'
-        const [year, month, day] = dateStr.split('-')
-        return `${day}/${month}/${year}`
-    }
+
 
     // ── Data Fetching ─────────────────────────────────────────────────────────
     const fetchAdjustments = useCallback(async () => {
@@ -97,7 +92,6 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
             params.set('limit', String(itemsPerPage))
             if (searchQuery) params.set('search', searchQuery)
             if (statusFilter) params.set('status', statusFilter)
-            if (logDate) params.set('date', logDate)
 
             const res = await fetch(`/api/attendance/adjustments?${params.toString()}`, { credentials: 'include' })
             if (res.status === 401) { window.location.href = '/login'; return }
@@ -113,13 +107,13 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         } finally {
             setLoading(false)
         }
-    }, [currentPage, searchQuery, statusFilter, logDate])
+    }, [currentPage, searchQuery, statusFilter])
 
     // Fetch on filter/page change
     useEffect(() => { fetchAdjustments() }, [fetchAdjustments])
 
     // ⚠️ FILTER RESET: page resets to 1 when any filter changes
-    useEffect(() => { setCurrentPage(1) }, [searchQuery, statusFilter, logDate])
+    useEffect(() => { setCurrentPage(1) }, [searchQuery, statusFilter])
 
     // ── Actions ───────────────────────────────────────────────────────────────
     const handleApprove = async (id: number) => {
@@ -180,8 +174,6 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         // Filter state
         searchQuery, setSearchQuery,
         statusFilter, setStatusFilter,
-        logDate, setLogDate,
-        logDateRef,
         // Pagination
         currentPage, setCurrentPage,
         itemsPerPage,
@@ -201,7 +193,6 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         handleReject,
         // Derived
         isAdmin, pendingCount,
-        formatDateLabel,
         // Toast
         toasts, dismissToast,
     }

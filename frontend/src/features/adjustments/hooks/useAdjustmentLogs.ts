@@ -18,7 +18,7 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
     const [currentPage, setCurrentPage] = useState(1)
     const [searchQuery, setSearchQuery] = useState('')
     const [branchFilter, setBranchFilter] = useState('All Branches')
-    const [logDate, setLogDate] = useState('')
+
     const [entityId, setEntityId] = useState<number | null>(initialEntityId)
     const [branches, setBranches] = useState<string[]>(['All Branches'])
     const itemsPerPage = initialItemsPerPage
@@ -31,7 +31,6 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
             params.set('limit', String(itemsPerPage))
             if (searchQuery) params.set('search', searchQuery)
             if (branchFilter && branchFilter !== 'All Branches') params.set('branch', branchFilter)
-            if (logDate) params.set('date', logDate)
             if (entityId) params.set('entityId', String(entityId))
 
             const res = await fetch(`/api/attendance/audit-logs?${params.toString()}`, { credentials: 'include' })
@@ -66,7 +65,7 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
         } finally {
             setLoading(false)
         }
-    }, [currentPage, searchQuery, branchFilter, logDate, itemsPerPage, branches.length])
+    }, [currentPage, searchQuery, branchFilter, itemsPerPage, branches.length])
 
     // Also fetch all branches on mount
     useEffect(() => {
@@ -87,7 +86,7 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
 
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchQuery, branchFilter, logDate])
+    }, [searchQuery, branchFilter])
 
     const groupedLogs = useMemo(() => {
         const groups: { key: string; logs: AuditLog[] }[] = []
@@ -137,13 +136,11 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
         currentPage,
         searchQuery,
         branchFilter,
-        logDate,
         branches,
         itemsPerPage,
         setCurrentPage,
         setSearchQuery,
         setBranchFilter,
-        setLogDate,
         refresh: fetchLogs
     }
 }
