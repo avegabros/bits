@@ -91,11 +91,11 @@ async function main() {
             firstName: 'Admin',
             lastName: 'User',
             role: 'ADMIN' as const,
-            department: 'ADMIN',
+            department: null,
             position: 'System Administrator',
-            branch: 'NRA',
-            contactNumber: '09171234567',
-            employeeNumber: 'EMP001',
+            branch: null,
+            contactNumber: null,
+            employeeNumber: null,
             preferredZkId: null, // Admin doesn't need a ZK ID
         },
         {
@@ -118,7 +118,7 @@ async function main() {
         if (!existing) {
             // Determine safe zkId if provided — never use 1 (device SUPER ADMIN)
             let finalZkId: number | null = null
-            
+
             if (u.preferredZkId) {
                 const zkCheck = await prisma.employee.findUnique({ where: { zkId: u.preferredZkId } })
                 finalZkId = u.preferredZkId
@@ -130,7 +130,7 @@ async function main() {
 
             // Look up the branch and department IDs for the FK relations.
             const branchRow = await prisma.branch.findUnique({ where: { name: u.branch } })
-            const deptRow   = await prisma.department.findUnique({ where: { name: u.department } })
+            const deptRow = await prisma.department.findUnique({ where: { name: u.department } })
 
             await prisma.employee.create({
                 data: {

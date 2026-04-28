@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, MapPin, Users, Search, LayoutGrid, List, Loader2 } from 'lucide-react'
+import { Building2, Building, MapPin, Users, Search, LayoutGrid, List, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -9,11 +9,13 @@ import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import ToastContainer from '@/components/ui/ToastContainer'
 
 import { useOrganization } from '../hooks/useOrganization'
-import type { Department } from '../types'
+import type { Department, Company } from '../types'
 import { DeleteConfirmDialog } from './DeleteConfirmDialog'
 import { EditDepartmentDialog } from './EditDepartmentDialog'
 import { EditBranchDialog } from './EditBranchDialog'
+import { EditCompanyDialog } from './EditCompanyDialog'
 import { AddOrganizationDialog } from './AddOrganizationDialog'
+import { CompanyCards } from './CompanyCards'
 import { BranchCards } from './BranchCards'
 import { DepartmentGrid } from './DepartmentGrid'
 import { DepartmentTable } from './DepartmentTable'
@@ -49,11 +51,25 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
   const openEditBranch = (branch: typeof org.branches[0]) => {
     org.setEditingBranch(branch)
     org.setEditBranchName(branch.name)
+    org.setEditBranchCompanyIds((branch.companies || []).map(c => c.companyId))
     org.setEditBranchError(null)
   }
 
   const openDeleteBranch = (branch: typeof org.branches[0]) => {
     org.setConfirmDeleteBranch(branch)
+    org.setDeleteError(null)
+  }
+
+  const openEditCompany = (company: Company) => {
+    org.setEditingCompany(company)
+    org.setEditCompanyName(company.name)
+    org.setEditCompanyAddress(company.address || '')
+    org.setEditCompanyLogo(company.logo || '')
+    org.setEditCompanyError(null)
+  }
+
+  const openDeleteCompany = (company: Company) => {
+    org.setConfirmDeleteCompany(company)
     org.setDeleteError(null)
   }
 
@@ -64,15 +80,18 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
       <DeleteConfirmDialog
         confirmDeleteDept={org.confirmDeleteDept}
         confirmDeleteBranch={org.confirmDeleteBranch}
+        confirmDeleteCompany={org.confirmDeleteCompany}
         deleteLoading={org.deleteLoading}
         deleteError={org.deleteError}
         onCancel={() => {
           org.setConfirmDeleteDept(null)
           org.setConfirmDeleteBranch(null)
+          org.setConfirmDeleteCompany(null)
           org.setDeleteError(null)
         }}
         onDeleteDept={org.handleDeleteDept}
         onDeleteBranch={org.handleDeleteBranch}
+        onDeleteCompany={org.handleDeleteCompany}
       />
 
       {/* ── Edit Department Dialog ── */}
@@ -91,10 +110,28 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
         editingBranch={org.editingBranch}
         editBranchName={org.editBranchName}
         setEditBranchName={org.setEditBranchName}
+        editBranchCompanyIds={org.editBranchCompanyIds}
+        setEditBranchCompanyIds={org.setEditBranchCompanyIds}
+        companies={org.companies}
         editBranchLoading={org.editBranchLoading}
         editBranchError={org.editBranchError}
         onSave={org.handleEditBranchSave}
         onCancel={() => { org.setEditingBranch(null); org.setEditBranchError(null) }}
+      />
+
+      {/* ── Edit Company Dialog ── */}
+      <EditCompanyDialog
+        editingCompany={org.editingCompany}
+        editCompanyName={org.editCompanyName}
+        setEditCompanyName={org.setEditCompanyName}
+        editCompanyAddress={org.editCompanyAddress}
+        setEditCompanyAddress={org.setEditCompanyAddress}
+        editCompanyLogo={org.editCompanyLogo}
+        setEditCompanyLogo={org.setEditCompanyLogo}
+        editCompanyLoading={org.editCompanyLoading}
+        editCompanyError={org.editCompanyError}
+        onSave={org.handleEditCompanySave}
+        onCancel={() => { org.setEditingCompany(null); org.setEditCompanyError(null) }}
       />
 
       {/* ── Header ── */}
@@ -105,7 +142,7 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
           </div>
           <div>
             <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Organization</h2>
-            <p className="text-muted-foreground text-sm mt-0.5">Manage departments &amp; branches</p>
+            <p className="text-muted-foreground text-sm mt-0.5">Manage companies, departments &amp; branches</p>
           </div>
         </div>
 
@@ -116,6 +153,10 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
           setAddType={org.setAddType}
           newName={org.newName}
           setNewName={org.setNewName}
+          newAddress={org.newAddress}
+          setNewAddress={org.setNewAddress}
+          newLogo={org.newLogo}
+          setNewLogo={org.setNewLogo}
           addLoading={org.addLoading}
           addError={org.addError}
           setAddError={org.setAddError}
@@ -130,7 +171,17 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
       )}
 
       {/* ── Summary Stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card className="bg-white border-slate-200 p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-slate-400 font-medium">Companies</p>
+              <p className="text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.companies.length}</p>
+              <p className="text-xs text-slate-400 mt-1">Registered companies</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-violet-50"><Building className="w-5 h-5 text-violet-600" /></div>
+          </div>
+        </Card>
         <Card className="bg-white border-slate-200 p-5">
           <div className="flex items-start justify-between">
             <div>
@@ -162,6 +213,14 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
           </div>
         </Card>
       </div>
+
+      {/* ── Companies Cards ── */}
+      <CompanyCards
+        companies={org.companies}
+        loading={org.loading}
+        onEditCompany={openEditCompany}
+        onDeleteCompany={openDeleteCompany}
+      />
 
       {/* ── Branches Cards ── */}
       <BranchCards

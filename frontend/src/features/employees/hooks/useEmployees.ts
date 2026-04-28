@@ -11,7 +11,8 @@ interface UseEmployeesProps {
 export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: number; name: string }[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<{ id: number; name: string; logo?: string | null; address?: string | null }[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,19 +39,22 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
 
   const fetchDependencies = useCallback(async () => {
     try {
-      const [deptRes, branchRes, shiftRes] = await Promise.all([
+      const [deptRes, branchRes, shiftRes, companyRes] = await Promise.all([
         fetch('/api/departments'),
         fetch('/api/branches'),
-        fetch('/api/shifts', { credentials: 'include' })
+        fetch('/api/shifts', { credentials: 'include' }),
+        fetch('/api/companies'),
       ]);
-      const [deptData, branchData, shiftData] = await Promise.all([
+      const [deptData, branchData, shiftData, companyData] = await Promise.all([
         deptRes.ok ? deptRes.json() : { success: false, departments: [] },
         branchRes.ok ? branchRes.json() : { success: false, branches: [] },
-        shiftRes.ok ? shiftRes.json() : { success: false, shifts: [] }
+        shiftRes.ok ? shiftRes.json() : { success: false, shifts: [] },
+        companyRes.ok ? companyRes.json() : { success: false, companies: [] },
       ]);
       if (deptData.success) setDepartments(deptData.departments);
       if (branchData.success) setBranches(branchData.branches);
       if (shiftData.success) setShifts(shiftData.shifts.filter(Boolean));
+      if (companyData.success) setCompanies(companyData.companies);
     } catch (e) {
       console.error('Error fetching dependencies:', e);
     }
@@ -146,6 +150,7 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     rawEmployees: employees,
     departments,
     branches,
+    companies,
     shifts,
     loading,
     refresh: fetchEmployees,

@@ -12,7 +12,8 @@ interface EmployeeEditModalProps {
   employee: Employee
   editForm: Partial<Employee>
   departments: Department[]
-  branches: Branch[]
+  branches: any[]
+  companies: { id: number; name: string }[]
   shifts: ShiftOption[]
   isSaving?: boolean
   onFormChange: (form: Partial<Employee>) => void
@@ -22,7 +23,7 @@ interface EmployeeEditModalProps {
 }
 
 export function EmployeeEditModal({
-  employee, editForm, departments, branches, shifts, isSaving,
+  employee, editForm, departments, branches, companies, shifts, isSaving,
   onFormChange, onSave, onClose, onDuplicateBlur,
 }: EmployeeEditModalProps) {
   const { formErrors, clearFieldError, handleSaveWrapper } = useEmployeeEditForm({ editForm, onSave })
@@ -63,6 +64,7 @@ export function EmployeeEditModal({
             formErrors={formErrors}
             departments={departments}
             branches={branches}
+            companies={companies}
             shifts={shifts}
             onFormChange={onFormChange}
             onClearError={clearFieldError}

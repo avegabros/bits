@@ -12,7 +12,7 @@ interface UseEmployeeListOptions {
 const ROWS_PER_PAGE = 10;
 
 export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOptions = {}) {
-  const { employees, rawEmployees, departments, branches, shifts, loading, refresh, filters, tableSort, actions } =
+  const { employees, rawEmployees, departments, branches, companies, shifts, loading, refresh, filters, tableSort, actions } =
     useEmployees({ statusFilter });
   const { toasts, showToast, dismissToast } = useToast();
 
@@ -251,6 +251,7 @@ export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOpti
     rawEmployees,
     departments,
     branches,
+    companies,
     shifts,
     loading,
     refresh,

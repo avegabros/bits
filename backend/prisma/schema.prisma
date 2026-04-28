@@ -83,12 +83,32 @@ model Department {
   Employee  Employee[]
 }
 
+model Company {
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  logo      String?
+  address   String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  branches  CompanyBranch[]
+}
+
 model Branch {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  createdAt DateTime        @default(now())
   updatedAt DateTime
   Employee  Employee[]
+  companies CompanyBranch[]
+}
+
+model CompanyBranch {
+  companyId Int
+  branchId  Int
+  company   Company @relation(fields: [companyId], references: [id])
+  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  @@id([companyId, branchId])
 }
 
 model Device {

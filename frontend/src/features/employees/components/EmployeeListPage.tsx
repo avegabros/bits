@@ -27,7 +27,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
       <EmployeePageHeader
         role={role} statusFilter={statusFilter}
         isExporting={list.isExporting} onExport={list.handleExport}
-        departments={list.departments} branches={list.branches} shifts={list.shifts}
+        departments={list.departments} branches={list.branches} companies={list.companies} shifts={list.shifts}
         onImportComplete={list.refresh}
         isAddOpen={list.isAddOpen} setIsAddOpen={list.setIsAddOpen}
         onRegisterEmployee={async (data) => {
@@ -64,7 +64,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
 
       {list.editingEmployee && <EmployeeEditModal
         employee={list.editingEmployee} editForm={list.editForm}
-        departments={list.departments} branches={list.branches} shifts={list.shifts}
+        departments={list.departments} branches={list.branches} companies={list.companies} shifts={list.shifts}
         isSaving={list.isUpdating} onFormChange={list.setEditForm}
         onSave={list.handleUpdateEmployee} onClose={() => list.setEditingEmployee(null)}
         onDuplicateBlur={list.handleDuplicateBlur}

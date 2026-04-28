@@ -1,5 +1,5 @@
 import express from 'express';
-import { getBranches, createBranch, renameBranch, deleteBranch } from './branch.controller';
+import { getBranches, createBranch, renameBranch, deleteBranch, addCompanyToBranch, removeCompanyFromBranch } from './branch.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminOrHR } from '../../shared/middleware/role.middleware';
 
@@ -85,5 +85,59 @@ router.put('/:id', adminOrHR, renameBranch);
  *         description: Branch not found
  */
 router.delete('/:id', adminOrHR, deleteBranch);
+
+/**
+ * @swagger
+ * /api/branches/{id}/companies:
+ *   post:
+ *     summary: Assign a company to a branch
+ *     tags: [Branches]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               companyId:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Company assigned to branch
+ */
+router.post('/:id/companies', adminOrHR, addCompanyToBranch);
+
+/**
+ * @swagger
+ * /api/branches/{id}/companies/{companyId}:
+ *   delete:
+ *     summary: Unassign a company from a branch
+ *     tags: [Branches]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: companyId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Company unassigned from branch
+ */
+router.delete('/:id/companies/:companyId', adminOrHR, removeCompanyFromBranch);
 
 export default router;
