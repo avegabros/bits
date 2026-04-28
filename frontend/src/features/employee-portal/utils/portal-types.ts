@@ -14,6 +14,7 @@ export interface PortalEmployeeProfile {
   employeeNumber: string | null
   hireDate: string | null
   employmentStatus: string
+  profilePicture: string | null
   needsPasswordChange: boolean
   createdAt: string
 }

@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 import type { Shift } from '../types'
 
@@ -9,10 +11,13 @@ interface ShiftDeleteModalProps {
 }
 
 export function ShiftDeleteModal({ deleteTarget, deleteLoading, onCancel, onDelete }: ShiftDeleteModalProps) {
-  if (!deleteTarget) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
-  return (
-    <div className="fixed inset-0 z-150 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
+  if (!deleteTarget || !mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm sm:p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
         <div className="p-6 text-center space-y-4">
           <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto">
@@ -37,6 +42,7 @@ export function ShiftDeleteModal({ deleteTarget, deleteLoading, onCancel, onDele
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

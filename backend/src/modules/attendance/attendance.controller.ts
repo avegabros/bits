@@ -188,9 +188,10 @@ export const getEmployeeHistory = async (req: Request, res: Response) => {
  */
 export const createManualAttendance = async (req: Request, res: Response) => {
     try {
-        const { employeeId, date, checkInTime, checkOutTime, reason } = req.body;
+        const { employeeId, date, checkInTime, checkOutTime, reason, roleContext } = req.body;
         const adjustedById = req.user?.employeeId;
         const userRole = req.user?.role;
+        const isHRWorkflow = userRole === 'HR' || roleContext === 'hr';
 
         if (!adjustedById || !employeeId || !date || !checkInTime) {
             return res.status(400).json({ success: false, message: 'Missing required fields: employeeId, date, checkInTime' });
@@ -231,24 +232,24 @@ export const createManualAttendance = async (req: Request, res: Response) => {
 
         const employee = await prisma.employee.findUnique({
              where: { id: Number(employeeId) },
-             include: { Shift: true }
+             include: { Shift: true, Branch: { select: { name: true } } }
         });
 
         if (!employee) {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
-        // If HR User: Create a 'pending' dummy record + Adjustment Request
-        if (userRole === 'HR') {
+        // If HR User (or Admin acting as HR): Create a 'pending' dummy record + Adjustment Request
+        if (isHRWorkflow) {
              const newRecord = await prisma.attendance.create({
                  data: {
                      employeeId: Number(employeeId),
                      date: recordDate,
-                     checkInTime: effectiveCheckIn,
-                     checkOutTime: effectiveCheckOut,
+                     checkInTime: recordDate, // Dummy time until approved
+                     checkOutTime: null, // Dummy time until approved
                      status: 'pending',
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
-                     checkoutSource: effectiveCheckOut ? 'manual' : null
+                     checkoutSource: null
                  }
              });
 
@@ -260,6 +261,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                      originalCheckOut: null,
                      requestedCheckIn: effectiveCheckIn,
                      requestedCheckOut: effectiveCheckOut,
+                     employeeName: `${employee.firstName} ${employee.lastName}`,
+                     employeeBranch: employee.Branch?.name || null,
                      reason: String(reason).trim(),
                      status: 'pending',
                  }
@@ -355,9 +358,10 @@ export const updateAttendance = async (req: Request, res: Response) => {
             return;
         }
 
-        const { checkInTime, checkOutTime, reason } = req.body;
+        const { checkInTime, checkOutTime, reason, roleContext } = req.body;
         const adjustedById = req.user?.employeeId;
         const userRole = req.user?.role;
+        const isHRWorkflow = userRole === 'HR' || roleContext === 'hr';
 
         if (!adjustedById) {
             res.status(401).json({ success: false, message: 'Not authenticated' });
@@ -372,7 +376,7 @@ export const updateAttendance = async (req: Request, res: Response) => {
 
         const existing = await prisma.attendance.findUnique({
             where: { id: recordId },
-            include: { employee: { include: { Shift: true } } }
+            include: { employee: { include: { Shift: true, Branch: { select: { name: true } } } } }
         });
         if (!existing) {
             res.status(404).json({ success: false, message: 'Attendance record not found' });
@@ -407,8 +411,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
             }
         }
 
-        // ── HR users: create a pending adjustment (do NOT apply immediately) ──
-        if (userRole === 'HR') {
+        // ── HR users (or Admin acting as HR): create a pending adjustment (do NOT apply immediately) ──
+        if (isHRWorkflow) {
             const adjustment = await prisma.attendanceAdjustment.create({
                 data: {
                     attendanceId: recordId,
@@ -417,6 +421,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
                     originalCheckOut: existing.checkOutTime,
                     requestedCheckIn: checkInTime ? new Date(checkInTime) : null,
                     requestedCheckOut: checkOutTime ? new Date(checkOutTime) : null,
+                    employeeName: `${existing.employee.firstName} ${existing.employee.lastName}`,
+                    employeeBranch: (existing.employee as any).Branch?.name || null,
                     reason: String(reason).trim(),
                     status: 'pending',
                 }
@@ -452,25 +458,6 @@ export const updateAttendance = async (req: Request, res: Response) => {
             updateData.checkInTime = newDate;
             updateData.checkin_updated = new Date();
             auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newDate.toISOString() });
-
-            const shift = existing.employee?.Shift;
-            if (shift) {
-                const [startH, startM] = shift.startTime.split(':').map(Number);
-                const grace = shift.graceMinutes || 0;
-                const checkInPHT = new Date(newDate.getTime() + 8 * 60 * 60 * 1000);
-                const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                const shiftStartMinutes = startH * 60 + startM + grace;
-
-                if (checkInMinutes <= shiftStartMinutes) {
-                    updateData.status = 'present';
-                } else {
-                    updateData.status = 'late';
-                }
-
-                if (updateData.status !== existing.status) {
-                    auditEntries.push({ field: 'status', oldValue: existing.status, newValue: String(updateData.status) });
-                }
-            }
         }
 
         if (checkOutTime !== undefined) {
@@ -482,19 +469,34 @@ export const updateAttendance = async (req: Request, res: Response) => {
             auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: newVal ? newVal.toISOString() : null });
         }
 
-        if (updateData.checkOutTime && existing.status === 'incomplete') {
+        // Recalculate status
+        const updatedCheckIn = updateData.checkInTime as Date || existing.checkInTime;
+        const updatedCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+
+        if (updatedCheckIn) {
+            let calculatedStatus = existing.status;
             const shift = existing.employee?.Shift;
+            
             if (shift) {
                 const [startH, startM] = shift.startTime.split(':').map(Number);
                 const grace = shift.graceMinutes || 0;
-                const checkInPHT = new Date(existing.checkInTime.getTime() + 8 * 60 * 60 * 1000);
+                const checkInPHT = new Date(updatedCheckIn.getTime() + 8 * 60 * 60 * 1000);
                 const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
                 const shiftStartMinutes = startH * 60 + startM + grace;
-                updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
+                
+                calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
             } else {
-                updateData.status = 'present';
+                calculatedStatus = 'present';
             }
-            auditEntries.push({ field: 'status', oldValue: 'incomplete', newValue: String(updateData.status) });
+            
+            if (!updatedCheckOut) {
+                calculatedStatus = 'incomplete';
+            }
+
+            if (calculatedStatus !== existing.status) {
+                updateData.status = calculatedStatus;
+                auditEntries.push({ field: 'status', oldValue: existing.status, newValue: calculatedStatus });
+            }
         }
 
 
@@ -596,18 +598,25 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
        });
        const validAttIds = matchedAtts.map(a => a.id);
 
-       if (search) {
-          // If searching, it could match the attendance employee OR the adjuster
-          where.OR = [
-             { entityId: { in: validAttIds } },
-             { performer: { OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-             ] } }
-          ];
-       } else {
-          // If just branch, it only filters the attendance employee
-          where.entityId = { in: validAttIds };
+       // Build an OR condition that matches either the still-existing attendance record,
+       // or the deleted record via the audit log details (which contains name and branch).
+       const orConditions: Prisma.AuditLogWhereInput[] = [
+          { entityId: { in: validAttIds } }
+       ];
+
+       if (branch && !search) {
+          orConditions.push({ details: { contains: `(Branch: ${branch})` } });
+          where.OR = orConditions;
+       } else if (search) {
+          orConditions.push({ details: { contains: search, mode: 'insensitive' } });
+          orConditions.push({ performer: { OR: [
+                 { firstName: { contains: search, mode: 'insensitive' } },
+                 { lastName: { contains: search, mode: 'insensitive' } },
+          ] } });
+          if (branch) {
+              orConditions.push({ details: { contains: `(Branch: ${branch})`, mode: 'insensitive' } });
+          }
+          where.OR = orConditions;
        }
     }
 
@@ -653,11 +662,20 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
     const mappedLogs: Record<string, unknown>[] = [];
     for (const log of rawLogs) {
         const attendance = log.entityId ? attMap.get(log.entityId) : null;
-        if (!attendance) continue;
-
-        const meta = log.metadata as { changes?: { field: string; oldValue: string | null; newValue: string | null }[]; reason?: string } | null;
+        
+        const meta = log.metadata as { changes?: { field: string; oldValue: string | null; newValue: string | null }[]; reason?: string; employeeName?: string; branch?: string } | null;
         const changes = meta?.changes ?? [];
         const reason = meta?.reason ?? null;
+
+        // Fallback for deleted records
+        const employeeFallback = {
+            firstName: meta?.employeeName || 'Unknown',
+            lastName: '',
+            Branch: { name: meta?.branch || '—' },
+            role: 'USER'
+        };
+
+        const empData = attendance ? attendance.employee : employeeFallback;
 
         for (const change of changes) {
             mappedLogs.push({
@@ -668,7 +686,7 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
                 reason: reason,
                 createdAt: log.timestamp,
                 attendance: {
-                    employee: attendance.employee
+                    employee: empData
                 },
                 adjustedBy: log.performer || { firstName: 'System', lastName: '', role: 'SYSTEM' }
             });
@@ -728,6 +746,8 @@ export const getAdjustments = async (req: Request, res: Response) => {
           { firstName: { contains: search, mode: 'insensitive' } },
           { lastName: { contains: search, mode: 'insensitive' } },
         ] } },
+        // Also search the snapshot name for deleted records
+        { employeeName: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -752,9 +772,31 @@ export const getAdjustments = async (req: Request, res: Response) => {
       })
     ]);
 
+    // Map adjustments to provide fallback employee info for deleted records
+    const mapped = adjustments.map(adj => {
+      if (adj.attendance) return adj;
+      // Attendance was deleted — use snapshot fields
+      const nameParts = (adj.employeeName || 'Unknown').split(' ');
+      return {
+        ...adj,
+        attendance: {
+          id: null,
+          date: adj.submittedAt,
+          employee: {
+            firstName: nameParts[0] || 'Unknown',
+            lastName: nameParts.slice(1).join(' ') || '',
+            middleName: null,
+            suffix: null,
+            Branch: { name: adj.employeeBranch || '—' },
+            Department: { name: '—' },
+          }
+        }
+      };
+    });
+
     return res.json({
       success: true,
-      data: adjustments,
+      data: mapped,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) }
     });
   } catch (error: unknown) {
@@ -803,6 +845,7 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Rejection reason is required' });
       }
 
+      // Mark the adjustment as rejected
       await prisma.attendanceAdjustment.update({
         where: { id: adjustmentId },
         data: {
@@ -813,14 +856,36 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
         }
       });
 
+      // Clean up the dummy attendance record that was created for this adjustment.
+      // If originalCheckIn is null, it was a brand-new manual creation by HR —
+      // the attendance record is just a placeholder and should be deleted entirely.
+      // If it was an edit on an existing record, the attendance record's status
+      // may have been set to 'pending' and needs to be reverted.
+      const attendanceRecord = adjustment.attendance;
+      if (attendanceRecord && adjustment.originalCheckIn === null && attendanceRecord.status === 'pending') {
+        // This was a new manual creation — delete the dummy record
+        await prisma.attendance.delete({
+          where: { id: attendanceRecord.id }
+        });
+      } else if (attendanceRecord && attendanceRecord.status === 'pending') {
+        // This was an edit on an existing record — revert status to 'incomplete'
+        await prisma.attendance.update({
+          where: { id: attendanceRecord.id },
+          data: { status: 'incomplete' }
+        });
+      }
+
       // Log rejection
+      const rejEmpName = attendanceRecord?.employee
+        ? `${attendanceRecord.employee.firstName} ${attendanceRecord.employee.lastName}`
+        : (adjustment.employeeName || 'Unknown');
       void audit({
           action: 'ADJUSTMENT_REJECT',
           entityType: 'Attendance',
-          entityId: adjustment.attendanceId,
+          entityId: adjustment.attendanceId ?? undefined,
           performedBy: reviewerId,
           source: 'admin-panel',
-          details: `Adjustment for ${adjustment.attendance.employee.firstName} ${adjustment.attendance.employee.lastName} was rejected`,
+          details: `Adjustment for ${rejEmpName} was rejected`,
           correlationId: req.correlationId
       });
 
@@ -828,52 +893,111 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
     }
 
     // ── APPROVE: apply the changes to the attendance record ──
+    if (adjustment.type === 'DELETE') {
+      const existing = adjustment.attendance;
+      const empName = existing?.employee
+        ? `${existing.employee.firstName} ${existing.employee.lastName}`
+        : (adjustment.employeeName || 'Unknown');
+      const empBranch = (existing?.employee as any)?.Branch?.name || adjustment.employeeBranch || '—';
+
+      // Mark the adjustment as approved FIRST
+      await prisma.attendanceAdjustment.update({
+        where: { id: adjustmentId },
+        data: {
+          status: 'approved',
+          reviewedById: reviewerId,
+          reviewedAt: new Date(),
+        }
+      });
+
+      if (existing) {
+        await prisma.attendance.delete({
+          where: { id: existing.id }
+        });
+
+        // Emit SSE for real-time dashboard updates (send a delete event)
+        attendanceEmitter.emit('new-record', { type: 'delete', record: existing });
+      }
+
+      // Log approval
+      void audit({
+          action: 'ADJUSTMENT_APPROVE',
+          entityType: 'Attendance',
+          entityId: adjustment.attendanceId ?? undefined,
+          performedBy: reviewerId,
+          source: 'admin-panel',
+          details: `Delete adjustment for ${empName} was approved and applied`,
+          metadata: {
+              reason: adjustment.reason,
+              employeeName: empName,
+              branch: empBranch,
+              changes: [
+                  { field: 'status', oldValue: 'present', newValue: 'deleted' }
+              ]
+          },
+          correlationId: req.correlationId
+      });
+
+      return res.json({ success: true, message: 'Adjustment approved and record deleted' });
+    }
+
     const updateData: Record<string, unknown> = {};
     const auditEntries: { field: string; oldValue: string | null; newValue: string | null }[] = [];
     const existing = adjustment.attendance;
+
+    if (!existing) {
+      return res.status(400).json({ success: false, message: 'Attendance record no longer exists.' });
+    }
 
     if (adjustment.requestedCheckIn) {
       const oldVal = existing.checkInTime ? existing.checkInTime.toISOString() : null;
       updateData.checkInTime = adjustment.requestedCheckIn;
       updateData.checkin_updated = new Date();
       auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn.toISOString() });
-
-      // Recalculate status
-      const shift = existing.employee?.Shift;
-      if (shift) {
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const grace = shift.graceMinutes || 0;
-        const checkInPHT = new Date(adjustment.requestedCheckIn.getTime() + 8 * 60 * 60 * 1000);
-        const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-        const shiftStartMinutes = startH * 60 + startM + grace;
-        updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-        if (updateData.status !== existing.status) {
-          auditEntries.push({ field: 'status', oldValue: existing.status, newValue: String(updateData.status) });
-        }
-      }
     }
 
-    if (adjustment.requestedCheckOut) {
+    if (adjustment.requestedCheckOut !== undefined && adjustment.requestedCheckOut !== null) {
       const oldVal = existing.checkOutTime ? existing.checkOutTime.toISOString() : null;
       updateData.checkOutTime = adjustment.requestedCheckOut;
       updateData.checkout_updated = new Date();
       updateData.checkoutSource = 'manual';
       auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: adjustment.requestedCheckOut.toISOString() });
+    } else if (adjustment.requestedCheckOut === null && existing.checkOutTime) {
+       // if they explicitly wanted to clear the checkout time? Unlikely but just in case
+       // For our adjustment model, null could mean no change or clearing.
+       // Usually we only set requestedCheckOut if we change it.
     }
 
-    if (updateData.checkOutTime && existing.status === 'incomplete') {
-      const shift = existing.employee?.Shift;
-      if (shift) {
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const grace = shift.graceMinutes || 0;
-        const checkInPHT = new Date(existing.checkInTime.getTime() + 8 * 60 * 60 * 1000);
-        const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-        const shiftStartMinutes = startH * 60 + startM + grace;
-        updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-      } else {
-        updateData.status = 'present';
-      }
-      auditEntries.push({ field: 'status', oldValue: 'incomplete', newValue: String(updateData.status) });
+    // Recalculate status
+    const effectiveCheckIn = updateData.checkInTime as Date || existing.checkInTime;
+    // For reviewAdjustment, if adjustment.requestedCheckOut is defined it is the new value
+    // otherwise fallback to existing
+    const effectiveCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+
+    if (effectiveCheckIn) {
+        let calculatedStatus = existing.status;
+        const shift = existing.employee?.Shift;
+        
+        if (shift) {
+            const [startH, startM] = shift.startTime.split(':').map(Number);
+            const grace = shift.graceMinutes || 0;
+            const checkInPHT = new Date(effectiveCheckIn.getTime() + 8 * 60 * 60 * 1000);
+            const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
+            const shiftStartMinutes = startH * 60 + startM + grace;
+            
+            calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
+        } else {
+            calculatedStatus = 'present';
+        }
+        
+        if (!effectiveCheckOut) {
+            calculatedStatus = 'incomplete';
+        }
+
+        if (calculatedStatus !== existing.status) {
+            updateData.status = calculatedStatus;
+            auditEntries.push({ field: 'status', oldValue: existing.status, newValue: calculatedStatus });
+        }
     }
 
     // Clear missing-checkout flag if a checkout is being set
@@ -888,7 +1012,7 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
 
     // Apply to attendance record
     const updated = await prisma.attendance.update({
-      where: { id: adjustment.attendanceId },
+      where: { id: existing.id },
       data: updateData
     });
 
@@ -910,10 +1034,10 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
     void audit({
         action: 'ADJUSTMENT_APPROVE',
         entityType: 'Attendance',
-        entityId: adjustment.attendanceId,
+        entityId: adjustment.attendanceId ?? undefined,
         performedBy: reviewerId,
         source: 'admin-panel',
-        details: `Adjustment for ${adjustment.attendance.employee.firstName} ${adjustment.attendance.employee.lastName} was approved and applied`,
+        details: `Adjustment for ${existing.employee?.firstName || 'Unknown'} ${existing.employee?.lastName || ''} was approved and applied`,
         correlationId: req.correlationId
     });
 
@@ -981,4 +1105,103 @@ export const streamAttendance = async (req: Request, res: Response): Promise<voi
     console.log(`[SSE] Client connected to attendance stream`);
 };
 
+/**
+ * DELETE /api/attendance/:id
+ * Delete an attendance record.
+ * Admin: Deletes immediately.
+ * HR: Submits a deletion adjustment request.
+ */
+export const deleteAttendance = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const recordId = parseInt(String(id));
+        const { reason, roleContext } = req.body;
+        const requestedById = req.user?.employeeId;
+        const userRole = req.user?.role;
+        const isHRWorkflow = userRole === 'HR' || roleContext === 'hr';
+
+        if (isNaN(recordId)) {
+            return res.status(400).json({ success: false, message: 'Invalid attendance record ID' });
+        }
+
+        if (!requestedById) {
+            return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+
+        if (!reason || !String(reason).trim()) {
+            return res.status(400).json({ success: false, message: 'Reason is required for deletion.' });
+        }
+
+        const existing = await prisma.attendance.findUnique({
+            where: { id: recordId },
+            include: { employee: { include: { Branch: { select: { name: true } } } } }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ success: false, message: 'Attendance record not found' });
+        }
+
+        if (isHRWorkflow) {
+            const adjustment = await prisma.attendanceAdjustment.create({
+                data: {
+                    attendanceId: recordId,
+                    submittedById: requestedById,
+                    type: 'DELETE',
+                    originalCheckIn: existing.checkInTime,
+                    originalCheckOut: existing.checkOutTime,
+                    requestedCheckIn: null,
+                    requestedCheckOut: null,
+                    employeeName: `${existing.employee.firstName} ${existing.employee.lastName}`,
+                    employeeBranch: (existing.employee as any).Branch?.name || null,
+                    reason: String(reason).trim(),
+                    status: 'pending',
+                }
+            });
+
+            void audit({
+                action: 'ADJUSTMENT_SUBMIT',
+                entityType: 'Attendance',
+                entityId: recordId,
+                performedBy: requestedById,
+                source: 'admin-panel',
+                details: `Attendance deletion request submitted for ${existing.employee.firstName} ${existing.employee.lastName}`,
+                correlationId: req.correlationId
+            });
+
+            return res.json({
+                success: true,
+                message: 'Deletion request submitted for admin approval.',
+                data: adjustment,
+                pending: true,
+            });
+        }
+
+        // Admin: delete immediately
+        await prisma.attendance.delete({
+            where: { id: recordId }
+        });
+
+        void audit({
+            action: 'ATTENDANCE_OVERRIDE',
+            entityType: 'Attendance',
+            entityId: recordId,
+            performedBy: requestedById,
+            source: 'admin-panel',
+            level: 'WARN',
+            details: `Admin deleted attendance record for ${existing.employee.firstName} ${existing.employee.lastName}`,
+            metadata: { reason },
+            correlationId: req.correlationId
+        });
+
+        attendanceEmitter.emit('new-record', { type: 'delete', record: existing });
+
+        return res.json({
+            success: true,
+            message: 'Attendance record deleted successfully.',
+        });
+    } catch (error: unknown) {
+        console.error('Delete Attendance Failed:', error);
+        return res.status(500).json({ success: false, message: 'An unexpected error occurred.' });
+    }
+};
 

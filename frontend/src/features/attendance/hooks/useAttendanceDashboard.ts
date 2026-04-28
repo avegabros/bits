@@ -105,6 +105,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const [editCheckIn, setEditCheckIn] = useState('')
   const [editCheckOut, setEditCheckOut] = useState('')
   const [editReason, setEditReason] = useState('')
+  const [deletingLog, setDeletingLog] = useState<AttendanceRecord | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -413,9 +415,10 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     setActionLoading(true)
     try {
       const isAbsentRecord = String(editingLog.id).startsWith('absent-')
-
-      const body: EditRequestBody = {
+      
+      const body: EditRequestBody & { roleContext?: string } = { 
         reason: editReason,
+        roleContext: role
       }
 
       if (isAbsentRecord) {
@@ -450,6 +453,43 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
       setActionLoading(false)
     }
   }, [editingLog, editCheckIn, editCheckOut, editReason, role, showToast, fetchRecords])
+
+  const handleDeleteClick = useCallback((row: AttendanceRecord) => {
+    setDeletingLog(row)
+    setDeleteReason('')
+  }, [])
+
+  const handleDeleteSubmit = useCallback(async () => {
+    if (!deletingLog) return
+
+    if (!deleteReason.trim()) {
+      showToast('error', 'Reason Required', 'Please provide a reason for deleting this record.')
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/attendance/${deletingLog.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: deleteReason }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast('success', role === 'admin' ? 'Record Deleted' : 'Deletion Requested',
+          role === 'admin' ? 'Attendance record successfully deleted!' : 'Deletion request submitted for admin approval!')
+        setDeletingLog(null)
+        fetchRecords()
+      } else {
+        showToast('error', 'Delete Failed', data.message || 'Delete failed')
+      }
+    } catch (e: unknown) {
+      showToast('error', 'Network Error', e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [deletingLog, deleteReason, role, showToast, fetchRecords])
 
   const exportToCSV = useCallback(() => {
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -545,8 +585,10 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     editCheckIn, setEditCheckIn,
     editCheckOut, setEditCheckOut,
     editReason, setEditReason,
+    deletingLog, setDeletingLog,
+    deleteReason, setDeleteReason,
     // Actions
-    handleEditClick, handleApplyChanges, exportToCSV,
+    handleEditClick, handleApplyChanges, handleDeleteClick, handleDeleteSubmit, exportToCSV,
     // Toast
     toasts, dismissToast,
     getTodayDate,

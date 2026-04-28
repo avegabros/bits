@@ -11,6 +11,7 @@ import {
     getAttendanceAuditLogs,
     getAdjustments,
     reviewAdjustment,
+    deleteAttendance,
 } from './attendance.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminOrHR, adminOnly } from '../../shared/middleware/role.middleware';
@@ -307,7 +308,44 @@ router.put('/adjustments/:id/review', adminOnly, reviewAdjustment);
  *     responses:
  *       200:
  *         description: Record updated
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found
  */
 router.put('/:id', updateAttendance);
+
+/**
+ * @swagger
+ * /api/attendance/{id}:
+ *   delete:
+ *     summary: Delete an attendance record
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Record deleted or deletion request submitted
+ */
+router.delete('/:id', deleteAttendance);
 
 export default router;

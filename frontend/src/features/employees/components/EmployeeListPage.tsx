@@ -59,6 +59,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
         onFingerprintOpen={(id, name) => list.setFingerprintDashboardOpen({ open: true, employeeId: id, employeeName: name })}
         onCardEnrollOpen={(id, name, card) => list.setCardEnrollOpen({ open: true, employeeId: id, employeeName: name, currentCard: card ?? null })}
         enrollStatus={list.enrollStatus} dragScrollRef={dragScrollRef}
+        role={role}
         {...(statusFilter === 'Inactive' ? { onRestore: list.setConfirmRestore, onPermanentDelete: list.setConfirmPermanentDelete } : {})}
       />
 

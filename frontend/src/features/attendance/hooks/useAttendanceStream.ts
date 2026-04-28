@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 
 export interface AttendanceStreamPayload {
-    type: 'check-in' | 'check-out'
+    type: 'check-in' | 'check-out' | 'delete'
     record: {
         id: number
         employeeId: number

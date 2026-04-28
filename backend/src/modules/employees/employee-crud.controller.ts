@@ -10,6 +10,103 @@ import bcrypt from 'bcryptjs';
 import { generateRandomPassword } from '../../shared/utils/password.utils';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
 
+// GET /api/employees/:id - Get a single employee by ID (for profile view)
+export const getEmployeeById = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const employeeId = parseInt(id, 10);
+
+        if (isNaN(employeeId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid employee ID',
+            });
+        }
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            select: {
+                id: true,
+                zkId: true,
+                cardNumber: true,
+                employeeNumber: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                suffix: true,
+                gender: true,
+                dateOfBirth: true,
+                email: true,
+                role: true,
+                departmentId: true,
+                Department: { select: { name: true } },
+                branchId: true,
+                Branch: { select: { name: true } },
+                position: true,
+                contactNumber: true,
+                hireDate: true,
+                employmentStatus: true,
+                profilePicture: true,
+                shiftId: true,
+                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+                createdAt: true,
+                updatedAt: true,
+                EmployeeDeviceEnrollment: {
+                    select: {
+                        enrolledAt: true,
+                        device: {
+                            select: {
+                                id: true,
+                                name: true,
+                                location: true,
+                                isActive: true,
+                            },
+                        },
+                    },
+                },
+                EmployeeFingerprintEnrollment: {
+                    select: {
+                        id: true,
+                        fingerIndex: true,
+                        fingerLabel: true,
+                        enrolledAt: true,
+                        device: {
+                            select: { id: true, name: true },
+                        },
+                    },
+                },
+                EmployeeCardEnrollment: {
+                    select: {
+                        id: true,
+                        enrolledAt: true,
+                        device: {
+                            select: { id: true, name: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found',
+            });
+        }
+
+        res.json({
+            success: true,
+            employee,
+        });
+    } catch (error) {
+        console.error('Error fetching employee:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch employee',
+        });
+    }
+};
+
 // GET /api/employees - Get all employees
 export const getAllEmployees = async (req: Request, res: Response) => {
     try {
@@ -35,6 +132,7 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 contactNumber: true,
                 hireDate: true,
                 employmentStatus: true,
+                profilePicture: true,
                 shiftId: true,
                 Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true } },
                 createdAt: true, EmployeeDeviceEnrollment: {

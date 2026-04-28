@@ -115,6 +115,7 @@ export const getMyProfile = async (req: Request, res: Response): Promise<void> =
                 hireDate: true,
                 employmentStatus: true,
                 needsPasswordChange: true,
+                profilePicture: true,
                 createdAt: true,
             },
         });

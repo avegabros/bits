@@ -773,7 +773,7 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         const recordDateStr = new Date(record.date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const todayStr = new Date(today.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const isToday = recordDateStr === todayStr;
-        const isShiftActive = !!record.checkInTime && !record.checkOutTime && isToday;
+        const isShiftActive = !!record.checkInTime && !record.checkOutTime && isToday && record.status !== 'pending';
         const status = isShiftActive ? "IN_PROGRESS" : record.status;
 
         return { 
@@ -964,7 +964,7 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
     const recordDateStr = new Date(record.date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const todayStr = new Date(today.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const isToday = recordDateStr === todayStr;
-    const isShiftActive = !!checkIn && !checkOut && isToday;
+    const isShiftActive = !!checkIn && !checkOut && isToday && record.status !== 'pending';
     const status = isShiftActive ? "IN_PROGRESS" : record.status;
     const gracePeriodApplied = checkIn.getTime() > expectedStart.getTime() && lateMinutes === 0;
 

@@ -5,3 +5,6 @@ dist
 
 
 /src/generated/prisma
+
+# Uploaded files (avatars, etc.)
+uploads/

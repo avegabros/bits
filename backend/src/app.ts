@@ -21,6 +21,8 @@ import holidayRoutes from './modules/holidays/holiday.routes';
 
 import timeRoutes from './modules/system/time.routes';
 import meRoutes from './modules/me/me.routes';
+import profilePictureRoutes from './modules/profile-picture/profilePicture.routes';
+import path from 'path';
 import { correlationId } from './shared/middleware/correlationId.middleware';
 
 dotenv.config();
@@ -71,6 +73,15 @@ app.use('/api/holidays', holidayRoutes);
 
 app.use('/api/time', timeRoutes);
 app.use('/api/me', meRoutes);
+app.use('/api/me/profile-picture', profilePictureRoutes);
+
+// ── Static file serving for uploaded avatars ──────────────────────────────────
+// Serves files from backend/uploads/avatars/ at /api/uploads/avatars/*
+// Cache for 24 hours; cache-busted via ?v=timestamp on the URL
+app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+  maxAge: '1d',
+  immutable: true,
+}));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

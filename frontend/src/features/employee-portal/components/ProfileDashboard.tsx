@@ -1,11 +1,15 @@
-﻿import React from 'react'
+import React from 'react'
 import { UserCircle, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useEmployeeProfile } from '../hooks/useEmployeeProfile'
+import { employeeSelfApi } from '@/lib/api'
+import { ProfilePictureUpload } from './ProfilePictureUpload'
+import { PortalEmployeeProfile } from '../utils/portal-types'
 
 export function ProfileDashboard() {
   const {
     loading,
     profile,
+    setProfile,
     currentPassword,
     setCurrentPassword,
     newPassword,
@@ -62,8 +66,23 @@ export function ProfileDashboard() {
          <div className="md:col-span-1 flex flex-col gap-6">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col items-center text-center relative overflow-hidden">
                <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
-               <div className="w-24 h-24 rounded-full bg-slate-100 mb-4 flex items-center justify-center border-4 border-white shadow-md">
-                 <span className="text-2xl font-black text-slate-400">{initials}</span>
+               <div className="mb-4">
+                 <ProfilePictureUpload
+                   currentUrl={profile.profilePicture || null}
+                   initials={initials}
+                   onUpload={async (file) => {
+                     const res = await employeeSelfApi.uploadProfilePicture(file)
+                     if (res.success && res.profilePicture && profile) {
+                       setProfile({ ...profile, profilePicture: res.profilePicture })
+                     }
+                   }}
+                   onDelete={async () => {
+                     const res = await employeeSelfApi.deleteProfilePicture()
+                     if (res.success && profile) {
+                       setProfile({ ...profile, profilePicture: null })
+                     }
+                   }}
+                 />
                </div>
                <h2 className="text-xl font-black text-slate-900">{profile.firstName}{profile.middleName ? ` ${profile.middleName[0]}.` : ''} {profile.lastName}{profile.suffix ? ` ${profile.suffix}` : ''}</h2>
                <p className="text-slate-500 text-sm mt-1 mb-4">{profile.position || 'Employee'}</p>

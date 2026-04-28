@@ -34,22 +34,38 @@ model Attendance {
 }
 
 model AttendanceAdjustment {
-  id                Int        @id @default(autoincrement())
-  attendanceId      Int
-  submittedById     Int
-  originalCheckIn   DateTime?
-  originalCheckOut  DateTime?
+  id            Int @id @default(autoincrement())
+  attendanceId  Int?
+  submittedById Int
+
+  type String @default("UPDATE") // UPDATE, DELETE
+
+  // Snapshot of original values at time of request
+  originalCheckIn  DateTime?
+  originalCheckOut DateTime?
+
+  // Requested new values
   requestedCheckIn  DateTime?
   requestedCheckOut DateTime?
-  reason            String
-  status            String     @default("pending")
-  reviewedById      Int?
-  rejectionReason   String?
-  submittedAt       DateTime   @default(now())
-  reviewedAt        DateTime?
-  attendance        Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  reviewedBy        Employee?  @relation("AdjustmentReviewedBy", fields: [reviewedById], references: [id])
-  submittedBy       Employee   @relation("AdjustmentSubmittedBy", fields: [submittedById], references: [id])
+
+  // Snapshot of employee info (survives attendance deletion)
+  employeeName   String?
+  employeeBranch String?
+
+  reason String // Required — why the adjustment is needed
+
+  // Approval workflow
+  status          String  @default("pending") // pending, approved, rejected
+  reviewedById    Int?
+  rejectionReason String?
+
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+
+  // Relations
+  attendance  Attendance? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  submittedBy Employee   @relation("AdjustmentSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy  Employee?  @relation("AdjustmentReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([attendanceId])
   @@index([submittedById])
@@ -119,26 +135,31 @@ model Device {
 }
 
 model Employee {
-  id                            Int                             @id @default(autoincrement())
-  zkId                          Int?                            @unique
-  cardNumber                    Int?                            @unique
-  firstName                     String
-  lastName                      String
-  middleName                    String?
-  suffix                        String?
-  gender                        String?
-  dateOfBirth                   DateTime?
-  role                          Role                            @default(USER)
-  email                         String?                         @unique
-  password                      String?
-  needsPasswordChange           Boolean                         @default(false)
-  employmentStatus              EmploymentStatus                @default(ACTIVE)
-  position                      String?
-  contactNumber                 String?                         @unique
-  employeeNumber                String?                         @unique
-  hireDate                      DateTime?
-  createdAt                     DateTime                        @default(now())
-  updatedAt                     DateTime
+  id                  Int              @id @default(autoincrement())
+  zkId                Int?             @unique
+  cardNumber          Int?             @unique // RFID badge card number (uint32 from device offset 35)
+  firstName           String
+  lastName            String
+  middleName          String?
+  suffix              String?
+  gender              String?
+  dateOfBirth         DateTime?
+  role                Role             @default(USER)
+  email               String?          @unique
+  password            String?
+  needsPasswordChange Boolean          @default(false)
+  employmentStatus    EmploymentStatus @default(ACTIVE)
+  profilePicture      String?          // Relative URL: "/api/uploads/avatars/{id}.webp"
+
+  // Secondary Info
+  position       String?
+  contactNumber  String?          @unique
+  employeeNumber String?   @unique
+  hireDate       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+
+  // Relations
   departmentId                  Int?
   branchId                      Int?
   shiftId                       Int?

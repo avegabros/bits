@@ -56,4 +56,14 @@ export const attendanceApi = {
       { method: 'POST' }
     )
   },
+
+  deleteAttendance(id: number, reason: string) {
+    return apiFetch<{ success: boolean; message: string; pending?: boolean }>(
+      `/api/attendance/${id}`,
+      { 
+        method: 'DELETE',
+        body: JSON.stringify({ reason })
+      }
+    )
+  },
 }

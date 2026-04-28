@@ -21,9 +21,11 @@ export type Employee = {
   gender: string | null
   dateOfBirth: string | null
   employmentStatus: 'ACTIVE' | 'INACTIVE' | 'TERMINATED'
+  profilePicture: string | null
   shiftId?: number | null
-  Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string } | null
+  Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string; workDays?: string; halfDays?: string; graceMinutes?: number; breakMinutes?: number; isNightShift?: boolean } | null
   createdAt: string
+  updatedAt?: string
   EmployeeDeviceEnrollment?: {
     enrolledAt: string
     device: {
@@ -32,6 +34,18 @@ export type Employee = {
       location: string | null
       isActive: boolean
     }
+  }[]
+  EmployeeFingerprintEnrollment?: {
+    id: number
+    fingerIndex: number
+    fingerLabel: string
+    enrolledAt: string
+    device: { id: number; name: string }
+  }[]
+  EmployeeCardEnrollment?: {
+    id: number
+    enrolledAt: string
+    device: { id: number; name: string }
   }[]
 }
 

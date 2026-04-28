@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+    getEmployeeById,
     getAllEmployees,
     syncEmployeesToDeviceController,
     deleteEmployee,
@@ -24,6 +25,8 @@ import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminOrHR } from '../../shared/middleware/role.middleware';
 import { validate } from '../../shared/middleware/validation.middleware';
 import { createEmployeeValidator, employeeQueryValidator, enrollFingerprintValidator, enrollCardValidator } from './employee.validator';
+import { uploadAvatar, handleMulterError } from '../profile-picture/profilePicture.validator';
+import { uploadEmployeeProfilePicture, deleteEmployeeProfilePicture } from '../profile-picture/profilePicture.controller';
 
 const router = Router();
 
@@ -181,6 +184,29 @@ router.get('/export', exportEmployees);
  *         description: Excel template file download
  */
 router.get('/export-template', exportTemplate);
+
+/**
+ * @swagger
+ * /api/employees/{id}:
+ *   get:
+ *     summary: Get a single employee by ID (profile view)
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Employee ID
+ *     responses:
+ *       200:
+ *         description: Employee details
+ *       404:
+ *         description: Employee not found
+ */
+router.get('/:id', getEmployeeById);
 
 /**
  * @swagger
@@ -527,5 +553,61 @@ router.put('/:id', updateEmployee);
  *         description: Employee not found
  */
 router.post('/:id/reset-password', resetEmployeePassword);
+
+/**
+ * @swagger
+ * /api/employees/{id}/profile-picture:
+ *   post:
+ *     summary: Upload or replace an employee's profile picture
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Profile picture updated
+ *       400:
+ *         description: Invalid file
+ *       404:
+ *         description: Employee not found
+ */
+router.post('/:id/profile-picture', uploadAvatar.single('file'), handleMulterError, uploadEmployeeProfilePicture);
+
+/**
+ * @swagger
+ * /api/employees/{id}/profile-picture:
+ *   delete:
+ *     summary: Remove an employee's profile picture
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Profile picture removed
+ *       404:
+ *         description: Employee not found
+ */
+router.delete('/:id/profile-picture', deleteEmployeeProfilePicture);
 
 export default router;

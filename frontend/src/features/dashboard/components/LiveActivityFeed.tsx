@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowRight, Clock, LogIn, LogOut } from 'lucide-react';
+import { Activity, ArrowRight, Clock, LogIn, LogOut, Trash2 } from 'lucide-react';
 import type { LiveRecord } from '../hooks/useDashboardData';
 
 export interface LiveActivityFeedProps {
@@ -55,7 +55,7 @@ export function LiveActivityFeed({ role, activity, activityScrollRef }: LiveActi
                     <div className="divide-y divide-slate-50">
                         {activity.map(a => (
                             <div key={a.id} className="flex items-center gap-3 px-3 lg:px-4 py-2.5 hover:bg-slate-50/70 transition-colors">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${a.eventType === 'check-in' ? 'bg-linear-to-br from-emerald-400 to-emerald-600' : 'bg-linear-to-br from-slate-300 to-slate-500'}`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${a.eventType === 'check-in' ? 'bg-linear-to-br from-emerald-400 to-emerald-600' : a.eventType === 'delete' ? 'bg-linear-to-br from-red-400 to-red-600' : 'bg-linear-to-br from-slate-300 to-slate-500'}`}>
                                     <span className="text-white text-[10px] font-black">{getInitials(a.employee)}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -68,16 +68,16 @@ export function LiveActivityFeed({ role, activity, activityScrollRef }: LiveActi
                                 </div>
                                 <div className="shrink-0 text-right hidden sm:block">
                                     <div className="flex items-center gap-1 justify-end">
-                                        {a.eventType === 'check-in' ? <LogIn className="w-3.5 h-3.5 text-emerald-500" /> : <LogOut className="w-3.5 h-3.5 text-slate-400" />}
+                                        {a.eventType === 'check-in' ? <LogIn className="w-3.5 h-3.5 text-emerald-500" /> : a.eventType === 'delete' ? <Trash2 className="w-3.5 h-3.5 text-red-500" /> : <LogOut className="w-3.5 h-3.5 text-slate-400" />}
                                         <span className="text-[10px] font-mono text-slate-600">{a.time}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-0.5 shrink-0">
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.eventType === 'check-in' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-500'}`}>
-                                        {a.eventType === 'check-in' ? 'Check-in' : 'Check-out'}
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.eventType === 'check-in' ? 'bg-blue-50 text-blue-700' : a.eventType === 'delete' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-500'}`}>
+                                        {a.eventType === 'check-in' ? 'Check-in' : a.eventType === 'delete' ? 'Deleted' : 'Check-out'}
                                     </span>
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.status === 'on-time' ? 'bg-emerald-50 text-emerald-700' : a.status === 'late' ? 'bg-amber-50 text-amber-700' : a.status === 'undertime' ? 'bg-orange-50 text-orange-700' : 'bg-rose-50 text-rose-700'}`}>
-                                        {a.status === 'on-time' ? 'On Time' : a.status === 'late' ? 'Late' : a.status === 'undertime' ? 'Undertime' : 'Absent'}
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.status === 'on-time' ? 'bg-emerald-50 text-emerald-700' : a.status === 'late' ? 'bg-amber-50 text-amber-700' : a.status === 'undertime' ? 'bg-orange-50 text-orange-700' : a.status === 'deleted' ? 'bg-red-50 text-red-700' : 'bg-rose-50 text-rose-700'}`}>
+                                        {a.status === 'on-time' ? 'On Time' : a.status === 'late' ? 'Late' : a.status === 'undertime' ? 'Undertime' : a.status === 'deleted' ? 'Record Deleted' : 'Absent'}
                                     </span>
                                 </div>
                             </div>

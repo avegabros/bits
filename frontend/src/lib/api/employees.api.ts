@@ -48,6 +48,10 @@ export const employeesApi = {
     return apiFetch<GetEmployeesResponse>(`/api/employees${qs ? `?${qs}` : ''}`)
   },
 
+  getById(id: number) {
+    return apiFetch<{ success: boolean; employee: Employee }>(`/api/employees/${id}`)
+  },
+
   create(payload: CreateEmployeePayload) {
     return apiFetch<{ success: boolean; message: string; employee: Employee; deviceSync: { success: boolean; message: string } }>(
       '/api/employees',
@@ -104,6 +108,26 @@ export const employeesApi = {
     return apiFetch<{ success: boolean; message: string }>(
       `/api/employees/${id}/enroll-card`,
       { method: 'POST', body: JSON.stringify({ cardNumber }) }
+    )
+  },
+
+  uploadProfilePicture(id: number, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    return fetch(`/api/employees/${id}/profile-picture`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    }).then(res => res.json()) as Promise<{ success: boolean; message: string; profilePicture?: string }>
+  },
+
+  deleteProfilePicture(id: number) {
+    return apiFetch<{ success: boolean; message: string }>(
+      `/api/employees/${id}/profile-picture`,
+      { method: 'DELETE' }
     )
   },
 }

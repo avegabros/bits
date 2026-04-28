@@ -87,6 +87,7 @@ export function useEmployeeProfile() {
   return {
     loading,
     profile,
+    setProfile,
     currentPassword,
     setCurrentPassword,
     newPassword,
