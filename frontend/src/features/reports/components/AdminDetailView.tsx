@@ -223,13 +223,14 @@ export function AdminDetailView({
                                 <SortableHeader label="OT" sortKey="otMinsVal" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-5 py-3" />
                                 <SortableHeader label="UT" sortKey="utMinsVal" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-5 py-3" />
                                 <SortableHeader label="Status" sortKey="statusType" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-5 py-3" />
+                                <th className="px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400/80">Note</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {sortedData.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={9}
                                         className="px-5 py-16 text-center text-slate-400 font-bold uppercase text-xs tracking-widest"
                                     >
                                         No attendance records found
@@ -237,7 +238,7 @@ export function AdminDetailView({
                                 </tr>
                             ) : (
                                 sortedData.map((row) => {
-                                    const { loopDate, loopDateStr, record, statusType, missingStatus, isFuture, checkInVal: checkIn, checkOutVal: checkOut, workedHrsVal: hoursWorked, lateMinsVal: lateMins, otMinsVal: otMins, utMinsVal: utMins } = row;
+                                    const { loopDate, loopDateStr, record, statusType, missingStatus, isFuture, checkInVal: checkIn, checkOutVal: checkOut, workedHrsVal: hoursWorked, lateMinsVal: lateMins, otMinsVal: otMins, utMinsVal: utMins, holidayName } = row;
 
                                     if (!record) {
                                         const statusColor = missingStatus === 'Upcoming' ? 'bg-blue-50 text-blue-600 border-blue-200' :
@@ -254,13 +255,26 @@ export function AdminDetailView({
                                                 </td>
                                                 <td colSpan={6} className="px-5 py-3.5 text-center">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                        {isFuture ? 'Scheduled' : missingStatus === 'Holiday' ? '🎉 Holiday' : 'No Record'}
+                                                        {isFuture ? 'Scheduled' : missingStatus === 'Holiday' ? '' : 'No Record'}
                                                     </span>
                                                 </td>
                                                 <td className="px-5 py-3.5">
-                                                    <span className={`inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${statusColor}`}>
-                                                        {missingStatus}
-                                                    </span>
+                                                    {missingStatus === 'Holiday' ? (
+                                                        <span className="text-xs font-bold text-slate-400">—</span>
+                                                    ) : (
+                                                        <span className={`inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${statusColor}`}>
+                                                            {missingStatus}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3.5 min-w-[140px]">
+                                                    {missingStatus === 'Holiday' ? (
+                                                        <span className="text-xs font-semibold text-indigo-500">
+                                                            🎉 Holiday{holidayName ? ` — ${holidayName}` : ''}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs font-bold text-slate-300">—</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
@@ -272,7 +286,7 @@ export function AdminDetailView({
                                         <tr key={record.id} className={`transition-colors duration-200 ${rowBg}`}>
                                             <td className="px-5 py-3.5">
                                                 <p className="font-bold text-slate-700 text-xs">
-                                                    {new Date(record.date).toLocaleDateString('en-US', {
+                                                    {loopDate.toLocaleDateString('en-US', {
                                                         weekday: 'short',
                                                         month: 'short',
                                                         day: 'numeric',
@@ -354,6 +368,15 @@ export function AdminDetailView({
                                                         <span title={record.notes || 'Manually adjusted'} className="inline-flex items-center justify-center w-28 h-5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-100/50 text-slate-400/80 border border-slate-200 shrink-0 cursor-help mt-0.5">Edited</span>
                                                     )}
                                                 </div>
+                                            </td>
+                                            <td className="px-5 py-3.5 min-w-[140px]">
+                                                {holidayName ? (
+                                                    <span className="text-xs font-semibold text-indigo-500">
+                                                        🎉 Holiday — {holidayName}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-300">—</span>
+                                                )}
                                             </td>
                                         </tr>
                                     );

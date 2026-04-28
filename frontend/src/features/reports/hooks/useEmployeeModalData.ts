@@ -20,6 +20,7 @@ export interface TableRowData {
     lateMinsVal: number;
     otMinsVal: number;
     utMinsVal: number;
+    holidayName: string | null;
 }
 
 export interface HRTableRowData {
@@ -75,6 +76,7 @@ function buildTableRows(
         let isFuture = false;
         let isWorkingDay = true;
         let missingStatus = '';
+        const holiday = holidayMap?.get(loopDateStr) ?? null;
 
         if (!record) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -89,11 +91,10 @@ function buildTableRows(
                     if (Array.isArray(wDays)) {
                         isWorkingDay = wDays.includes(dayName);
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
 
             // Check if this date is a holiday
-            const holiday = holidayMap?.get(loopDateStr);
             if (holiday) {
                 missingStatus = 'Holiday';
             } else {
@@ -124,6 +125,7 @@ function buildTableRows(
             lateMinsVal,
             otMinsVal,
             utMinsVal,
+            holidayName: holiday?.name ?? null,
         };
     });
 }
@@ -165,7 +167,7 @@ function buildHRTableRows(
         const checkOutStr = row.record?.isShiftActive ? "Active" : (row.checkOutVal ? row.checkOutVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-");
 
         return {
-            date: row.loopDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            date: row.loopDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
             shift: shiftLabel,
             type: typeLabel,
             duration: durationLabel,

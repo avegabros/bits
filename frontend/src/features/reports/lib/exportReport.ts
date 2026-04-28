@@ -165,6 +165,7 @@ export const handleExportIndividual = (
     'OT',
     'UT',
     'Status',
+    'Note',
   ]);
   // Build a lookup map keyed by YYYY-MM-DD (same logic as EmployeeModal)
   const recordsByDate = new Map<string, AttendanceRecord>();
@@ -190,10 +191,12 @@ export const handleExportIndividual = (
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
-  // Build a holiday date set for O(1) lookup
-  const holidayDateSet = new Set(
-    (holidays ?? []).map(h => new Date(h.date).toISOString().split('T')[0])
-  );
+  // Build a holiday date map for O(1) lookup (date → name)
+  const holidayDateMap = new Map<string, string>();
+  for (const h of (holidays ?? [])) {
+    const dateStr = new Date(h.date).toISOString().split('T')[0];
+    holidayDateMap.set(dateStr, h.name);
+  }
 
   // Walk every calendar day from startDate to endDate inclusive
   let totalCalendarDays = 0;
@@ -249,6 +252,7 @@ export const handleExportIndividual = (
         lateLabel = '—';
       }
 
+      const holidayName = holidayDateMap.get(dateKey) ?? null;
       allRows.push([
         fmtFullDate(cursor),
         DAYS[dayOfWeek],
@@ -259,12 +263,14 @@ export const handleExportIndividual = (
         otMins > 0 ? formatHrsMins(otMins / 60) : '—',
         utMins > 0 ? formatHrsMins(utMins / 60) : '—',
         displayStatus,
+        holidayName ? `Holiday — ${holidayName}` : '—',
       ]);
     } else {
       // No record — determine status exactly like EmployeeModal
       const isFuture = dateKey > todayStr;
       const isWorkingDay = workDayNames.includes(dayShort);
-      const isHoliday = holidayDateSet.has(dateKey);
+      const holidayName = holidayDateMap.get(dateKey) ?? null;
+      const isHoliday = !!holidayName;
       const missingStatus = isFuture ? 'Upcoming' : isHoliday ? 'Holiday' : isWorkingDay ? 'Absent' : 'Rest Day';
 
       allRows.push([
@@ -276,7 +282,8 @@ export const handleExportIndividual = (
         '—',
         '—',
         '—',
-        missingStatus,
+        missingStatus === 'Holiday' ? '—' : missingStatus,
+        holidayName ? `Holiday — ${holidayName}` : '—',
       ]);
     }
 
@@ -302,6 +309,7 @@ export const handleExportIndividual = (
     { wch: 10 },
     { wch: 10 },
     { wch: 22 },
+    { wch: 28 },
   ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance');
