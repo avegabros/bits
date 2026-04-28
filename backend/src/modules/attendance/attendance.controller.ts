@@ -6,7 +6,9 @@ import { syncZkData, addUserToDevice } from '../devices/zk';
 import {
     getAttendanceRecords,
     getTodayAttendance,
-    getEmployeeAttendanceHistory
+    getEmployeeAttendanceHistory,
+    toPHTDate,
+    calculateAttendanceStatus
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -220,7 +222,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         // Check if an attendance record already exists for this date to prevent duplicates
-        const recordDate = new Date(date);
+        const recordDate = toPHTDate(new Date(`${date}T00:00:00+08:00`));
         const existingRecord = await prisma.attendance.findFirst({
             where: { employeeId: Number(employeeId), date: recordDate }
         });
@@ -238,15 +240,22 @@ export const createManualAttendance = async (req: Request, res: Response) => {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
-        // If HR User: Create a 'pending' dummy record + Adjustment Request
+        // If HR User: Create a dummy record with actual calculated status + Adjustment Request
         if (userRole === 'HR') {
+             const calculatedStatus = calculateAttendanceStatus(
+                 effectiveCheckIn,
+                 effectiveCheckOut,
+                 recordDate,
+                 employee.Shift ?? null
+             );
+
              const newRecord = await prisma.attendance.create({
                  data: {
                      employeeId: Number(employeeId),
                      date: recordDate,
                      checkInTime: effectiveCheckIn,
                      checkOutTime: effectiveCheckOut,
-                     status: 'pending',
+                     status: calculatedStatus,
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
                      checkoutSource: effectiveCheckOut ? 'manual' : null
                  }
@@ -286,20 +295,12 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         // If Admin: Calculate actual status and create the finalized record
-        let calculatedStatus = 'present';
-        const shift = employee.Shift;
-        if (shift) {
-            const [startH, startM] = shift.startTime.split(':').map(Number);
-            const grace = shift.graceMinutes || 0;
-            const checkInPHT = new Date(effectiveCheckIn.getTime() + 8 * 60 * 60 * 1000);
-            const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-            const shiftStartMinutes = startH * 60 + startM + grace;
-            
-            calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-            if (!effectiveCheckOut) calculatedStatus = 'incomplete';
-        } else if (!effectiveCheckOut) {
-            calculatedStatus = 'incomplete';
-        }
+        const calculatedStatus = calculateAttendanceStatus(
+            effectiveCheckIn,
+            effectiveCheckOut,
+            recordDate,
+            employee.Shift ?? null
+        );
 
         const adminRecord = await prisma.attendance.create({
             data: {
@@ -452,25 +453,6 @@ export const updateAttendance = async (req: Request, res: Response) => {
             updateData.checkInTime = newDate;
             updateData.checkin_updated = new Date();
             auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newDate.toISOString() });
-
-            const shift = existing.employee?.Shift;
-            if (shift) {
-                const [startH, startM] = shift.startTime.split(':').map(Number);
-                const grace = shift.graceMinutes || 0;
-                const checkInPHT = new Date(newDate.getTime() + 8 * 60 * 60 * 1000);
-                const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                const shiftStartMinutes = startH * 60 + startM + grace;
-
-                if (checkInMinutes <= shiftStartMinutes) {
-                    updateData.status = 'present';
-                } else {
-                    updateData.status = 'late';
-                }
-
-                if (updateData.status !== existing.status) {
-                    auditEntries.push({ field: 'status', oldValue: existing.status, newValue: String(updateData.status) });
-                }
-            }
         }
 
         if (checkOutTime !== undefined) {
@@ -482,19 +464,17 @@ export const updateAttendance = async (req: Request, res: Response) => {
             auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: newVal ? newVal.toISOString() : null });
         }
 
-        if (updateData.checkOutTime && existing.status === 'incomplete') {
-            const shift = existing.employee?.Shift;
-            if (shift) {
-                const [startH, startM] = shift.startTime.split(':').map(Number);
-                const grace = shift.graceMinutes || 0;
-                const checkInPHT = new Date(existing.checkInTime.getTime() + 8 * 60 * 60 * 1000);
-                const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                const shiftStartMinutes = startH * 60 + startM + grace;
-                updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-            } else {
-                updateData.status = 'present';
+        // Centralized status recalculation
+        if (updateData.checkInTime || updateData.checkOutTime !== undefined) {
+            const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
+            const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+            const shift = existing.employee?.Shift ?? null;
+            
+            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+            if (newStatus !== existing.status) {
+                updateData.status = newStatus;
+                auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
             }
-            auditEntries.push({ field: 'status', oldValue: 'incomplete', newValue: String(updateData.status) });
         }
 
 
@@ -813,6 +793,11 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
         }
       });
 
+      if (adjustment.originalCheckIn === null && adjustment.originalCheckOut === null) {
+        // This was a manual creation request — the Attendance record was a placeholder
+        await prisma.attendance.delete({ where: { id: adjustment.attendanceId } });
+      }
+
       // Log rejection
       void audit({
           action: 'ADJUSTMENT_REJECT',
@@ -837,20 +822,6 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       updateData.checkInTime = adjustment.requestedCheckIn;
       updateData.checkin_updated = new Date();
       auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn.toISOString() });
-
-      // Recalculate status
-      const shift = existing.employee?.Shift;
-      if (shift) {
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const grace = shift.graceMinutes || 0;
-        const checkInPHT = new Date(adjustment.requestedCheckIn.getTime() + 8 * 60 * 60 * 1000);
-        const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-        const shiftStartMinutes = startH * 60 + startM + grace;
-        updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-        if (updateData.status !== existing.status) {
-          auditEntries.push({ field: 'status', oldValue: existing.status, newValue: String(updateData.status) });
-        }
-      }
     }
 
     if (adjustment.requestedCheckOut) {
@@ -861,19 +832,17 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: adjustment.requestedCheckOut.toISOString() });
     }
 
-    if (updateData.checkOutTime && existing.status === 'incomplete') {
-      const shift = existing.employee?.Shift;
-      if (shift) {
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const grace = shift.graceMinutes || 0;
-        const checkInPHT = new Date(existing.checkInTime.getTime() + 8 * 60 * 60 * 1000);
-        const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-        const shiftStartMinutes = startH * 60 + startM + grace;
-        updateData.status = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-      } else {
-        updateData.status = 'present';
+    // Centralized status recalculation
+    if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
+      const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
+      const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+      const shift = existing.employee?.Shift ?? null;
+      
+      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+      if (newStatus !== existing.status) {
+        updateData.status = newStatus;
+        auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
       }
-      auditEntries.push({ field: 'status', oldValue: 'incomplete', newValue: String(updateData.status) });
     }
 
     // Clear missing-checkout flag if a checkout is being set

@@ -57,8 +57,13 @@ export function AttendanceDesktopTable({
           sortedRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map(row => (
             <tr key={row.id} className="hover:bg-primary/5 transition-colors duration-200 group cursor-default">
               {/* Employee */}
-              <td className="px-6 py-4 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
+              <td className="px-6 py-4 flex items-center gap-3 relative">
+                {row.isPending && (
+                  <span title="Pending Request" className="absolute top-0 left-0 bg-yellow-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-md shadow-sm z-10 leading-none tracking-widest">PR</span>
+                )}
+                <div className="relative group/avatar">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
+                </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground leading-tight uppercase tracking-tight">{row.employeeName}</p>
                   <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-0.5">{row.branchName}</p>
@@ -188,10 +193,10 @@ export function AttendanceDesktopTable({
                     : row.displayStatus === 'late'             ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
                     : row.displayStatus === 'missing_checkout' ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
                     : row.displayStatus === 'incomplete'       ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
-                    : row.displayStatus === 'pending'          ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
+                    : row.displayStatus === '—'                ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
                     : 'text-red-500 bg-red-500/10 border-red-500/20'
                   }`}>
-                    {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'pending' ? 'Pending Request' : row.displayStatus}
+                    {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus}
                   </span>
                   {row.isEdited && (
                     <span 
