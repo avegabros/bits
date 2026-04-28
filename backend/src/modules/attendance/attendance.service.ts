@@ -33,7 +33,7 @@ export async function getHolidaySetForRange(startDate: Date, endDate: Date): Pro
  * e.g. 7 AM PHT Feb 28 (= 11 PM UTC Feb 27) → PHT midnight Feb 28 (= 4 PM UTC Feb 27)
  * This ensures scans between 12 AM–8 AM PHT are grouped under the correct PHT date.
  */
-const toPHTDate = (utcDate: Date): Date => {
+export const toPHTDate = (utcDate: Date): Date => {
     // Shift to PHT (+8 hours)
     const pht = new Date(utcDate.getTime() + 8 * 60 * 60 * 1000);
     // Zero out time to get PHT midnight (still represented as UTC internally)
@@ -106,15 +106,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
 
             if (!existingAttendance) {
                 // No record exists → This is a CHECK-IN
-                // Determine if late using SHIFT-AWARE logic (not hardcoded 8 AM)
-                const checkInPHT = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
-                const empShift = log.employee?.Shift;
-                const shiftStartMins = empShift
-                    ? Number(empShift.startTime.split(':')[0]) * 60 + Number(empShift.startTime.split(':')[1])
-                    : ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60; // fallback if no shift
-                const graceMins = empShift?.graceMinutes ?? 0;
-                const checkInMins = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                const isLate = checkInMins > (shiftStartMins + graceMins);
+                // Determine if late using centralized SHIFT-AWARE logic
+                const empShift = log.employee?.Shift ?? null;
+                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
+                const isLate = calculatedStatus === 'late';
 
                 try {
                     const createdRecord = await prisma.attendance.create({
@@ -216,16 +211,8 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         };
 
                         if (existingAttendance.status === 'incomplete') {
-                            const empShift = log.employee?.Shift;
-                            if (empShift) {
-                                const [startH, startM] = empShift.startTime.split(':').map(Number);
-                                const grace = empShift.graceMinutes ?? 0;
-                                const checkInPHT = new Date(existingAttendance.checkInTime.getTime() + 8 * 60 * 60 * 1000);
-                                const checkInMins = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                                updateData.status = checkInMins <= (startH * 60 + startM + grace) ? 'present' : 'late';
-                            } else {
-                                updateData.status = 'present';
-                            }
+                            const empShift = log.employee?.Shift ?? null;
+                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
 
                             if (existingAttendance.notes?.includes('No checkout recorded')) {
                                 updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -697,8 +684,13 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
                         Department: {
                             select: { name: true }
                         },
+                        Branch: { select: { name: true } },
                         Shift: true
                     }
+                },
+                AttendanceAdjustment: {
+                    where: { status: 'pending' },
+                    select: { id: true }
                 }
             },
             orderBy: [{ date: 'desc' }, { checkInTime: 'desc' }],
@@ -710,7 +702,14 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
     // Enrich each record with shift-based calculations
     const data = records.map((record) => {
         const shift = record.employee?.Shift ?? null;
-        const metrics = calculateAttendanceMetrics(record, shift);
+        let finalStatus = record.status;
+        if (finalStatus === 'pending') {
+            finalStatus = record.checkInTime 
+                ? calculateAttendanceStatus(record.checkInTime, record.checkOutTime, record.date, shift)
+                : 'absent';
+        }
+
+        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift);
         return {
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,
@@ -720,6 +719,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             isEarlyPunch: (record.notes ?? '').includes('Early punch'),
             isMissingCheckout: (record.notes ?? '').includes('No checkout recorded'),
             isEdited: !!(record.checkin_updated || record.checkout_updated),
+            isPending: record.AttendanceAdjustment && record.AttendanceAdjustment.length > 0,
             ...metrics,
         };
     });
@@ -909,8 +909,12 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
             };
         }
 
-        // CAP: Working hours only start from shift start, not from an early check-in
-        const effectiveCheckIn = new Date(Math.max(checkIn.getTime(), expectedStart.getTime()));
+        // The grace period protects the employee from deductions until the threshold is crossed.
+        // To ensure absolute consistency across lateMinutes, undertimeMinutes, and totalHours,
+        // regular hour deductions at the start of the shift MUST exactly match the late penalty.
+        // - If within grace: lateMinutes = 0 -> effectiveCheckIn = expectedStart
+        // - If beyond grace: lateMinutes = X -> effectiveCheckIn = expectedStart + X mins
+        const effectiveCheckIn = new Date(expectedStart.getTime() + lateMinutes * 60 * 1000);
         const rawWorkedMins = (checkOut.getTime() - effectiveCheckIn.getTime()) / 60000;
         
         // Calculate exact break time that overlaps with the attended period.
@@ -983,6 +987,24 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         workedHours: totalHours
     };
 };
+
+/**
+ * Shared wrapper around calculateAttendanceMetrics to determine the final status.
+ * Used consistently across biometric sync, manual creation, and adjustment approvals.
+ */
+export function calculateAttendanceStatus(
+    checkInTime: Date,
+    checkOutTime: Date | null,
+    date: Date,
+    shift: Prisma.ShiftGetPayload<{}> | null
+): string {
+    const record = { date, checkInTime, checkOutTime, status: 'present' };
+    const metrics = calculateAttendanceMetrics(record as any, shift);
+    
+    if (!checkOutTime) return 'incomplete';
+    if (metrics.lateMinutes > 0) return 'late';
+    return 'present';
+}
 
 /**
  * Helper: Convert UTC date to Philippine Time string

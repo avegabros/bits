@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   Clock, Plus, Trash2, Moon, X as XIcon, AlertTriangle, Coffee
 } from 'lucide-react'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { DAYS } from '../types'
 import type { ShiftFormData, Shift } from '../types'
 import { formatTime, calcDuration, calcFormBreaks, getBreakError } from '../utils/shift-formatters'
@@ -24,29 +25,24 @@ export function ShiftFormModal({
   formLoading, formError, hasInvalidBreaks,
   onClose, onSubmit,
 }: ShiftFormModalProps) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
-  if (!isFormOpen || !mounted) return null
-
-  return createPortal(
-    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[150] flex items-center justify-center sm:p-4">
-      <div className="bg-white sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden flex flex-col sm:max-h-[90vh]">
-        <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
+  return (
+    <Dialog open={isFormOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-lg p-0 rounded-2xl overflow-hidden shadow-xl">
+        <div className="bg-red-600 px-6 py-4 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="font-bold text-lg leading-tight tracking-tight">
+            <DialogTitle className="text-white font-bold text-lg leading-tight tracking-tight">
               {editingShift ? 'Edit Shift' : 'New Shift'}
-            </h3>
-            <p className="text-[10px] text-red-100 opacity-90 uppercase font-black tracking-widest mt-0.5">
+            </DialogTitle>
+            <DialogDescription className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">
               {editingShift ? 'Modify shift schedule' : 'Create a shift schedule'}
-            </p>
+            </DialogDescription>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto">
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
           {formError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-bold text-red-700">{formError}</div>
           )}
@@ -299,14 +295,13 @@ export function ShiftFormModal({
           )}
         </div>
 
-        <div className="p-5 bg-slate-50 flex gap-3 shrink-0">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Discard</button>
           <button onClick={onSubmit} disabled={formLoading || hasInvalidBreaks} className="flex-1 px-4 py-3.5 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 disabled:opacity-70 transition-all active:scale-95">
             {formLoading ? 'Saving…' : editingShift ? 'Save Changes' : 'Create Shift'}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -26,6 +26,7 @@ export interface AttendanceRecord {
   checkOutDevice?: string | null;
   checkoutSource?: string | null;
   isEdited?: boolean;
+  isPending?: boolean;
 }
 
 export interface AttendanceStats {

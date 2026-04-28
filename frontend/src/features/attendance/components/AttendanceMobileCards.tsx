@@ -44,11 +44,19 @@ export function AttendanceMobileCards({
   return (
     <div className="divide-y divide-border">
       {sortedRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map(row => (
-        <div key={row.id} className="p-4 hover:bg-primary/5 transition-colors">
+        <div key={row.id} className="p-4 hover:bg-primary/5 transition-colors relative">
+          {row.isPending && (
+            <span title="Pending Request" className="absolute top-0 left-0 bg-yellow-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-md shadow-sm z-10 leading-none tracking-widest">PR</span>
+          )}
           <div className="flex items-start justify-between gap-2 mb-3">
-            <div className="min-w-0 flex-1">
-              <p className="font-black text-foreground text-sm truncate uppercase tracking-tight">{row.employeeName}</p>
-              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{row.department} • {row.branchName}</p>
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="relative group/avatar">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-black text-foreground text-sm truncate uppercase tracking-tight">{row.employeeName}</p>
+                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{row.department} • {row.branchName}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
               <span className={`font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${
@@ -56,10 +64,10 @@ export function AttendanceMobileCards({
                   : row.displayStatus === 'IN_PROGRESS'      ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
                   : row.displayStatus === 'late'             ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
                   : row.displayStatus === 'missing_checkout' ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
-                  : row.displayStatus === 'pending'          ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
+                  : row.displayStatus === '—'                ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
                   : 'text-red-500 bg-red-500/10 border-red-500/20'
               }`}>
-                {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'pending' ? 'Pending Request' : row.displayStatus}
+                {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus}
               </span>
               {row.isEdited && (
                 <span 

@@ -6,7 +6,9 @@ import { syncZkData, addUserToDevice } from '../devices/zk';
 import {
     getAttendanceRecords,
     getTodayAttendance,
-    getEmployeeAttendanceHistory
+    getEmployeeAttendanceHistory,
+    toPHTDate,
+    calculateAttendanceStatus
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -221,7 +223,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         // Check if an attendance record already exists for this date to prevent duplicates
-        const recordDate = new Date(date);
+        const recordDate = toPHTDate(new Date(`${date}T00:00:00+08:00`));
         const existingRecord = await prisma.attendance.findFirst({
             where: { employeeId: Number(employeeId), date: recordDate }
         });
@@ -239,15 +241,22 @@ export const createManualAttendance = async (req: Request, res: Response) => {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
-        // If HR User (or Admin acting as HR): Create a 'pending' dummy record + Adjustment Request
+        // If HR User (or Admin acting as HR): Create a pending record + Adjustment Request
         if (isHRWorkflow) {
+             const calculatedStatus = calculateAttendanceStatus(
+                 effectiveCheckIn,
+                 effectiveCheckOut,
+                 recordDate,
+                 employee.Shift ?? null
+             );
+
              const newRecord = await prisma.attendance.create({
                  data: {
                      employeeId: Number(employeeId),
                      date: recordDate,
-                     checkInTime: recordDate, // Dummy time until approved
-                     checkOutTime: null, // Dummy time until approved
-                     status: 'pending',
+                     checkInTime: effectiveCheckIn,
+                     checkOutTime: effectiveCheckOut,
+                     status: calculatedStatus,
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
                      checkoutSource: null
                  }
@@ -289,20 +298,12 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         // If Admin: Calculate actual status and create the finalized record
-        let calculatedStatus = 'present';
-        const shift = employee.Shift;
-        if (shift) {
-            const [startH, startM] = shift.startTime.split(':').map(Number);
-            const grace = shift.graceMinutes || 0;
-            const checkInPHT = new Date(effectiveCheckIn.getTime() + 8 * 60 * 60 * 1000);
-            const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-            const shiftStartMinutes = startH * 60 + startM + grace;
-            
-            calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-            if (!effectiveCheckOut) calculatedStatus = 'incomplete';
-        } else if (!effectiveCheckOut) {
-            calculatedStatus = 'incomplete';
-        }
+        const calculatedStatus = calculateAttendanceStatus(
+            effectiveCheckIn,
+            effectiveCheckOut,
+            recordDate,
+            employee.Shift ?? null
+        );
 
         const adminRecord = await prisma.attendance.create({
             data: {
@@ -469,33 +470,16 @@ export const updateAttendance = async (req: Request, res: Response) => {
             auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: newVal ? newVal.toISOString() : null });
         }
 
-        // Recalculate status
-        const updatedCheckIn = updateData.checkInTime as Date || existing.checkInTime;
-        const updatedCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+        // Centralized status recalculation
+        if (updateData.checkInTime || updateData.checkOutTime !== undefined) {
+            const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
+            const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+            const shift = existing.employee?.Shift ?? null;
 
-        if (updatedCheckIn) {
-            let calculatedStatus = existing.status;
-            const shift = existing.employee?.Shift;
-            
-            if (shift) {
-                const [startH, startM] = shift.startTime.split(':').map(Number);
-                const grace = shift.graceMinutes || 0;
-                const checkInPHT = new Date(updatedCheckIn.getTime() + 8 * 60 * 60 * 1000);
-                const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-                const shiftStartMinutes = startH * 60 + startM + grace;
-                
-                calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-            } else {
-                calculatedStatus = 'present';
-            }
-            
-            if (!updatedCheckOut) {
-                calculatedStatus = 'incomplete';
-            }
-
-            if (calculatedStatus !== existing.status) {
-                updateData.status = calculatedStatus;
-                auditEntries.push({ field: 'status', oldValue: existing.status, newValue: calculatedStatus });
+            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+            if (newStatus !== existing.status) {
+                updateData.status = newStatus;
+                auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
             }
         }
 
@@ -856,19 +840,18 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
         }
       });
 
-      // Clean up the dummy attendance record that was created for this adjustment.
+      // Clean up the attendance record created for this adjustment.
       // If originalCheckIn is null, it was a brand-new manual creation by HR —
       // the attendance record is just a placeholder and should be deleted entirely.
-      // If it was an edit on an existing record, the attendance record's status
-      // may have been set to 'pending' and needs to be reverted.
+      // If it was an edit on an existing record, the status may need to be reverted.
       const attendanceRecord = adjustment.attendance;
       if (attendanceRecord && adjustment.originalCheckIn === null && attendanceRecord.status === 'pending') {
-        // This was a new manual creation — delete the dummy record
+        // This was a new manual creation — delete the placeholder record
         await prisma.attendance.delete({
           where: { id: attendanceRecord.id }
         });
       } else if (attendanceRecord && attendanceRecord.status === 'pending') {
-        // This was an edit on an existing record — revert status to 'incomplete'
+        // This was an edit on an existing record — revert status
         await prisma.attendance.update({
           where: { id: attendanceRecord.id },
           data: { status: 'incomplete' }
@@ -968,36 +951,17 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
        // Usually we only set requestedCheckOut if we change it.
     }
 
-    // Recalculate status
-    const effectiveCheckIn = updateData.checkInTime as Date || existing.checkInTime;
-    // For reviewAdjustment, if adjustment.requestedCheckOut is defined it is the new value
-    // otherwise fallback to existing
-    const effectiveCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+    // Centralized status recalculation
+    if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
+      const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
+      const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
+      const shift = existing.employee?.Shift ?? null;
 
-    if (effectiveCheckIn) {
-        let calculatedStatus = existing.status;
-        const shift = existing.employee?.Shift;
-        
-        if (shift) {
-            const [startH, startM] = shift.startTime.split(':').map(Number);
-            const grace = shift.graceMinutes || 0;
-            const checkInPHT = new Date(effectiveCheckIn.getTime() + 8 * 60 * 60 * 1000);
-            const checkInMinutes = checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes();
-            const shiftStartMinutes = startH * 60 + startM + grace;
-            
-            calculatedStatus = checkInMinutes <= shiftStartMinutes ? 'present' : 'late';
-        } else {
-            calculatedStatus = 'present';
-        }
-        
-        if (!effectiveCheckOut) {
-            calculatedStatus = 'incomplete';
-        }
-
-        if (calculatedStatus !== existing.status) {
-            updateData.status = calculatedStatus;
-            auditEntries.push({ field: 'status', oldValue: existing.status, newValue: calculatedStatus });
-        }
+      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+      if (newStatus !== existing.status) {
+        updateData.status = newStatus;
+        auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
+      }
     }
 
     // Clear missing-checkout flag if a checkout is being set

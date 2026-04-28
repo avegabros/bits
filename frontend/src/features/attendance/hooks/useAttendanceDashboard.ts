@@ -43,6 +43,7 @@ interface RawAttendanceLog {
   checkOutDeviceName?: string | null
   checkoutSource?: string | null
   isEdited?: boolean
+  isPending?: boolean
   displayStatus?: string
 }
 
@@ -230,23 +231,29 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
         const mapped: AttendanceRecord[] = userRecords.map((log: RawAttendanceLog) => {
           const emp = log.employee
-          const isPending = log.status === 'pending'
+          const isPending = log.isPending === true
+          const isPendingManualCreation = isPending && log.notes?.includes('[Pending] Manual creation');
+
           const checkIn = log.checkInTime ? new Date(log.checkInTime) : new Date()
           const checkOut = log.checkOutTime ? new Date(log.checkOutTime) : null
-          const totalHours: number = isPending ? 0 : (log.totalHours ?? (checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0))
-          const lateMinutes: number = isPending ? 0 : (log.lateMinutes ?? 0)
-          const overtimeMinutes: number = isPending ? 0 : (log.overtimeMinutes ?? 0)
-          const undertimeMinutes: number = isPending ? 0 : (log.undertimeMinutes ?? 0)
+          const totalHours: number = isPendingManualCreation ? 0 : (log.totalHours ?? (checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0))
+          const lateMinutes: number = isPendingManualCreation ? 0 : (log.lateMinutes ?? 0)
+          const overtimeMinutes: number = isPendingManualCreation ? 0 : (log.overtimeMinutes ?? 0)
+          const undertimeMinutes: number = isPendingManualCreation ? 0 : (log.undertimeMinutes ?? 0)
           const shiftCode: string | null = log.shiftCode ?? emp?.Shift?.shiftCode ?? null
-          const isAnomaly: boolean = isPending ? false : (log.isAnomaly ?? false)
-          const isEarlyOut: boolean = isPending ? false : (log.isEarlyOut ?? false)
-          const isShiftActive: boolean = isPending ? false : (log.isShiftActive ?? false)
+          const isAnomaly: boolean = isPendingManualCreation ? false : (log.isAnomaly ?? false)
+          const isEarlyOut: boolean = isPendingManualCreation ? false : (log.isEarlyOut ?? false)
+          const isShiftActive: boolean = isPendingManualCreation ? false : (log.isShiftActive ?? false)
           const gracePeriodApplied: boolean = log.gracePeriodApplied ?? false
-          const computedStatus = isEarlyOut ? 'early-out' : isAnomaly ? 'anomaly' : lateMinutes > 0 ? 'late' : undertimeMinutes > 0 ? 'undertime' : (log.status || 'present')
+          let computedStatus = isEarlyOut ? 'early-out' : isAnomaly ? 'anomaly' : lateMinutes > 0 ? 'late' : undertimeMinutes > 0 ? 'undertime' : (log.status || 'present')
           const hasMissingCheckout = log.checkOutTime === null && log.status === 'incomplete';
 
           let displayStatus = isShiftActive ? 'IN_PROGRESS' : hasMissingCheckout ? 'missing_checkout' : computedStatus
-          if (isPending) displayStatus = 'pending'
+
+          if (isPendingManualCreation) {
+            computedStatus = 'absent'
+            displayStatus = 'absent'
+          }
 
           return {
             id: log.id,
@@ -255,9 +262,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             department: emp?.Department?.name || 'General',
             branchName: emp?.Branch?.name || '—',
             date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
-            checkIn: isPending ? '—' : checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }),
-            checkOut: isPending ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
-            status: isPending ? 'pending' : computedStatus,
+            checkIn: isPendingManualCreation ? '—' : (log.checkInTime ? checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
+            checkOut: isPendingManualCreation ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
+            status: computedStatus, 
             displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes, shiftCode,
             isNightShift: emp?.Shift?.isNightShift ?? false,
             isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
@@ -268,6 +275,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             checkOutDevice: log.checkOutDeviceName ?? null,
             checkoutSource: log.checkoutSource ?? null,
             isEdited: log.isEdited ?? false,
+            isPending,
           }
         })
 
