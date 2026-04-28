@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Clock, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { AttendanceRecord } from '../types';
 
@@ -33,16 +34,19 @@ export function AttendanceEditModal({
   handleApplyChanges,
   actionLoading,
 }: AttendanceEditModalProps) {
-  if (!editingLog) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
+  if (!editingLog || !mounted) return null;
+
+  return createPortal(
     <>
-      <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+      <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
           <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
             <h3 className="font-bold text-lg leading-tight tracking-tight">Manual Time Changes</h3>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 overflow-y-auto">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <p className="text-sm font-bold text-slate-800 leading-none">{editingLog.employeeName}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">
@@ -150,6 +154,7 @@ export function AttendanceEditModal({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 }
