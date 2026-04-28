@@ -18,7 +18,7 @@ export function EditDepartmentDialog({
   if (!editingDept) return null
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
       <div className="bg-white border-0 rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
           <div>

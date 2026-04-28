@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Clock, Plus, Trash2, Moon, X as XIcon, AlertTriangle, Coffee
 } from 'lucide-react'
@@ -22,11 +24,14 @@ export function ShiftFormModal({
   formLoading, formError, hasInvalidBreaks,
   onClose, onSubmit,
 }: ShiftFormModalProps) {
-  if (!isFormOpen) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
-  return (
-    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+  if (!isFormOpen || !mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[150] flex items-center justify-center sm:p-4">
+      <div className="bg-white sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden flex flex-col sm:max-h-[90vh]">
         <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
           <div>
             <h3 className="font-bold text-lg leading-tight tracking-tight">
@@ -301,6 +306,7 @@ export function ShiftFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
