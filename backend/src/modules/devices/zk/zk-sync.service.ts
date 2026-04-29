@@ -45,6 +45,11 @@ async function syncSingleDevice(dbDevice: {
         return { deviceId: dbDevice.id, newLogs: 0, skipped: true };
     }
 
+    if (dbDevice.isActive === false) {
+        console.debug(`[ZK] Skipping "${dbDevice.name}" — device is currently offline.`);
+        return { deviceId: dbDevice.id, newLogs: 0, skipped: true };
+    }
+
     if (!tryAcquireDeviceLock(dbDevice.id)) {
         console.debug(`[ZK] Cron sync skipped for "${dbDevice.name}" — device is busy.`);
         return { deviceId: dbDevice.id, newLogs: 0, skipped: true };
@@ -311,7 +316,7 @@ export const syncZkData = async (): Promise<SyncZkDataResult> => {
                 totalNewLogs += deviceResult.newLogs;
                 if (deviceResult.error) {
                     failedDevices.push({ id: dbDevice.id, name: dbDevice.name, error: deviceResult.error });
-                } else {
+                } else if (!deviceResult.skipped) {
                     successfulDevices++;
                 }
             } else {
@@ -329,7 +334,7 @@ export const syncZkData = async (): Promise<SyncZkDataResult> => {
         console.log(`[ZK] Processing attendance logs (${totalNewLogs} new this tick)...`);
         await processAttendanceLogs();
 
-        const activeDevicesCount = dbDevices.filter(d => d.syncEnabled).length;
+        const activeDevicesCount = dbDevices.filter(d => d.syncEnabled && d.isActive).length;
         
         let status: 'SUCCESS' | 'PARTIAL' | 'FAILED' = 'SUCCESS';
         if (failedDevices.length > 0) {
