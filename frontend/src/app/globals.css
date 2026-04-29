@@ -203,26 +203,31 @@
 }
 
 /*
- * Sidebar scrollbar — always-reserved, hidden by default, visible on hover.
- * The scrollbar gutter is always present (thin/4px) but fully transparent,
- * so hovering only reveals the thumb — no layout shift, no content clipping.
+ * Sidebar scrollbar — completely hidden by default, visible on sidebar hover.
+ * Pattern: .sidebar-root on <aside>, .scrollbar-sidebar on <nav>.
+ * Hovering anywhere on .sidebar-root reveals the scrollbar.
  */
 .scrollbar-sidebar {
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-width: thin; /* Firefox: always reserve space */
-  scrollbar-color: transparent transparent; /* Invisible by default */
+  scrollbar-width: none; /* Firefox: completely hidden */
 }
 
-/* Firefox: reveal thumb on hover */
-.scrollbar-sidebar:hover {
+/* Firefox: show thin scrollbar when hovering sidebar */
+.sidebar-root:hover .scrollbar-sidebar {
+  scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
-/* Webkit (Chrome, Safari, Edge) */
+/* Webkit: scrollbar hidden by default (0 width) */
 .scrollbar-sidebar::-webkit-scrollbar {
-  width: 4px;
+  width: 0;
   background: transparent;
+}
+
+/* Webkit: expand and show scrollbar on sidebar hover */
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar {
+  width: 4px;
 }
 
 .scrollbar-sidebar::-webkit-scrollbar-track {
@@ -234,11 +239,11 @@
   border-radius: 20px;
 }
 
-.scrollbar-sidebar:hover::-webkit-scrollbar-thumb {
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.25);
 }
 
-.scrollbar-sidebar:hover::-webkit-scrollbar-thumb:hover {
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.45);
 }
 

@@ -85,7 +85,7 @@ export function BaseSidebar({
         />
       )}
       
-      <aside aria-label="Main navigation" className={`
+      <aside aria-label="Main navigation" className={`sidebar-root
       fixed z-60 bg-brand flex flex-col transition-all duration-300 ease-in-out
       
       /* Mobile View: Full height, flush to edges */
@@ -98,7 +98,7 @@ export function BaseSidebar({
     `}>
 
       {/* Header Section */}
-      <div className="flex items-center h-16 shrink-0 px-7 justify-start relative">
+      <div className="flex items-center h-16 shrink-0 px-7 justify-start relative z-20">
         <div className="w-6 flex items-center justify-center shrink-0">
           <button
             onClick={onToggleCollapse}

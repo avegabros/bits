@@ -170,7 +170,7 @@ function AdminAttendanceContent() {
       />
 
       {deletingLog && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
             <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
