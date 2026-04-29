@@ -50,6 +50,8 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
     // Filter state
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState(role === 'admin' ? 'pending' : '')
+    const [branchFilter, setBranchFilter] = useState('All Branches')
+    const [branches, setBranches] = useState<string[]>(['All Branches'])
 
 
     // Pagination state
@@ -83,6 +85,19 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
 
 
 
+    // Fetch branches on mount
+    useEffect(() => {
+        fetch('/api/branches', { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const names = (data.branches || data.data || []).map((b: any) => b.name)
+                    setBranches(['All Branches', ...names])
+                }
+            })
+            .catch(err => console.error('Failed to fetch branches:', err))
+    }, [])
+
     // ── Data Fetching ─────────────────────────────────────────────────────────
     const fetchAdjustments = useCallback(async () => {
         try {
@@ -92,6 +107,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
             params.set('limit', String(itemsPerPage))
             if (searchQuery) params.set('search', searchQuery)
             if (statusFilter) params.set('status', statusFilter)
+            if (branchFilter && branchFilter !== 'All Branches') params.set('branch', branchFilter)
 
             const res = await fetch(`/api/attendance/adjustments?${params.toString()}`, { credentials: 'include' })
             if (res.status === 401) { window.location.href = '/login'; return }
@@ -107,13 +123,13 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         } finally {
             setLoading(false)
         }
-    }, [currentPage, searchQuery, statusFilter])
+    }, [currentPage, searchQuery, statusFilter, branchFilter])
 
     // Fetch on filter/page change
     useEffect(() => { fetchAdjustments() }, [fetchAdjustments])
 
     // ⚠️ FILTER RESET: page resets to 1 when any filter changes
-    useEffect(() => { setCurrentPage(1) }, [searchQuery, statusFilter])
+    useEffect(() => { setCurrentPage(1) }, [searchQuery, statusFilter, branchFilter])
 
     // ── Actions ───────────────────────────────────────────────────────────────
     const handleApprove = async (id: number) => {
@@ -174,6 +190,8 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         // Filter state
         searchQuery, setSearchQuery,
         statusFilter, setStatusFilter,
+        branchFilter, setBranchFilter,
+        branches,
         // Pagination
         currentPage, setCurrentPage,
         itemsPerPage,

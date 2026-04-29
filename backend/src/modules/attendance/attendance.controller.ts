@@ -329,7 +329,18 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             source: 'admin-panel',
             level: 'WARN',
             details: `Admin manually created missing attendance record for ${employee.firstName} ${employee.lastName}`,
-            metadata: { reason },
+            metadata: { 
+                reason,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                branch: employee.Branch?.name || '—',
+                attendanceDate: adminRecord.date.toISOString(),
+                changes: [
+                    { field: 'record', oldValue: 'missing', newValue: 'created' },
+                    { field: 'checkInTime', oldValue: null, newValue: adminRecord.checkInTime?.toISOString() || null },
+                    ...(adminRecord.checkOutTime ? [{ field: 'checkOutTime', oldValue: null, newValue: adminRecord.checkOutTime.toISOString() }] : []),
+                    { field: 'status', oldValue: 'missing', newValue: adminRecord.status }
+                ]
+            },
             correlationId: req.correlationId
         });
 
@@ -544,7 +555,7 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
     // Use the central AuditLog instead of the legacy AttendanceAuditLog table
     const where: Prisma.AuditLogWhereInput = {
         entityType: 'Attendance',
-        action: { in: ['ATTENDANCE_OVERRIDE', 'ADJUSTMENT_APPROVE'] }
+        action: { in: ['ATTENDANCE_OVERRIDE', 'ATTENDANCE_DELETE', 'ADJUSTMENT_APPROVE'] }
     };
 
     if (entityId) {
@@ -560,48 +571,64 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
     }
 
     if (search || branch) {
-       // Since AuditLog handles entityId as an unconstrained Int, 
-       // we must fetch valid attendance IDs that match the employee criteria.
-       const attWhere: Prisma.AttendanceWhereInput = {};
-       const employeeWhere: Prisma.EmployeeWhereInput = {};
-       if (branch) {
-           const branchRecord = await prisma.branch.findFirst({ where: { name: branch }, select: { id: true } });
-           if (branchRecord) employeeWhere.branchId = branchRecord.id;
-       }
-       if (search) {
-           employeeWhere.OR = [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } }
-           ];
-       }
-       if (branch || search) attWhere.employee = employeeWhere;
-       
-       const matchedAtts = await prisma.attendance.findMany({ 
-           where: attWhere, 
-           select: { id: true } 
-       });
-       const validAttIds = matchedAtts.map(a => a.id);
+      const searchTerms = search.trim().split(/\s+/);
+      const nameConditions = searchTerms.map(term => {
+        const isNumeric = /^\d+$/.test(term);
+        return {
+          OR: [
+            { firstName: { contains: term, mode: 'insensitive' as const } },
+            { lastName: { contains: term, mode: 'insensitive' as const } },
+            { middleName: { contains: term, mode: 'insensitive' as const } },
+            { Branch: { name: { contains: term, mode: 'insensitive' as const } } },
+            ...(isNumeric ? [{ id: parseInt(term) }] : []),
+          ]
+        };
+      });
 
-       // Build an OR condition that matches either the still-existing attendance record,
-       // or the deleted record via the audit log details (which contains name and branch).
-       const orConditions: Prisma.AuditLogWhereInput[] = [
-          { entityId: { in: validAttIds } }
-       ];
+      // Build employee filter
+      const employeeWhere: Prisma.EmployeeWhereInput = {};
+      if (branch) {
+        const branchRecord = await prisma.branch.findFirst({ where: { name: branch }, select: { id: true } });
+        if (branchRecord) employeeWhere.branchId = branchRecord.id;
+      }
+      if (search) {
+        employeeWhere.AND = nameConditions;
+      }
 
-       if (branch && !search) {
-          orConditions.push({ details: { contains: `(Branch: ${branch})` } });
-          where.OR = orConditions;
-       } else if (search) {
-          orConditions.push({ details: { contains: search, mode: 'insensitive' } });
-          orConditions.push({ performer: { OR: [
-                 { firstName: { contains: search, mode: 'insensitive' } },
-                 { lastName: { contains: search, mode: 'insensitive' } },
-          ] } });
-          if (branch) {
-              orConditions.push({ details: { contains: `(Branch: ${branch})`, mode: 'insensitive' } });
-          }
-          where.OR = orConditions;
-       }
+      // Fetch IDs for active records
+      const matchedAtts = await prisma.attendance.findMany({
+        where: { employee: employeeWhere },
+        select: { id: true }
+      });
+      const validAttIds = matchedAtts.map(a => a.id);
+
+      const orConditions: Prisma.AuditLogWhereInput[] = [
+        { entityId: { in: validAttIds } }
+      ];
+
+      // Also search snapshot data in details for deleted records
+      if (search) {
+        // Match ANY of the terms in the details string or performer name
+        orConditions.push({
+          OR: [
+            { details: { contains: search, mode: 'insensitive' as const } },
+            {
+              performer: {
+                OR: [
+                  { firstName: { contains: search, mode: 'insensitive' as const } },
+                  { lastName: { contains: search, mode: 'insensitive' as const } }
+                ]
+              }
+            }
+          ]
+        });
+      }
+
+      if (branch) {
+        orConditions.push({ details: { contains: `Branch: ${branch}`, mode: 'insensitive' as const } });
+      }
+
+      where.OR = orConditions;
     }
 
     const [total, rawLogs] = await Promise.all([
@@ -647,9 +674,11 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
     for (const log of rawLogs) {
         const attendance = log.entityId ? attMap.get(log.entityId) : null;
         
-        const meta = log.metadata as { changes?: { field: string; oldValue: string | null; newValue: string | null }[]; reason?: string; employeeName?: string; branch?: string } | null;
+        const meta = log.metadata as { changes?: { field: string; oldValue: string | null; newValue: string | null }[]; reason?: string; employeeName?: string; branch?: string; submittedBy?: { firstName: string; lastName: string; role: string }, attendanceDate?: string | Date, date?: string | Date } | null;
         const changes = meta?.changes ?? [];
         const reason = meta?.reason ?? null;
+        const submittedBy = meta?.submittedBy;
+        const attendanceDate = attendance ? attendance.date : (meta?.attendanceDate || meta?.date);
 
         // Fallback for deleted records
         const employeeFallback = {
@@ -661,18 +690,26 @@ export const getAttendanceAuditLogs = async (req: Request, res: Response) => {
 
         const empData = attendance ? attendance.employee : employeeFallback;
 
+        const defaultSystemPerformer = { firstName: 'System', lastName: '', role: 'SYSTEM' };
+        // If it's an approved adjustment, the originator is the submittedBy
+        const mappedAdjustedBy = submittedBy ? submittedBy : (log.performer || defaultSystemPerformer);
+        const mappedApprovedBy = submittedBy ? (log.performer || defaultSystemPerformer) : undefined;
+
         for (const change of changes) {
             mappedLogs.push({
                 id: `${log.id}-${change.field}`, // synthetic ID
+                actionType: log.action,
                 field: change.field,
                 oldValue: change.oldValue,
                 newValue: change.newValue,
                 reason: reason,
                 createdAt: log.timestamp,
                 attendance: {
+                    date: attendanceDate,
                     employee: empData
                 },
-                adjustedBy: log.performer || { firstName: 'System', lastName: '', role: 'SYSTEM' }
+                adjustedBy: mappedAdjustedBy,
+                approvedBy: mappedApprovedBy
             });
         }
     }
@@ -706,6 +743,7 @@ export const getAdjustments = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 15;
     const statusFilter = (req.query.status as string) || '';
     const search = (req.query.search as string) || '';
+    const branch = (req.query.branch as string) || '';
     const dateStr = (req.query.date as string) || '';
     const skip = (page - 1) * limit;
 
@@ -720,18 +758,46 @@ export const getAdjustments = async (req: Request, res: Response) => {
       where.attendance = { ...((where.attendance as object) || {}), date: { gte: start, lte: end } };
     }
 
+    if (branch) {
+      const branchFilter = {
+        OR: [
+          { attendance: { employee: { Branch: { name: branch } } } },
+          { employeeBranch: branch }
+        ]
+      };
+      if (where.AND) {
+        (where.AND as any).push(branchFilter);
+      } else {
+        where.AND = [branchFilter];
+      }
+    }
+
     if (search) {
+      const searchTerms = search.trim().split(/\s+/);
+      const nameConditions = searchTerms.map(term => {
+        const isNumeric = /^\d+$/.test(term);
+        return {
+          OR: [
+            { firstName: { contains: term, mode: 'insensitive' as const } },
+            { lastName: { contains: term, mode: 'insensitive' as const } },
+            { middleName: { contains: term, mode: 'insensitive' as const } },
+            { Branch: { name: { contains: term, mode: 'insensitive' as const } } },
+            ...(isNumeric ? [{ id: parseInt(term) }] : []),
+          ]
+        };
+      });
+
       where.OR = [
-        { attendance: { employee: { OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-        ] } } },
-        { submittedBy: { OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-        ] } },
-        // Also search the snapshot name for deleted records
-        { employeeName: { contains: search, mode: 'insensitive' } },
+        { attendance: { employee: { AND: nameConditions } } },
+        { submittedBy: { AND: nameConditions } },
+        { 
+          AND: searchTerms.map(term => ({ 
+            OR: [
+              { employeeName: { contains: term, mode: 'insensitive' as const } },
+              { employeeBranch: { contains: term, mode: 'insensitive' as const } }
+            ]
+          })) 
+        },
       ];
     }
 
@@ -814,7 +880,10 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
 
     const adjustment = await prisma.attendanceAdjustment.findUnique({
       where: { id: adjustmentId },
-      include: { attendance: { include: { employee: { include: { Shift: true } } } } }
+      include: { 
+          attendance: { include: { employee: { include: { Shift: true } } } },
+          submittedBy: { select: { firstName: true, lastName: true, role: true } }
+      }
     });
 
     if (!adjustment) {
@@ -909,14 +978,16 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
           entityId: adjustment.attendanceId ?? undefined,
           performedBy: reviewerId,
           source: 'admin-panel',
-          details: `Delete adjustment for ${empName} was approved and applied`,
+          details: `Delete adjustment for ${empName} (Branch: ${empBranch}) was approved and applied`,
           metadata: {
-              reason: adjustment.reason,
-              employeeName: empName,
-              branch: empBranch,
-              changes: [
-                  { field: 'status', oldValue: 'present', newValue: 'deleted' }
-              ]
+            reason: adjustment.reason,
+            employeeName: `${existing?.employee?.firstName || ''} ${existing?.employee?.lastName || ''}`.trim(),
+            branch: (existing?.employee as any)?.Branch?.name,
+            attendanceDate: existing?.date,
+            changes: [
+                { field: 'record', oldValue: 'present', newValue: 'deleted' }
+            ],
+            submittedBy: adjustment.submittedBy
           },
           correlationId: req.correlationId
       });
@@ -932,15 +1003,17 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Attendance record no longer exists.' });
     }
 
+    const isManualCreation = adjustment.originalCheckIn === null;
+
     if (adjustment.requestedCheckIn) {
-      const oldVal = existing.checkInTime ? existing.checkInTime.toISOString() : null;
+      const oldVal = isManualCreation ? null : (existing.checkInTime ? existing.checkInTime.toISOString() : null);
       updateData.checkInTime = adjustment.requestedCheckIn;
       updateData.checkin_updated = new Date();
       auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn.toISOString() });
     }
 
     if (adjustment.requestedCheckOut !== undefined && adjustment.requestedCheckOut !== null) {
-      const oldVal = existing.checkOutTime ? existing.checkOutTime.toISOString() : null;
+      const oldVal = isManualCreation ? null : (existing.checkOutTime ? existing.checkOutTime.toISOString() : null);
       updateData.checkOutTime = adjustment.requestedCheckOut;
       updateData.checkout_updated = new Date();
       updateData.checkoutSource = 'manual';
@@ -951,6 +1024,11 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
        // Usually we only set requestedCheckOut if we change it.
     }
 
+    if (isManualCreation) {
+      // This was a manual creation request, so log the record creation
+      auditEntries.push({ field: 'record', oldValue: 'missing', newValue: 'created' });
+    }
+
     // Centralized status recalculation
     if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
       const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
@@ -958,9 +1036,10 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       const shift = existing.employee?.Shift ?? null;
 
       const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
-      if (newStatus !== existing.status) {
+      if (newStatus !== existing.status || isManualCreation) {
         updateData.status = newStatus;
-        auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
+        const oldStatusVal = isManualCreation ? 'missing' : existing.status;
+        auditEntries.push({ field: 'status', oldValue: oldStatusVal, newValue: newStatus });
       }
     }
 
@@ -1002,6 +1081,11 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
         performedBy: reviewerId,
         source: 'admin-panel',
         details: `Adjustment for ${existing.employee?.firstName || 'Unknown'} ${existing.employee?.lastName || ''} was approved and applied`,
+        metadata: {
+            reason: adjustment.reason,
+            changes: auditEntries,
+            submittedBy: adjustment.submittedBy
+        },
         correlationId: req.correlationId
     });
 
@@ -1145,15 +1229,28 @@ export const deleteAttendance = async (req: Request, res: Response) => {
             where: { id: recordId }
         });
 
+        const empName = `${existing.employee.firstName} ${existing.employee.lastName}`;
+        const empBranch = (existing.employee as any).Branch?.name || '—';
+
         void audit({
-            action: 'ATTENDANCE_OVERRIDE',
+            action: 'ATTENDANCE_DELETE',
             entityType: 'Attendance',
             entityId: recordId,
             performedBy: requestedById,
             source: 'admin-panel',
             level: 'WARN',
-            details: `Admin deleted attendance record for ${existing.employee.firstName} ${existing.employee.lastName}`,
-            metadata: { reason },
+            details: `Admin deleted attendance record for ${empName} (Branch: ${empBranch})`,
+            metadata: {
+                reason: String(reason).trim(),
+                employeeName: empName,
+                branch: empBranch,
+                originalCheckIn: existing.checkInTime?.toISOString() || null,
+                originalCheckOut: existing.checkOutTime?.toISOString() || null,
+                date: existing.date.toISOString(),
+                changes: [
+                    { field: 'record', oldValue: 'active', newValue: 'deleted' }
+                ]
+            },
             correlationId: req.correlationId
         });
 

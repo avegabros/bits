@@ -1,8 +1,8 @@
 'use client'
 
 import React from 'react'
-import Link from 'next/link'
-import { Loader2, CheckCircle2, XCircle, Clock, ExternalLink, LucideIcon } from 'lucide-react'
+
+import { Loader2, CheckCircle2, XCircle, Clock, Trash2, LucideIcon } from 'lucide-react'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { Adjustment } from '@/features/adjustments/types'
 import { formatTime, formatTimestamp, formatDate, empName } from '../hooks/useAdjustmentList'
@@ -39,103 +39,149 @@ export function AdjustmentTable({
     onReject,
 }: AdjustmentTableProps) {
     return (
-        <table className="w-full text-left text-sm border-collapse table-auto min-w-[1200px]">
-            <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
-                <tr>
-                    <SortableHeader label="Submitted" sortKey="submittedAt" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-3.5" />
-                    <SortableHeader label="Employee" sortKey="attendance.employee.lastName" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-3.5" />
-                    <th className="px-4 py-3.5">Original Time</th>
-                    <th className="px-4 py-3.5">Requested Time</th>
-                    <th className="px-4 py-3.5">Reason</th>
-                    <SortableHeader label="Submitted By" sortKey="submittedBy.lastName" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-3.5" />
-                    <SortableHeader label="Status" sortKey="status" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-3.5 text-center" />
-                    <th className="px-4 py-3.5 text-center">{isAdmin ? 'Actions / Reviewed' : 'Reviewed By'}</th>
+        <table className="w-full border-collapse">
+            <thead>
+                <tr className="border-b border-[#E0E0E0] bg-white">
+                    <SortableHeader label="SUBMITTED" sortKey="submittedAt" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
+                    <th className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">TYPE</th>
+                    <SortableHeader label="EMPLOYEE" sortKey="attendance.employee.lastName" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
+                    <th className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">ORIGINAL TIME</th>
+                    <th className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">REQUESTED TIME</th>
+                    <th className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">REASON</th>
+                    <SortableHeader label="SUBMITTED BY" sortKey="submittedBy.lastName" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
+                    <SortableHeader label="STATUS" sortKey="status" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-center text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
+                    <th className="px-[20px] py-[16px] text-center text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">{isAdmin ? 'ACTIONS / REVIEWED' : 'REVIEWED BY'}</th>
                 </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E0E0E0]">
                 {loading ? (
                     <tr>
-                        <td colSpan={8} className="px-6 py-24 text-center">
-                            <div className="flex items-center justify-center gap-2 text-slate-400">
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                <span className="font-bold uppercase text-[10px] tracking-widest">Loading...</span>
+                        <td colSpan={9} className="px-[20px] py-[64px] text-center">
+                            <div className="flex flex-col items-center gap-[12px]">
+                                <Loader2 size={24} className="animate-spin text-[#D0021B]" />
+                                <span className="text-[12px] font-bold text-[#9E9E9E] uppercase tracking-widest italic">Loading adjustments...</span>
                             </div>
                         </td>
                     </tr>
-                ) : sortedAdjustments.length > 0 ? sortedAdjustments.map((adj) => {
-                    const sc = statusConfig[adj.status] || statusConfig.pending
-                    const StatusIcon = sc.icon
+                ) : sortedAdjustments.length > 0 ? sortedAdjustments.map((adj, index) => {
+                    const isDelete = adj.type === 'DELETE'
+                    
+                    const getStatusStyle = (status: string) => {
+                        switch (status) {
+                            case 'approved': return 'bg-[#E8F5E9] text-[#2E7D32]';
+                            case 'rejected': return 'bg-[#FFEBEE] text-[#C62828]';
+                            default: return 'bg-[#FFF8E1] text-[#F57F17]';
+                        }
+                    }
+
+                    const rowClassName = `group transition-all duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]'} hover:bg-[#F5F5F5] cursor-default`;
+
+                    // Split submitted at into date and time
+                    const subDateObj = new Date(adj.submittedAt);
+                    const subDateStr = subDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const subTimeStr = subDateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
                     return (
-                        <tr key={adj.id} className="hover:bg-red-50/40 transition-colors duration-200">
-                            <td className="px-4 py-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">{formatTimestamp(adj.submittedAt)}</td>
-                            <td className="px-4 py-3">
-                                <p className="font-bold text-slate-700 text-sm">{empName(adj.attendance?.employee)}</p>
-                                <p className="text-[10px] text-slate-400 font-medium">
-                                    {adj.attendance?.employee?.branch?.name || '—'} • {adj.attendance?.employee?.Department?.name || '—'}
-                                </p>
-                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">{formatDate(adj.attendance?.date)}</p>
+                        <tr key={adj.id} className={rowClassName}>
+                            <td className="px-[20px] py-[16px] align-top whitespace-nowrap">
+                                <div className="text-[13px] text-[#212121] leading-tight font-medium">{subDateStr}</div>
+                                <div className="text-[11px] text-[#9E9E9E] mt-[2px]">{subTimeStr}</div>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                                <div className="text-[10px] text-slate-500">
-                                    <div>In: <span className="font-mono font-bold">{formatTime(adj.originalCheckIn)}</span></div>
-                                    <div>Out: <span className="font-mono font-bold">{formatTime(adj.originalCheckOut)}</span></div>
-                                </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                                <div className="text-[10px] text-blue-600 font-bold">
-                                    <div>In: <span className="font-mono">{formatTime(adj.requestedCheckIn)}</span></div>
-                                    <div>Out: <span className="font-mono">{formatTime(adj.requestedCheckOut)}</span></div>
-                                </div>
-                            </td>
-                            <td className="px-4 py-3 max-w-[180px]">
-                                <p className="text-[11px] font-medium text-slate-600 truncate" title={adj.reason}>{adj.reason}</p>
-                                {adj.rejectionReason && (
-                                    <p className="text-[10px] text-red-500 font-medium mt-1 truncate flex items-center gap-1" title={adj.rejectionReason}><XCircle size={10} className="shrink-0" /> {adj.rejectionReason}</p>
+
+                            <td className="px-[20px] py-[16px] align-top">
+                                {isDelete ? (
+                                    <span className="inline-flex items-center gap-[4px] px-[8px] py-[3px] rounded-[4px] bg-[#FFEBEE] text-[#C62828] font-bold text-[11px] uppercase tracking-[0.5px]">
+                                        <Trash2 size={10} />
+                                        Delete
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-[4px] px-[8px] py-[3px] rounded-[4px] bg-[#E3F2FD] text-[#1565C0] font-bold text-[11px] uppercase tracking-[0.5px]">
+                                        Edit
+                                    </span>
                                 )}
                             </td>
-                            <td className="px-4 py-3 font-bold text-slate-700 text-sm whitespace-nowrap">
-                                {adj.submittedBy ? `${adj.submittedBy.firstName} ${adj.submittedBy.lastName}` : '—'}
+
+                            <td className="px-[20px] py-[16px] align-top min-w-[180px]">
+                                <div className="font-semibold text-[#212121] text-[14px] leading-tight">{empName(adj.attendance?.employee)}</div>
+                                <div className="text-[12px] text-[#9E9E9E] mt-[2px]">
+                                    {adj.attendance?.employee?.Branch?.name}
+                                </div>
+                                <div className="text-[12px] text-[#212121] font-medium mt-[4px] px-[6px] py-[2px] bg-[#F5F5F5] border border-[#E0E0E0] rounded-[4px] inline-block">
+                                    {formatDate(adj.attendance?.date)}
+                                </div>
                             </td>
-                            <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center gap-1 font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${sc.bg} ${sc.text} ${sc.border}`}>
-                                    <StatusIcon size={10} />
-                                    {sc.label}
+
+                            <td className="px-[20px] py-[16px] align-top whitespace-nowrap">
+                                <div className="text-[12px] text-[#757575] space-y-[2px]">
+                                    <div>In: <span className="font-bold text-[#212121]">{formatTime(adj.originalCheckIn)}</span></div>
+                                    <div>Out: <span className="font-bold text-[#212121]">{formatTime(adj.originalCheckOut)}</span></div>
+                                </div>
+                            </td>
+
+                            <td className="px-[20px] py-[16px] align-top whitespace-nowrap">
+                                {isDelete ? (
+                                    <div className="flex flex-col gap-[2px]">
+                                        <span className="text-[10px] font-bold text-[#C62828] uppercase tracking-[0.5px]">Record Deletion</span>
+                                        <span className="text-[11px] text-[#9E9E9E]">Removing all logs</span>
+                                    </div>
+                                ) : (
+                                    <div className="text-[12px] text-[#1565C0] space-y-[2px] font-bold bg-[#E3F2FD] px-[8px] py-[4px] rounded-[6px] border border-[#BBDEFB]">
+                                        <div>In: {formatTime(adj.requestedCheckIn)}</div>
+                                        <div>Out: {formatTime(adj.requestedCheckOut)}</div>
+                                    </div>
+                                )}
+                            </td>
+
+                            <td className="px-[20px] py-[16px] align-top max-w-[200px]">
+                                <p className="text-[13px] text-[#757575] leading-snug line-clamp-2" title={adj.reason}>{adj.reason}</p>
+                                {adj.rejectionReason && (
+                                    <div className="mt-[6px] p-[6px] bg-[#FFEBEE] rounded-[4px] border border-[#FFCDD2] flex items-start gap-[6px]">
+                                        <XCircle size={12} className="text-[#C62828] mt-[2px] shrink-0" />
+                                        <p className="text-[11px] text-[#C62828] font-medium line-clamp-2" title={adj.rejectionReason}>{adj.rejectionReason}</p>
+                                    </div>
+                                )}
+                            </td>
+                            <td className="px-[20px] py-[16px] align-top font-medium text-[#212121] text-[13px] whitespace-nowrap">
+                                {adj.submittedBy ? `${adj.submittedBy.firstName} ${adj.submittedBy.lastName}` : ''}
+                            </td>
+                            <td className="px-[20px] py-[16px] align-top text-center">
+                                <span className={`inline-flex items-center gap-[4px] font-bold text-[11px] uppercase tracking-[0.5px] px-[10px] py-[3px] rounded-[4px] whitespace-nowrap ${getStatusStyle(adj.status)}`}>
+                                    {adj.status}
                                 </span>
                             </td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="px-[20px] py-[16px] align-top text-center">
                                 {isAdmin && adj.status === 'pending' ? (
-                                    <div className="flex items-center justify-center gap-1.5">
+                                    <div className="flex items-center justify-center gap-[8px]">
                                         <button onClick={() => onApprove(adj.id)} disabled={actionLoading}
-                                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50 active:scale-95 inline-flex items-center gap-1">
-                                            <CheckCircle2 size={10} /> Approve
+                                            className={`h-[32px] px-[12px] text-white rounded-[6px] text-[11px] font-bold uppercase tracking-[0.5px] transition-all shadow-sm active:scale-[0.95] inline-flex items-center gap-[6px] ${
+                                                isDelete
+                                                    ? 'bg-[#D0021B] hover:bg-[#B00216] shadow-[#D0021B]/20'
+                                                    : 'bg-[#2E7D32] hover:bg-[#1B5E20] shadow-[#2E7D32]/20'
+                                            }`}>
+                                            {isDelete ? <Trash2 size={12} /> : <CheckCircle2 size={12} />}
+                                            {isDelete ? 'Delete' : 'Approve'}
                                         </button>
                                         <button onClick={() => onReject(adj.id)} disabled={actionLoading}
-                                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-red-700 transition-all shadow-sm disabled:opacity-50 active:scale-95 inline-flex items-center gap-1">
-                                            <XCircle size={10} /> Reject
+                                            className="h-[32px] px-[12px] bg-[#F5F5F5] border border-[#E0E0E0] text-[#757575] rounded-[6px] text-[11px] font-bold uppercase tracking-[0.5px] hover:bg-[#EEEEEE] hover:text-[#212121] transition-all active:scale-[0.95] inline-flex items-center gap-[6px]">
+                                            <XCircle size={12} /> Reject
                                         </button>
                                     </div>
                                 ) : (
-                                    <span className="text-[10px] text-slate-400 font-medium block text-center">
-                                        {adj.reviewedBy ? `${adj.reviewedBy.firstName} ${adj.reviewedBy.lastName}` : '—'}
-                                        {adj.reviewedAt && <><br />{formatTimestamp(adj.reviewedAt)}</>}
-                                        {adj.status === 'approved' && (
-                                            <Link
-                                                href={`/adjustments?tab=history&entityId=${adj.attendanceId}`}
-                                                className="mt-1.5 flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 transition-colors"
-                                            >
-                                                <ExternalLink size={9} />
-                                                View Audit Detail
-                                            </Link>
-                                        )}
-                                    </span>
+                                    <div className="flex flex-col items-center gap-[4px]">
+                                        <span className="text-[12px] text-[#212121] font-semibold">
+                                            {adj.reviewedBy ? `${adj.reviewedBy.firstName} ${adj.reviewedBy.lastName}` : ''}
+                                        </span>
+                                        {adj.reviewedAt && <span className="text-[11px] text-[#9E9E9E]">{formatTimestamp(adj.reviewedAt)}</span>}
+
+                                    </div>
                                 )}
                             </td>
                         </tr>
                     )
                 }) : (
                     <tr>
-                        <td colSpan={8} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-                            {statusFilter === 'pending' ? 'No pending adjustments — all caught up!' : 'No adjustment records found'}
+                        <td colSpan={9} className="px-[20px] py-[64px] text-center text-[#9E9E9E] font-bold uppercase text-[12px] tracking-[0.8px]">
+                            {statusFilter === 'pending' ? 'All caught up!' : 'No records found'}
                         </td>
                     </tr>
                 )}

@@ -6,6 +6,7 @@ export interface Adjustment {
     requestedCheckIn: string | null;
     requestedCheckOut: string | null;
     reason: string;
+    type?: 'UPDATE' | 'DELETE';
     status: string;
     rejectionReason: string | null;
     submittedAt: string;
@@ -17,7 +18,7 @@ export interface Adjustment {
             lastName: string;
             middleName?: string | null;
             suffix?: string | null;
-            branch: { name: string } | null;
+            Branch: { name: string } | null;
             Department?: { name: string } | null;
         };
     };

@@ -1,7 +1,7 @@
 'use client';
 
-import { AdjustmentListPage } from '@/features/adjustments/components/AdjustmentListPage';
+import { AdjustmentsDashboard } from '@/features/adjustments/components/AdjustmentsDashboard';
 
 export default function HRAdjustmentsPage() {
-    return <AdjustmentListPage role="hr" />;
+    return <AdjustmentsDashboard role="hr" />;
 }
