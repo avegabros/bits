@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
 
@@ -58,7 +59,11 @@ async function main() {
     // ──────────────────────────────────────────────
 
     // ──────────────────────────────────────────────
-    // 4.5. SyncConfig
+    // 4. Company
+    // ──────────────────────────────────────────────
+
+    // ──────────────────────────────────────────────
+    // 5. SyncConfig
     // ──────────────────────────────────────────────
     await prisma.syncConfig.upsert({
         where: { id: 1 },
@@ -79,7 +84,7 @@ async function main() {
     console.log('⚙️ Seeded sync config')
 
     // ──────────────────────────────────────────────
-    // 5. Employees
+    // 6. Employees
     // NOTE: zkId 1 is RESERVED for the ZKTeco device SUPER ADMIN — never use it.
     //       Employee zkIds start from 2.
     // ──────────────────────────────────────────────
@@ -129,8 +134,12 @@ async function main() {
             }
 
             // Look up the branch and department IDs for the FK relations.
-            const branchRow = await prisma.branch.findUnique({ where: { name: u.branch } })
-            const deptRow = await prisma.department.findUnique({ where: { name: u.department } })
+            const branchRow = u.branch
+                ? await prisma.branch.findUnique({ where: { name: u.branch } })
+                : null
+            const deptRow = u.department
+                ? await prisma.department.findUnique({ where: { name: u.department } })
+                : null
 
             await prisma.employee.create({
                 data: {

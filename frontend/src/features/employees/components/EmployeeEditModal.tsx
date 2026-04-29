@@ -29,7 +29,7 @@ export function EmployeeEditModal({
   const { formErrors, clearFieldError, handleSaveWrapper } = useEmployeeEditForm({ editForm, onSave })
 
   return (
-    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* Header */}

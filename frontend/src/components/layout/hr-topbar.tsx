@@ -61,7 +61,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
           if (match) setHolidayName(match.name)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   return (
@@ -93,7 +93,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
           <p className="text-sm font-black text-slate-700 font-mono tracking-tighter">{mounted ? time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : ''}</p>
         </div>
 
-        <div className="relative z-[110]" ref={dropdownRef}>
+        <div className="relative z-110" ref={dropdownRef}>
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 group p-1 rounded-full hover:bg-slate-50 transition-colors">
             <div className="h-9 w-9 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-200 group-hover:scale-105 transition-transform overflow-hidden">
               <User size={18} />
@@ -102,7 +102,7 @@ export default function TopBar({ setIsMobileOpen }: { setIsMobileOpen: (val: boo
           </button>
 
           {isProfileOpen && (
-            <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-2xl py-2 z-[120] origin-top-right animate-in fade-in slide-in-from-top-4 zoom-in-95 duration-200 ease-out">
+            <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-2xl py-2 z-120 origin-top-right animate-in fade-in slide-in-from-top-4 zoom-in-95 duration-200 ease-out">
               <div className="px-4 py-3 border-b border-slate-50 text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Signed in as</p>
                 <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{userName || 'Mwehehe'}</p>

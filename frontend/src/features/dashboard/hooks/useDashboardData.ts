@@ -141,11 +141,12 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 });
 
                 const late = dayAtts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-                // Present = everyone who checked in (on-time + late)
-                const present = dayAtts.filter(a => a.checkInTime).length;
+                // On Time = checked in AND not late (mutually exclusive with Late)
+                const onTime = dayAtts.filter(a => a.checkInTime && (a.lateMinutes ?? 0) === 0).length;
+                const totalCheckedIn = onTime + late;
                 const isDateHoliday = holidayDateSet.has(dateStr);
-                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, activeCount - present) : 0);
-                return { day, present, late, absent };
+                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, activeCount - totalCheckedIn) : 0);
+                return { day, present: onTime, late, absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
             const weekly = weeklyAll.filter(d => {
@@ -177,9 +178,10 @@ export function useDashboardData(role: 'admin' | 'hr') {
             setBranchPresence(bPresence);
 
             const todayLate = atts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-            // Present = everyone who checked in (on-time + late)
-            const todayPresent = atts.filter(a => a.checkInTime).length;
-            setTotalPresent(todayPresent);
+            // On Time = checked in AND not late (mutually exclusive with Late)
+            const todayOnTime = atts.filter(a => a.checkInTime && !(a.lateMinutes > 0)).length;
+            const todayPresent = todayOnTime + todayLate; // total who checked in, used for absent calc
+            setTotalPresent(todayOnTime);
             setTotalLate(todayLate);
             const missingCount = Math.max(0, activeCount - todayPresent);
             if (todayHoliday) {
@@ -262,9 +264,12 @@ export function useDashboardData(role: 'admin' | 'hr') {
         setActivity(prev => [newEntry, ...prev].slice(0, 15));
 
         if (payload.type === 'check-in') {
-            // Present = all check-ins; Late is an additional subset indicator
-            setTotalPresent(prev => prev + 1);
-            if (isLate) setTotalLate(prev => prev + 1);
+            // On Time and Late are mutually exclusive
+            if (isLate) {
+                setTotalLate(prev => prev + 1);
+            } else {
+                setTotalPresent(prev => prev + 1);
+            }
             setTotalAbsent(prev => Math.max(0, prev - 1));
         }
     }, []);

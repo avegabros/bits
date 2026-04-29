@@ -182,19 +182,17 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' }) {
                                             if (holiday) setSelectedHoliday(holiday);
                                             else if (isAdmin && day.inMonth) openCreate(dateStr);
                                         }}
-                                        className={`relative min-h-[80px] p-2 border-b border-r border-border/50 transition-all cursor-pointer group ${
-                                            !day.inMonth ? 'bg-secondary/20 opacity-40' : 'hover:bg-secondary/30'
-                                        } ${isToday ? 'ring-1 ring-inset ring-indigo-500/30 bg-indigo-500/5' : ''}`}
+                                        className={`relative min-h-[80px] p-2 border-b border-r border-border/50 transition-all cursor-pointer group ${!day.inMonth ? 'bg-secondary/20 opacity-40' : 'hover:bg-secondary/30'
+                                            } ${isToday ? 'ring-1 ring-inset ring-indigo-500/30 bg-indigo-500/5' : ''}`}
                                     >
                                         <span className={`text-xs font-bold ${isToday ? 'text-indigo-500' : isSunday ? 'text-red-400' : 'text-muted-foreground'}`}>
                                             {day.date.getDate()}
                                         </span>
                                         {holiday && (
-                                            <div className={`mt-1 px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight truncate ${
-                                                holiday.type === 'REGULAR'
-                                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                            }`}>
+                                            <div className={`mt-1 px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight truncate ${holiday.type === 'REGULAR'
+                                                ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                                }`}>
                                                 {holiday.name}
                                             </div>
                                         )}
@@ -229,9 +227,8 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' }) {
                         <div className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-3">
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                                        selectedHoliday.type === 'REGULAR' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
-                                    }`}>
+                                    <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${selectedHoliday.type === 'REGULAR' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                                        }`}>
                                         {selectedHoliday.type === 'REGULAR' ? <Flag className="w-2.5 h-2.5" /> : <Star className="w-2.5 h-2.5" />}
                                         {selectedHoliday.type}
                                     </span>
@@ -288,7 +285,7 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' }) {
 
             {/* Create/Edit Modal */}
             {modalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-100 flex items-center justify-center p-4">
                     <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
                         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                             <h3 className="text-sm font-black text-foreground">{editingId ? 'Edit Holiday' : 'Add Holiday'}</h3>
@@ -329,7 +326,7 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' }) {
 
             {/* Delete Confirm */}
             {deleteConfirm && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-100 flex items-center justify-center p-4">
                     <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
                         <h3 className="text-sm font-black text-foreground">Delete Holiday?</h3>
                         <p className="text-xs text-muted-foreground">Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.</p>
