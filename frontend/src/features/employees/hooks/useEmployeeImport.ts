@@ -15,6 +15,7 @@ export interface ParsedImportRow {
   dateOfBirth?: string;
   email: string;
   contactNumber: string;
+  company: string;
   department: string;
   branch: string;
   hireDate?: string;
@@ -35,7 +36,8 @@ export type ImportStep = 'select' | 'preview' | 'results';
 
 interface UseEmployeeImportOptions {
   departments: { id: number; name: string }[];
-  branches: { id: number; name: string }[];
+  branches: any[];
+  companies: { id: number; name: string }[];
   shifts: any[];
   onImportComplete: () => void;
 }
@@ -43,6 +45,7 @@ interface UseEmployeeImportOptions {
 export function useEmployeeImport({
   departments,
   branches,
+  companies,
   shifts,
   onImportComplete,
 }: UseEmployeeImportOptions) {
@@ -138,6 +141,7 @@ export function useEmployeeImport({
         const dateOfBirth = n['dateofbirth'] || n['dob'] || n['birthday'];
         const email = n['email'] || n['emailaddress'] || '';
         const contactNumber = (n['contactnumber'] || n['phonenumber'] || n['phone'] || n['contact'] || '').replace(/\s/g, '');
+        const company = n['company'] || '';
         const department = n['department'] || n['dept'] || '';
         const branch = n['branch'] || '';
         const hireDate = n['hiredate'] || n['datehired'];
@@ -148,6 +152,7 @@ export function useEmployeeImport({
         if (!lastName) errors.push('Missing last name');
         if (!email) errors.push('Missing email');
         if (!contactNumber) errors.push('Missing contact');
+        if (!company) errors.push('Missing company');
         if (!department) errors.push('Missing department');
         if (!branch) errors.push('Missing branch');
 
@@ -158,6 +163,24 @@ export function useEmployeeImport({
 
         if (department && !deptNames.some(d => d.toLowerCase() === department.toLowerCase())) errors.push(`Invalid dept: ${department}`);
         if (branch && !branchNames.some(b => b.toLowerCase() === branch.toLowerCase())) errors.push(`Invalid branch: ${branch}`);
+
+        // Cross-validate: branch must belong to selected company
+        if (company && branch) {
+          const matchedBranch = branches.find((b: any) => b.name.toLowerCase() === branch.toLowerCase());
+          if (matchedBranch) {
+            const matchedCompany = companies.find(c => c.name.toLowerCase() === company.toLowerCase());
+            if (matchedCompany) {
+              const branchBelongsToCompany = matchedBranch.companies?.some(
+                (cb: any) => cb.companyId === matchedCompany.id
+              );
+              if (!branchBelongsToCompany) {
+                errors.push(`Branch '${branch}' does not belong to Company '${company}'`);
+              }
+            } else {
+              errors.push(`Invalid company: ${company}`);
+            }
+          }
+        }
 
         let resolvedShiftId: number | null = null;
         if (shiftCode) {
@@ -179,7 +202,7 @@ export function useEmployeeImport({
           _rowNumber: idx + 2,
           employeeNumber: empNum, firstName, lastName,
           middleName, suffix, gender, dateOfBirth,
-          email, contactNumber, department, branch,
+          email, contactNumber, company, department, branch,
           hireDate, shiftCode, shiftId: resolvedShiftId,
           status: errors.length === 0 ? 'valid' : 'invalid',
           reason: errors.length > 0 ? errors.join('; ') : undefined,
