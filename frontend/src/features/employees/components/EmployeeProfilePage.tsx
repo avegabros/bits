@@ -59,7 +59,7 @@ function StatusBadge({ status }: { status: string }) {
 export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePageProps) {
   const router = useRouter()
   const { employee, loading, error, refresh } = useEmployeeProfile(employeeId)
-  const { departments, branches, shifts } = useEmployees()
+  const { departments, branches, shifts, companies } = useEmployees()
 
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [editForm, setEditForm] = useState<Partial<Employee>>({})
@@ -328,6 +328,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
           editForm={editForm}
           departments={departments}
           branches={branches}
+          companies={companies}
           shifts={shifts}
           isSaving={isSaving}
           onFormChange={setEditForm}

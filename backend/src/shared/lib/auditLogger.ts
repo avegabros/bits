@@ -26,6 +26,7 @@ const ENTITY_TO_CATEGORY: Record<string, AuditCategory> = {
     'Shift': 'config',
     'Department': 'config',
     'Branch': 'config',
+    'Company': 'config',
     'Holiday': 'config',
     'System': 'system',
 };
