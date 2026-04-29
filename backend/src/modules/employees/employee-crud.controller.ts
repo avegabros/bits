@@ -935,9 +935,9 @@ export const resetEmployeePassword = async (req: Request, res: Response) => {
         );
 
         if (!emailSent) {
-            return res.status(200).json({
-                success: true,
-                message: "Password reset in database, but failed to send email. The temporary password is: " + generatedPassword,
+            return res.status(500).json({
+                success: false,
+                message: "Password was reset but the email could not be sent. Please verify SMTP configuration and try again.",
             });
         }
 
