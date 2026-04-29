@@ -21,8 +21,8 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
   const { collapsed, labelStyle } = useSidebarCollapsed(isCollapsed);
 
   const currentStatus = searchParams.get('status') || 'Active';
-  const isInactivePage = pathname === '/hr/employees' && currentStatus === 'Inactive';
-  const isOnEmployees = pathname === '/hr/employees';
+  const isInactivePage = pathname === '/hr/employees/inactive';
+  const isOnEmployees = pathname.startsWith('/hr/employees');
   const isOnReports = pathname.startsWith('/hr/reports');
   const isOnAdjust = pathname === '/hr/adjust';
   const isOnOrganization = pathname.startsWith('/hr/organization') || pathname.startsWith('/hr/branches');
@@ -68,7 +68,7 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
 
       {/* Employees (with submenu) */}
       <SidebarSubMenu
-        href="/hr/employees?status=Active"
+        href="/hr/employees"
         label="Employees"
         icon={Users}
         isGroupActive={isOnEmployees || isInactivePage}
@@ -79,7 +79,7 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
         onClose={onClose}
         subItems={[
           {
-            href: '/hr/employees?status=Inactive',
+            href: '/hr/employees/inactive',
             label: 'Inactive Employees',
             icon: UserX,
             isActive: isInactivePage,
