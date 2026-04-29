@@ -124,7 +124,7 @@ export function BaseSidebar({
       <nav 
         aria-label="Sidebar navigation"
         role="navigation"
-        className="flex-1 -mt-[30px] relative z-10 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide-hover scrollbar-slim"
+        className="flex-1 -mt-[30px] relative z-10 flex flex-col min-h-0 scrollbar-sidebar"
       >
         <ul ref={listRef} className="relative pb-4 pt-[30px]">
 

@@ -88,7 +88,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [branchesList, setBranchesList] = useState<{ id: number; name: string }[]>([])
+  const [branchesList, setBranchesList] = useState<{ id: number; name: string; companies?: { companyId: number; branchId: number; company: { id: number; name: string } }[] }[]>([])
+  const [companiesList, setCompaniesList] = useState<{ id: number; name: string }[]>([])
+  const [companyFilter, setCompanyFilter] = useState('All Companies')
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
   const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
 
@@ -121,7 +123,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const sortKeyStr = sortKey as string | null
 
   // ── Derived filter lists ──────────────────────────────────────────────────
-  const branches = ['All Branches', ...branchesList.map(b => b.name)]
+  const companies = ['All Companies', ...companiesList.map(c => c.name)]
+  const filteredBranchesList = companyFilter === 'All Companies'
+    ? branchesList
+    : branchesList.filter(b => b.companies?.some(link => link.company.name === companyFilter))
+  const branches = ['All Branches', ...filteredBranchesList.map(b => b.name)]
   const departments = ['All Departments', ...departmentsList.map(d => d.name)]
   const statuses = [
     { value: 'all', label: 'All Status' },
@@ -150,7 +156,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   }, [searchQuery])
 
   // ⚠️ FILTER RESET: page resets to 1 on any filter or date change
-  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter])
+  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter])
 
   // Fetch branches — on mount only
   useEffect(() => {
@@ -177,6 +183,25 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     }
     run()
   }, [])
+
+  // Fetch companies — on mount only
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const res = await fetch('/api/companies', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && data.companies) setCompaniesList(data.companies)
+        }
+      } catch { /* ignore */ }
+    }
+    run()
+  }, [])
+
+  // Reset branch filter when company changes
+  useEffect(() => {
+    setBranchFilter('All Branches')
+  }, [companyFilter])
 
   // ── Data Fetching ─────────────────────────────────────────────────────────
   const fetchRecords = useCallback(async () => {
@@ -318,6 +343,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
         // Apply client-side filters
         if (debouncedSearch) full = full.filter(r => r.employeeName.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        if (companyFilter !== 'All Companies') {
+          const validBranches = new Set(
+            branchesList
+              .filter(b => b.companies?.some(link => link.company.name === companyFilter))
+              .map(b => b.name)
+          )
+          full = full.filter(r => validBranches.has(r.branchName))
+        }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== 'All Departments') full = full.filter(r => r.department === deptFilter)
 
@@ -348,7 +381,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         setLoading(false)
       }
     }
-  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter])
+  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, branchesList])
 
   // SSE stream — teardown is managed internally by useAttendanceStream
   const handleStreamRecord = useCallback((payload: AttendanceStreamPayload) => {
@@ -576,11 +609,12 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     statusFilter, setStatusFilter,
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
+    companyFilter, setCompanyFilter,
     // Refs
     dateInputRef, dragScrollRef,
     // Data
     records, loading, error, stats,
-    branches, departments, statuses,
+    companies, branches, departments, statuses,
     // Sort
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     // Pagination

@@ -22,7 +22,7 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
 
   const currentStatus = searchParams.get('status') || 'Active';
   const isInactivePage = pathname === '/hr/employees' && currentStatus === 'Inactive';
-  const isOnEmployees = pathname === '/hr/employees';
+  const isOnEmployees = pathname.startsWith('/hr/employees');
   const isOnReports = pathname.startsWith('/hr/reports');
   const isOnAdjust = pathname === '/hr/adjust';
   const isOnOrganization = pathname.startsWith('/hr/organization') || pathname.startsWith('/hr/branches');
