@@ -197,7 +197,7 @@ export function AttendanceDesktopTable({
                     {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'holiday' ? 'Holiday' : row.displayStatus}
                   </span>
                   {row.isEdited && (
-                    <span 
+                    <span
                       title={row.notes || 'Manually adjusted'}
                       className="font-black text-[10px] uppercase px-2 py-0.5 rounded-full border whitespace-nowrap text-violet-500 bg-violet-500/10 border-violet-500/20 cursor-help"
                     >

@@ -1,10 +1,13 @@
-import { X as XIcon, Loader2 } from 'lucide-react'
-import type { Branch } from '../types'
+import { X as XIcon, Loader2, Check } from 'lucide-react'
+import type { Branch, Company } from '../types'
 
 interface EditBranchDialogProps {
   editingBranch: Branch | null
   editBranchName: string
   setEditBranchName: (name: string) => void
+  editBranchCompanyIds: number[]
+  setEditBranchCompanyIds: (ids: number[]) => void
+  companies: Company[]
   editBranchLoading: boolean
   editBranchError: string | null
   onSave: () => void
@@ -13,9 +16,18 @@ interface EditBranchDialogProps {
 
 export function EditBranchDialog({
   editingBranch, editBranchName, setEditBranchName,
+  editBranchCompanyIds, setEditBranchCompanyIds, companies,
   editBranchLoading, editBranchError, onSave, onCancel,
 }: EditBranchDialogProps) {
   if (!editingBranch) return null
+
+  const toggleCompany = (companyId: number) => {
+    if (editBranchCompanyIds.includes(companyId)) {
+      setEditBranchCompanyIds(editBranchCompanyIds.filter(id => id !== companyId))
+    } else {
+      setEditBranchCompanyIds([...editBranchCompanyIds, companyId])
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
@@ -23,7 +35,7 @@ export function EditBranchDialog({
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
           <div>
             <h3 className="text-white font-bold text-lg">Edit Branch</h3>
-            <p className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">Rename branch</p>
+            <p className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">Update branch details</p>
           </div>
           <button onClick={onCancel} className="text-white/80 hover:text-white transition-colors">
             <XIcon className="w-5 h-5" />
@@ -39,6 +51,44 @@ export function EditBranchDialog({
               onChange={e => setEditBranchName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && onSave()}
             />
+          </div>
+          <div>
+            <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Companies</label>
+            <p className="text-[10px] text-slate-300 mb-2">Select which companies this branch belongs to</p>
+            {companies.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No companies created yet</p>
+            ) : (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {companies.map(c => {
+                  const isChecked = editBranchCompanyIds.includes(c.id)
+                  return (
+                    <label
+                      key={c.id}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-violet-200 bg-violet-50'
+                          : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${
+                        isChecked ? 'bg-violet-500 border-violet-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isChecked && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={isChecked}
+                        onChange={() => toggleCompany(c.id)}
+                      />
+                      <span className={`text-sm font-medium ${isChecked ? 'text-violet-700' : 'text-slate-500'}`}>
+                        {c.name}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
           {editBranchError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{editBranchError}</p>}
         </div>

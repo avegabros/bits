@@ -8,7 +8,12 @@ export const getBranches = async (req: Request, res: Response) => {
         const branches = await prisma.branch.findMany({
             orderBy: {
                 name: 'asc'
-            }
+            },
+            include: {
+                companies: {
+                    include: { company: true },
+                },
+            },
         });
 
         res.json({
@@ -133,6 +138,9 @@ export const deleteBranch = async (req: Request, res: Response) => {
             });
         }
 
+        // Clean up CompanyBranch links before deleting
+        await prisma.companyBranch.deleteMany({ where: { branchId: id } });
+
         await prisma.branch.delete({ where: { id } });
 
         void auditDelete({
@@ -151,5 +159,110 @@ export const deleteBranch = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error deleting branch:', error);
         res.status(500).json({ success: false, message: 'Failed to delete branch' });
+    }
+};
+
+// POST /api/branches/:id/companies - Assign a company to a branch
+export const addCompanyToBranch = async (req: Request, res: Response) => {
+    try {
+        const branchId = parseInt(String(req.params.id));
+        if (isNaN(branchId)) {
+            return res.status(400).json({ success: false, message: 'Invalid branch ID' });
+        }
+
+        const { companyId } = req.body;
+        const companyIdNum = parseInt(String(companyId));
+        if (isNaN(companyIdNum)) {
+            return res.status(400).json({ success: false, message: 'Invalid company ID' });
+        }
+
+        const branch = await prisma.branch.findUnique({ where: { id: branchId } });
+        if (!branch) {
+            return res.status(404).json({ success: false, message: 'Branch not found' });
+        }
+
+        const company = await prisma.company.findUnique({ where: { id: companyIdNum } });
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+
+        // Check if already assigned
+        const existing = await prisma.companyBranch.findUnique({
+            where: { companyId_branchId: { companyId: companyIdNum, branchId } },
+        });
+        if (existing) {
+            return res.status(409).json({ success: false, message: 'Branch is already assigned to this company' });
+        }
+
+        await prisma.companyBranch.create({
+            data: { branchId, companyId: companyIdNum },
+        });
+
+        void auditUpdate({
+            entityType: 'Branch',
+            entityId: branchId,
+            performedBy: req.user?.employeeId,
+            source: 'admin-panel',
+            details: `Assigned branch "${branch.name}" to company "${company.name}"`,
+            correlationId: req.correlationId,
+        }, [{ field: 'Company Added', oldValue: '—', newValue: company.name }]);
+
+        // Return updated branch with all companies
+        const updated = await prisma.branch.findUnique({
+            where: { id: branchId },
+            include: { companies: { include: { company: true } } },
+        });
+
+        res.json({ success: true, branch: updated });
+    } catch (error) {
+        console.error('Error adding company to branch:', error);
+        res.status(500).json({ success: false, message: 'Failed to assign company' });
+    }
+};
+
+// DELETE /api/branches/:id/companies/:companyId - Unassign a company from a branch
+export const removeCompanyFromBranch = async (req: Request, res: Response) => {
+    try {
+        const branchId = parseInt(String(req.params.id));
+        const companyId = parseInt(String(req.params.companyId));
+        if (isNaN(branchId) || isNaN(companyId)) {
+            return res.status(400).json({ success: false, message: 'Invalid branch or company ID' });
+        }
+
+        const link = await prisma.companyBranch.findUnique({
+            where: { companyId_branchId: { companyId, branchId } },
+        });
+        if (!link) {
+            return res.status(404).json({ success: false, message: 'Assignment not found' });
+        }
+
+        const [branch, company] = await Promise.all([
+            prisma.branch.findUnique({ where: { id: branchId } }),
+            prisma.company.findUnique({ where: { id: companyId } }),
+        ]);
+
+        await prisma.companyBranch.delete({
+            where: { companyId_branchId: { companyId, branchId } },
+        });
+
+        void auditUpdate({
+            entityType: 'Branch',
+            entityId: branchId,
+            performedBy: req.user?.employeeId,
+            source: 'admin-panel',
+            details: `Unassigned branch "${branch?.name}" from company "${company?.name}"`,
+            correlationId: req.correlationId,
+        }, [{ field: 'Company Removed', oldValue: company?.name || '—', newValue: '—' }]);
+
+        // Return updated branch with all companies
+        const updated = await prisma.branch.findUnique({
+            where: { id: branchId },
+            include: { companies: { include: { company: true } } },
+        });
+
+        res.json({ success: true, branch: updated });
+    } catch (error) {
+        console.error('Error removing company from branch:', error);
+        res.status(500).json({ success: false, message: 'Failed to unassign company' });
     }
 };

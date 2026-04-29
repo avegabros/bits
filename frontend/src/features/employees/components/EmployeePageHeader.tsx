@@ -10,7 +10,8 @@ interface EmployeePageHeaderProps {
   isExporting: boolean;
   onExport: () => void;
   departments: { id: number; name: string }[];
-  branches: { id: number; name: string }[];
+  branches: any[];
+  companies: { id: number; name: string }[];
   shifts: any[];
   onImportComplete: () => void;
   isAddOpen: boolean;
@@ -20,7 +21,7 @@ interface EmployeePageHeaderProps {
 
 export function EmployeePageHeader({
   role, statusFilter, isExporting, onExport,
-  departments, branches, shifts, onImportComplete,
+  departments, branches, companies, shifts, onImportComplete,
   isAddOpen, setIsAddOpen, onRegisterEmployee,
 }: EmployeePageHeaderProps) {
   return (
@@ -53,7 +54,7 @@ export function EmployeePageHeader({
           <EmployeeImportModal departments={departments} branches={branches} shifts={shifts} onImportComplete={onImportComplete} />
         )}
         {(role === 'admin' || role === 'hr') && statusFilter === 'Active' && (
-          <EmployeeAddModal departments={departments} branches={branches} shifts={shifts} onSave={onRegisterEmployee} isOpen={isAddOpen} setIsOpen={setIsAddOpen} />
+          <EmployeeAddModal departments={departments} branches={branches} companies={companies} shifts={shifts} onSave={onRegisterEmployee} isOpen={isAddOpen} setIsOpen={setIsAddOpen} />
         )}
       </div>
     </div>

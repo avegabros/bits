@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
 
@@ -58,7 +59,11 @@ async function main() {
     // ──────────────────────────────────────────────
 
     // ──────────────────────────────────────────────
-    // 4.5. SyncConfig
+    // 4. Company
+    // ──────────────────────────────────────────────
+
+    // ──────────────────────────────────────────────
+    // 5. SyncConfig
     // ──────────────────────────────────────────────
     await prisma.syncConfig.upsert({
         where: { id: 1 },
@@ -79,7 +84,7 @@ async function main() {
     console.log('⚙️ Seeded sync config')
 
     // ──────────────────────────────────────────────
-    // 5. Employees
+    // 6. Employees
     // NOTE: zkId 1 is RESERVED for the ZKTeco device SUPER ADMIN — never use it.
     //       Employee zkIds start from 2.
     // ──────────────────────────────────────────────
@@ -91,11 +96,11 @@ async function main() {
             firstName: 'Admin',
             lastName: 'User',
             role: 'ADMIN' as const,
-            department: 'ADMIN',
+            department: null,
             position: 'System Administrator',
-            branch: 'NRA',
-            contactNumber: '09171234567',
-            employeeNumber: 'EMP001',
+            branch: null,
+            contactNumber: null,
+            employeeNumber: null,
             preferredZkId: null, // Admin doesn't need a ZK ID
         },
         {
@@ -118,7 +123,7 @@ async function main() {
         if (!existing) {
             // Determine safe zkId if provided — never use 1 (device SUPER ADMIN)
             let finalZkId: number | null = null
-            
+
             if (u.preferredZkId) {
                 const zkCheck = await prisma.employee.findUnique({ where: { zkId: u.preferredZkId } })
                 finalZkId = u.preferredZkId
@@ -129,8 +134,12 @@ async function main() {
             }
 
             // Look up the branch and department IDs for the FK relations.
-            const branchRow = await prisma.branch.findUnique({ where: { name: u.branch } })
-            const deptRow   = await prisma.department.findUnique({ where: { name: u.department } })
+            const branchRow = u.branch
+                ? await prisma.branch.findUnique({ where: { name: u.branch } })
+                : null
+            const deptRow = u.department
+                ? await prisma.department.findUnique({ where: { name: u.department } })
+                : null
 
             await prisma.employee.create({
                 data: {

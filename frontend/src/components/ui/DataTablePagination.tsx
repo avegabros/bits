@@ -24,7 +24,7 @@ export function DataTablePagination({
   loading = false,
   className = ''
 }: DataTablePaginationProps) {
-  
+
   const [inputValue, setInputValue] = useState(String(currentPage))
 
   useEffect(() => {
@@ -104,8 +104,8 @@ export function DataTablePagination({
           </button>
 
           {/* Current / Total */}
-          <div className="px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-sm min-w-[3rem] text-center">
-             <span className="text-xs font-bold text-slate-700">{currentPage}</span>
+          <div className="px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-sm min-w-12 text-center">
+            <span className="text-xs font-bold text-slate-700">{currentPage}</span>
           </div>
 
           {/* Next Page */}

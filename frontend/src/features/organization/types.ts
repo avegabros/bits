@@ -5,10 +5,25 @@ export interface Department {
   name: string
 }
 
+export interface Company {
+  id: number
+  name: string
+  logo?: string | null
+  address?: string | null
+  _count?: { branches: number }
+}
+
+export interface CompanyBranchLink {
+  companyId: number
+  branchId: number
+  company: { id: number; name: string; logo?: string | null; address?: string | null }
+}
+
 export interface Branch {
   id: number
   name: string
   address?: string | null
+  companies?: CompanyBranchLink[]
 }
 
 export const DEPT_COLORS = [

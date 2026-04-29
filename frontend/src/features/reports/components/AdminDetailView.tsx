@@ -39,7 +39,7 @@ export function AdminDetailView({
     onExport,
 }: AdminDetailViewProps) {
     return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center">
             <div className="bg-slate-50 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200/50">
                 {/* Modal Header */}
                 <div className="px-6 py-4 bg-white border-b border-slate-200/60 flex justify-between items-center shrink-0 relative">

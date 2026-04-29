@@ -1,23 +1,29 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Department, Branch } from '../types'
+import type { Department, Branch, Company } from '../types'
 
 interface DeleteConfirmDialogProps {
   confirmDeleteDept: Department | null
   confirmDeleteBranch: Branch | null
+  confirmDeleteCompany?: Company | null
   deleteLoading: boolean
   deleteError: string | null
   onCancel: () => void
   onDeleteDept: () => void
   onDeleteBranch: () => void
+  onDeleteCompany?: () => void
 }
 
 export function DeleteConfirmDialog({
-  confirmDeleteDept, confirmDeleteBranch,
+  confirmDeleteDept, confirmDeleteBranch, confirmDeleteCompany,
   deleteLoading, deleteError,
-  onCancel, onDeleteDept, onDeleteBranch,
+  onCancel, onDeleteDept, onDeleteBranch, onDeleteCompany,
 }: DeleteConfirmDialogProps) {
-  if (!confirmDeleteDept && !confirmDeleteBranch) return null
+  if (!confirmDeleteDept && !confirmDeleteBranch && !confirmDeleteCompany) return null
+
+  const entityType = confirmDeleteDept ? 'Department' : confirmDeleteBranch ? 'Branch' : 'Company'
+  const entityName = confirmDeleteDept?.name || confirmDeleteBranch?.name || confirmDeleteCompany?.name
+  const onDelete = confirmDeleteDept ? onDeleteDept : confirmDeleteBranch ? onDeleteBranch : (onDeleteCompany ?? (() => {}))
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
@@ -28,16 +34,21 @@ export function DeleteConfirmDialog({
           </div>
           <div>
             <h3 className="font-semibold text-foreground">
-              Remove {confirmDeleteDept ? 'Department' : 'Branch'}?
+              Remove {entityType}?
             </h3>
             <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
           </div>
         </div>
         <p className="text-sm text-foreground mb-2">
           Are you sure you want to remove <span className="font-medium">
-            {confirmDeleteDept?.name || confirmDeleteBranch?.name}
+            {entityName}
           </span>?
         </p>
+        {confirmDeleteCompany && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+            This company must have no branches assigned before it can be deleted.
+          </p>
+        )}
         {deleteError && (
           <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{deleteError}</p>
         )}
@@ -52,7 +63,7 @@ export function DeleteConfirmDialog({
           </Button>
           <Button
             className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-            onClick={confirmDeleteDept ? onDeleteDept : onDeleteBranch}
+            onClick={onDelete}
             disabled={deleteLoading}
           >
             {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Remove'}

@@ -47,7 +47,7 @@ export function WeeklyAttendanceChart({ weeklyData }: WeeklyAttendanceChartProps
                         <XAxis dataKey="day" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-chart-axis-primary)' }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 10, fontWeight: 600, fill: 'var(--color-chart-axis-secondary)' }} axisLine={false} tickLine={false} width={32} />
                         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)', radius: 4 }} />
-                        <Bar dataKey="present" fill="var(--color-chart-success)" radius={[4, 4, 0, 0]} name="Present">
+                        <Bar dataKey="present" fill="var(--color-chart-success)" radius={[4, 4, 0, 0]} name="On Time">
                             {weeklyData.map((entry, i) => <Cell key={i} opacity={entry.day === todayName ? 1 : 0.7} />)}
                         </Bar>
                         <Bar dataKey="late" fill="var(--color-chart-warning)" radius={[4, 4, 0, 0]} name="Late">
