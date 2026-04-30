@@ -28,19 +28,19 @@ export function AttendanceDesktopTable({
   handleDeleteClick,
 }: AttendanceDesktopTableProps) {
   return (
-    <table className="w-full text-left border-collapse min-w-[900px] bg-card">
+    <table className="w-full text-left border-collapse min-w-[800px] bg-card">
       <thead className="bg-secondary/50 backdrop-blur-sm border-b border-border">
         <tr>
-          <SortableHeader label="Employee"    sortKey="employeeName"     currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
-          <SortableHeader label="Shift"       sortKey="shiftCode"        currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="Clock In"    sortKey="checkIn"          currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="Clock Out"   sortKey="checkOut"         currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="Late"        sortKey="lateMinutes"      currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-yellow-500" />
-          <SortableHeader label="Reg Hrs"     sortKey="totalHours"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
-          <SortableHeader label="UT"          sortKey="undertimeMinutes" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-red-500" />
-          <SortableHeader label="Status"      sortKey="status"           currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <th className="px-4 py-4 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Actions</th>
+          <SortableHeader label="Employee"    sortKey="employeeName"     currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight" />
+          <SortableHeader label="Shift"       sortKey="shiftCode"        currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="Clock In"    sortKey="checkIn"          currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="Clock Out"   sortKey="checkOut"         currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="Late"        sortKey="lateMinutes"      currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-yellow-500" />
+          <SortableHeader label="Reg Hrs"     sortKey="totalHours"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
+          <SortableHeader label="UT"          sortKey="undertimeMinutes" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-red-500" />
+          <SortableHeader label="Status"      sortKey="status"           currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
+          <th className="px-2 py-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Actions</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -57,12 +57,25 @@ export function AttendanceDesktopTable({
           sortedRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map(row => (
             <tr key={row.id} className="hover:bg-primary/5 transition-colors duration-200 group cursor-default">
               {/* Employee */}
-              <td className="px-6 py-4 flex items-center gap-3 relative">
+              <td className="px-4 py-3 flex items-center gap-2 relative">
                 {row.isPending && (
                   <span title="Pending Request" className="absolute top-0 left-0 bg-yellow-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-md shadow-sm z-10 leading-none tracking-widest">PR</span>
                 )}
-                <div className="relative group/avatar">
-                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
+                <div className="relative group/avatar shrink-0">
+                  {row.profilePicture ? (
+                    <img 
+                      src={row.profilePicture} 
+                      alt={row.employeeName}
+                      className="w-8 h-8 rounded-full object-cover border border-border"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.employeeName)}&background=random`
+                      }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] uppercase tracking-tight">
+                      {row.employeeName.charAt(0)}
+                    </div>
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground leading-tight uppercase tracking-tight">{row.employeeName}</p>
@@ -70,7 +83,7 @@ export function AttendanceDesktopTable({
                 </div>
               </td>
               {/* Shift */}
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3 text-center">
                 {row.shiftCode ? (
                   <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode}</span>
                 ) : (
@@ -157,7 +170,7 @@ export function AttendanceDesktopTable({
                 )}
               </td>
               {/* Late */}
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3 text-center">
                 {row.lateMinutes > 0 ? (
                   <span className="text-[10px] font-black text-yellow-600 bg-yellow-50 border border-yellow-100 px-2.5 py-1 rounded-full whitespace-nowrap">{formatLate(row.lateMinutes)}</span>
                 ) : row.gracePeriodApplied ? (
@@ -169,20 +182,20 @@ export function AttendanceDesktopTable({
                 {row.isShiftActive ? <span className="text-slate-400 text-xs italic">Live</span> : fmtHours(Math.max(0, row.totalHours - (row.overtimeMinutes / 60)))}
               </td>
               {/* OT */}
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3 text-center">
                 <span className={`text-sm font-bold ${row.overtimeMinutes > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
                   {row.overtimeMinutes > 0 ? `+${fmtMins(row.overtimeMinutes)}` : '—'}
                 </span>
               </td>
               {/* UT */}
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3 text-center">
                 <span className={`text-sm font-bold ${row.undertimeMinutes > 0 ? 'text-red-500' : 'text-slate-300'}`}>
                   {row.undertimeMinutes > 0 ? `-${fmtMins(row.undertimeMinutes)}` : '—'}
                 </span>
               </td>
               {/* Status */}
-              <td className="px-4 py-4 text-center">
-                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              <td className="px-2 py-3 text-center">
+                <div className="flex flex-col items-center justify-center gap-1">
                   <span className={`font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${
                     row.displayStatus === 'present'           ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
                     : row.displayStatus === 'IN_PROGRESS'      ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
@@ -207,7 +220,7 @@ export function AttendanceDesktopTable({
                 </div>
               </td>
               {/* Actions */}
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3 text-center">
                 <div className="flex items-center justify-center gap-1">
                   <button onClick={() => handleEditClick(row)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
                     <Edit2 size={16} />

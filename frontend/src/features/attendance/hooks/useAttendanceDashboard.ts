@@ -19,7 +19,8 @@ interface RawAttendanceLog {
     suffix?: string
     Department?: { name: string }
     Branch?: { name: string }
-    Shift?: { shiftCode: string; isNightShift: boolean }
+    Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
+    profilePicture?: string | null
   }
   status: string
   checkInTime: string | null
@@ -55,7 +56,8 @@ interface RawEmployee {
   lastName: string
   Department?: { name: string }
   Branch?: { name: string }
-  Shift?: { shiftCode: string; isNightShift: boolean }
+  Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
+  profilePicture?: string | null
 }
 
 interface EditRequestBody {
@@ -259,6 +261,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             id: log.id,
             employeeId: log.employeeId,
             employeeName: emp?.firstName ? `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}` : 'Unknown',
+            profilePicture: emp?.profilePicture,
             department: emp?.Department?.name || 'General',
             branchName: emp?.Branch?.name || '—',
             date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
@@ -266,6 +269,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             checkOut: isPendingManualCreation ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
             status: computedStatus, 
             displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes, shiftCode,
+            shiftStartTime: emp?.Shift?.startTime,
+            shiftEndTime: emp?.Shift?.endTime,
             isNightShift: emp?.Shift?.isNightShift ?? false,
             isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
             notes: log.notes || null,
@@ -306,12 +311,15 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
               id: `absent-${e.id}`,
               employeeId: e.id,
               employeeName: `${e.firstName} ${e.lastName}`,
+              profilePicture: e.profilePicture,
               department: e.Department?.name || 'General',
               branchName: e.Branch?.name || '—',
               date: selectedDate,
               checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
               lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
               shiftCode: e.Shift?.shiftCode ?? null,
+              shiftStartTime: e.Shift?.startTime,
+              shiftEndTime: e.Shift?.endTime,
               isNightShift: e.Shift?.isNightShift ?? false,
               isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
               isEarlyPunch: false, isMissingCheckout: false,
