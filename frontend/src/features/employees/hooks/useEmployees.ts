@@ -20,6 +20,7 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
   const [selectedDept, setSelectedDept] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
+  const [selectedCompany, setSelectedCompany] = useState('All Companies');
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -65,7 +66,31 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     fetchDependencies();
   }, [fetchEmployees, fetchDependencies]);
 
+  // ── Company tab: derived lists ──────────────────────────────────────────────
+  const companyNames = useMemo(() => ['All Companies', ...companies.map(c => c.name)], [companies]);
+
+  const filteredBranches = useMemo(() => {
+    if (selectedCompany === 'All Companies') return branches;
+    return branches.filter((b: any) =>
+      b.companies?.some((link: any) => link.company.name === selectedCompany)
+    );
+  }, [branches, selectedCompany]);
+
+  // Reset branch filter when company changes
+  useEffect(() => {
+    setSelectedBranch('all');
+  }, [selectedCompany]);
+
   const filteredEmployees = useMemo(() => {
+    // Pre-compute valid branch names for the selected company
+    const companyBranchNames = selectedCompany === 'All Companies'
+      ? null
+      : new Set(
+          branches
+            .filter((b: any) => b.companies?.some((link: any) => link.company.name === selectedCompany))
+            .map((b: any) => b.name)
+        );
+
     return employees.filter((emp) => {
       const fullName = formatFullName(emp.firstName, emp.middleName, emp.lastName, emp.suffix).toLowerCase();
       const searchStr = searchTerm.toLowerCase().trim();
@@ -82,12 +107,13 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
         // Only compare zkId if the query is purely numeric (it's an Int)
         (isNumericSearch && emp.zkId === Number(searchStr));
 
+      const matchesCompany = !companyBranchNames || companyBranchNames.has(emp.Branch?.name || '');
       const matchesDept = selectedDept === 'all' || emp.Department?.name === selectedDept;
       const matchesBranch = selectedBranch === 'all' || emp.Branch?.name === selectedBranch;
       const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift;
-      return matchesSearch && matchesDept && matchesBranch && matchesShift;
+      return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift;
     });
-  }, [employees, searchTerm, selectedDept, selectedBranch, selectedShift]);
+  }, [employees, searchTerm, selectedCompany, branches, selectedDept, selectedBranch, selectedShift]);
 
   const tableSort = useTableSort<Employee>({ initialData: filteredEmployees });
 
@@ -150,7 +176,9 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     rawEmployees: employees,
     departments,
     branches,
+    filteredBranches,
     companies,
+    companyNames,
     shifts,
     loading,
     refresh: fetchEmployees,
@@ -162,7 +190,9 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
       selectedBranch,
       setSelectedBranch,
       selectedShift,
-      setSelectedShift
+      setSelectedShift,
+      selectedCompany,
+      setSelectedCompany,
     },
     tableSort,
     actions: {

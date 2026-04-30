@@ -3,12 +3,13 @@
 export const dynamic = 'force-dynamic'
 
 import React, { Suspense } from 'react'
-import { AlertCircle, Calendar as CalendarIcon, Download } from 'lucide-react'
+import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle } from 'lucide-react'
 import ToastContainer from '@/components/ui/ToastContainer'
 import { AttendanceStats } from '@/features/attendance/components/AttendanceStats'
 import { AttendanceFilters } from '@/features/attendance/components/AttendanceFilters'
 import { AttendanceTable } from '@/features/attendance/components/AttendanceTable'
 import { AttendanceEditModal } from '@/features/attendance/components/AttendanceEditModal'
+import { CompanyTabs } from '@/features/attendance/components/CompanyTabs'
 import { useAttendanceDashboard } from '@/features/attendance/hooks/useAttendanceDashboard'
 
 export interface AttendanceDashboardProps {
@@ -22,9 +23,10 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
     statusFilter, setStatusFilter,
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
-    dateInputRef, dragScrollRef,
+    companyFilter, setCompanyFilter,
+    dateInputRef,
     records, loading, error, stats,
-    branches, departments, statuses,
+    companies, branches, departments, statuses,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     editingLog, setEditingLog,
@@ -42,72 +44,120 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Premium Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">Attendance Logs</h1>
-          <p className="text-slate-500 text-sm font-medium mt-0.5">
-            {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', {
-              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
-            })}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Fingerprint className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">Biometric Attendance</h2>
+            <p className="text-muted-foreground text-sm font-medium">
+              {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
+              })}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <input type="date" ref={dateInputRef} className="absolute opacity-0 pointer-events-none"
-            onChange={e => setSelectedDate(e.target.value)} value={selectedDate} />
-          <button onClick={() => dateInputRef.current?.showPicker()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 hover:border-red-200 transition-all shadow-sm">
-            <CalendarIcon className="w-4 h-4 text-red-500" />
+          <input
+            type="date"
+            ref={dateInputRef}
+            className="absolute opacity-0 pointer-events-none"
+            onChange={(e) => setSelectedDate(e.target.value)}
+            value={selectedDate}
+          />
+          <button
+            onClick={() => {
+              if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
+                dateInputRef.current.showPicker()
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-secondary border border-border rounded-xl text-sm font-bold text-foreground hover:bg-secondary/80 transition-all shadow-sm"
+          >
+            <CalendarIcon className="w-4 h-4 text-primary" />
             <span>
               {selectedDate === getTodayDate()
-                ? 'Today, ' + new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                ? `Today, ${new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
                 : new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </span>
           </button>
-          <button onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 active:scale-95">
-            <Download className="w-4 h-4" /> Export Log
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95"
+          >
+            <Download className="w-4 h-4" /> Export
           </button>
         </div>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-xl flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />{error}
+          <AlertCircle className="w-4 h-4" />
+          {error}
         </div>
       )}
 
-      <AttendanceStats stats={stats} />
+      {selectedDate > getTodayDate() && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-sm font-medium px-4 py-3 rounded-xl">
+          <span>🗓️</span>
+          <span>You are viewing a future date — attendance has not been recorded yet.</span>
+        </div>
+      )}
 
-      <AttendanceFilters
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        branchFilter={branchFilter}
-        setBranchFilter={setBranchFilter}
-        deptFilter={deptFilter}
-        setDeptFilter={setDeptFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        branches={branches}
-        departments={departments}
-        statuses={statuses}
-      />
+      {/* Stats Grid */}
+      <AttendanceStats stats={stats} variant="admin" />
 
-      <AttendanceTable
-        loading={loading}
-        records={records}
-        sortedRecords={sortedRecords}
-        sortKeyStr={sortKeyStr}
-        sortOrder={sortOrder}
-        handleSort={handleSort}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        totalPages={totalPages}
-        rowsPerPage={rowsPerPage}
-        handleEditClick={handleEditClick}
-        handleDeleteClick={handleDeleteClick}
-        dragScrollRef={dragScrollRef}
-      />
+      {/* Company Tabs + Filters + Table (tighter spacing) */}
+      <div className="space-y-2">
+        <CompanyTabs
+          activeCompany={companyFilter}
+          onCompanyChange={setCompanyFilter}
+          companies={companies}
+        />
+
+        {/* Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <AttendanceFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            branchFilter={branchFilter}
+            setBranchFilter={setBranchFilter}
+            deptFilter={deptFilter}
+            setDeptFilter={setDeptFilter}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            branches={branches}
+            departments={departments}
+            statuses={statuses}
+          />
+        </div>
+
+        {/* Table Card (with integrated stats header) */}
+        <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border rounded-tl-1">
+          <AttendanceTable
+            loading={loading}
+            records={records}
+            sortedRecords={sortedRecords}
+            sortKeyStr={sortKeyStr}
+            sortOrder={sortOrder}
+            handleSort={handleSort}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            totalPages={totalPages}
+            rowsPerPage={rowsPerPage}
+            handleEditClick={handleEditClick}
+            handleDeleteClick={handleDeleteClick}
+            showStatsHeader={true}
+            stats={{
+              onTime: stats.onTime,
+              late: stats.late,
+              absent: stats.absent,
+              total: stats.total,
+            }}
+          />
+        </div>
+      </div>
 
       <AttendanceEditModal
         editingLog={editingLog}
@@ -126,17 +176,20 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
       />
 
       {deletingLog && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
             <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
                 <AlertCircle size={20} />
-                Delete Request
+                {role === 'admin' ? 'Delete Record' : 'Delete Request'}
               </h3>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm font-medium text-slate-700">
-                Are you sure you want to request deletion for <span className="font-bold">{deletingLog.employeeName}</span> on {deletingLog.date}?
+                {role === 'admin'
+                  ? <>Are you sure you want to delete the attendance record for <span className="font-bold">{deletingLog.employeeName}</span> on {deletingLog.date}?</>
+                  : <>Are you sure you want to request deletion for <span className="font-bold">{deletingLog.employeeName}</span> on {deletingLog.date}?</>
+                }
               </p>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">Reason for Deletion <span className="text-red-500">*</span></label>
@@ -161,7 +214,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
                 disabled={actionLoading || !deleteReason.trim()}
                 className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {actionLoading ? 'Submitting...' : 'Submit Request'}
+                {actionLoading ? (role === 'admin' ? 'Deleting...' : 'Submitting...') : (role === 'admin' ? 'Delete' : 'Submit Request')}
               </button>
             </div>
           </div>
@@ -175,7 +228,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
 
 export default function AttendanceDashboard({ role }: AttendanceDashboardProps) {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-medium">Loading workspace...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-medium">Loading attendance workspace...</div>}>
       <AttendanceContent role={role} />
     </Suspense>
   )

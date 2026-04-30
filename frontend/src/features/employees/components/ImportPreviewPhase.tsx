@@ -42,6 +42,7 @@ export function ImportPreviewPhase({
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Emp. No.</th>
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">First Name</th>
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Last Name</th>
+              <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Company</th>
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Department</th>
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Branch</th>
               <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-400 uppercase">Status</th>
@@ -54,6 +55,7 @@ export function ImportPreviewPhase({
                 <td className="px-3 py-2 font-bold text-slate-700">{row.employeeNumber || '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{row.firstName || '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{row.lastName || '—'}</td>
+                <td className="px-3 py-2 text-slate-600">{row.company || '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{row.department || '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{row.branch || '—'}</td>
                 <td className="px-3 py-2">

@@ -7,7 +7,7 @@ import { AttendanceStats } from './AttendanceStats';
 import { AttendanceFilters } from './AttendanceFilters';
 import { AttendanceTable } from './AttendanceTable';
 import { AttendanceEditModal } from './AttendanceEditModal';
-import { BranchTabs } from './BranchTabs';
+import { CompanyTabs } from './CompanyTabs';
 import ToastContainer from '@/components/ui/ToastContainer';
 
 function AdminAttendanceContent() {
@@ -17,9 +17,10 @@ function AdminAttendanceContent() {
     statusFilter, setStatusFilter,
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
+    companyFilter, setCompanyFilter,
     dateInputRef,
     records, loading, error, stats,
-    branches, departments, statuses,
+    branches, companies, departments, statuses,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     editingLog, setEditingLog,
@@ -101,54 +102,55 @@ function AdminAttendanceContent() {
       {/* Stats Grid */}
       <AttendanceStats stats={stats} variant="admin" />
 
-      {/* Branch Tabs */}
-      <BranchTabs
-        activeBranchId={branchFilter}
-        onBranchChange={setBranchFilter}
-        branches={branches}
-      />
-
-      {/* Filter Bar - Now between Tabs and Attendance Logs */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <AttendanceFilters
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          branchFilter={branchFilter}
-          setBranchFilter={setBranchFilter}
-          deptFilter={deptFilter}
-          setDeptFilter={setDeptFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          branches={branches}
-          departments={departments}
-          statuses={statuses}
-          hideBranchFilter={true}
+      {/* Company Tabs + Filters + Table (tighter spacing) */}
+      <div className="space-y-2">
+        <CompanyTabs
+          activeCompany={companyFilter}
+          onCompanyChange={setCompanyFilter}
+          companies={companies}
         />
-      </div>
 
-      {/* Table Card (with integrated stats header) */}
-      <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border rounded-tl-1">
-        <AttendanceTable
-          loading={loading}
-          records={records}
-          sortedRecords={sortedRecords}
-          sortKeyStr={sortKeyStr}
-          sortOrder={sortOrder}
-          handleSort={handleSort}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          totalPages={totalPages}
-          rowsPerPage={rowsPerPage}
-          handleEditClick={handleEditClick}
-          handleDeleteClick={handleDeleteClick}
-          showStatsHeader={true}
-          stats={{
-            onTime: stats.onTime,
-            late: stats.late,
-            absent: stats.absent,
-            total: stats.total,
-          }}
-        />
+        {/* Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <AttendanceFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            branchFilter={branchFilter}
+            setBranchFilter={setBranchFilter}
+            deptFilter={deptFilter}
+            setDeptFilter={setDeptFilter}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            branches={branches}
+            departments={departments}
+            statuses={statuses}
+          />
+        </div>
+
+        {/* Table Card (with integrated stats header) */}
+        <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border rounded-tl-1">
+          <AttendanceTable
+            loading={loading}
+            records={records}
+            sortedRecords={sortedRecords}
+            sortKeyStr={sortKeyStr}
+            sortOrder={sortOrder}
+            handleSort={handleSort}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            totalPages={totalPages}
+            rowsPerPage={rowsPerPage}
+            handleEditClick={handleEditClick}
+            handleDeleteClick={handleDeleteClick}
+            showStatsHeader={true}
+            stats={{
+              onTime: stats.onTime,
+              late: stats.late,
+              absent: stats.absent,
+              total: stats.total,
+            }}
+          />
+        </div>
       </div>
 
       <AttendanceEditModal
@@ -168,7 +170,7 @@ function AdminAttendanceContent() {
       />
 
       {deletingLog && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
             <div className="p-5 bg-red-600 text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">

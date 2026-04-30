@@ -9,7 +9,8 @@ import { ImportResultsPhase } from './ImportResultsPhase';
 
 interface EmployeeImportModalProps {
   departments: { id: number; name: string }[];
-  branches: { id: number; name: string }[];
+  branches: any[];
+  companies: { id: number; name: string }[];
   shifts: any[];
   onImportComplete: () => void;
 }
@@ -26,7 +27,7 @@ const STEP_MAX_WIDTH: Record<string, string> = {
   results: 'sm:max-w-3xl',
 };
 
-export function EmployeeImportModal({ departments, branches, shifts, onImportComplete }: EmployeeImportModalProps) {
+export function EmployeeImportModal({ departments, branches, companies, shifts, onImportComplete }: EmployeeImportModalProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const {
@@ -47,7 +48,7 @@ export function EmployeeImportModal({ departments, branches, shifts, onImportCom
     downloadTemplate,
     submitImport,
     resetImport,
-  } = useEmployeeImport({ departments, branches, shifts, onImportComplete });
+  } = useEmployeeImport({ departments, branches, companies, shifts, onImportComplete });
 
   const closeAndReset = () => {
     setIsOpen(false);

@@ -138,11 +138,21 @@ export const exportTemplate = async (req: Request, res: Response) => {
         const workbook = new ExcelJS.Workbook();
 
         // ── Fetch reference data first (needed for dropdown ranges) ───────────
-        const [departments, branches, shifts] = await Promise.all([
+        const [departments, branches, shifts, companies] = await Promise.all([
             prisma.department.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
             prisma.branch.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
             prisma.shift.findMany({ select: { shiftCode: true, name: true }, orderBy: { shiftCode: 'asc' } }),
+            prisma.company.findMany({
+                select: { name: true, branches: { include: { branch: true } } },
+                orderBy: { name: 'asc' },
+            }),
         ]);
+
+        // ── Helper: sanitize company name to a valid Excel named range identifier ──
+        // Replaces every non-alphanumeric character with '_', prefixed with 'C_', suffixed with '_BRANCHES'
+        const sanitizeForNamedRange = (name: string): string => {
+            return 'C_' + name.replace(/[^A-Za-z0-9]/g, '_') + '_BRANCHES';
+        };
 
         // ── Sheet 1: Employee Import ──────────────────────────────────────────
         const sheet1 = workbook.addWorksheet('Employee Import');
@@ -156,11 +166,12 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { header: 'Gender', key: 'gender', width: 14, required: false, hint: 'Male / Female / Prefer not to say' },
             { header: 'Date of Birth', key: 'dateOfBirth', width: 18, required: false, hint: 'YYYY-MM-DD format' },
             { header: 'Email', key: 'email', width: 28, required: true, hint: 'Valid email (login credentials sent here)' },
-            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: '11 digits (e.g. 09171234567)' },
+            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: '+63 format (e.g. +639171234567) or 0XXXXXXXXXX — auto-converted' },
+            { header: 'Company', key: 'company', width: 24, required: true, hint: 'Select from dropdown (see Reference Lists)' },
+            { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (filtered by Company)' },
             { header: 'Department', key: 'department', width: 20, required: true, hint: 'Select from dropdown (see Reference Lists)' },
-            { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Hire Date', key: 'hireDate', width: 16, required: false, hint: 'YYYY-MM-DD format' },
-            { header: 'Shift Code', key: 'shiftCode', width: 16, required: false, hint: 'Select from dropdown (see Reference Lists)' },
+            { header: 'Shift Code', key: 'shiftCode', width: 16, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Status', key: 'employmentStatus', width: 14, required: false, hint: 'ACTIVE (default) / INACTIVE' },
         ];
 
@@ -266,15 +277,34 @@ export const exportTemplate = async (req: Request, res: Response) => {
             }
         }
 
-        // Branch dropdown — references 'Reference Lists' sheet column B
-        if (branches.length > 0) {
-            const branchLastRow = 2 + branches.length;
+        // Company dropdown — references 'Reference Lists' sheet column E
+        if (companies.length > 0) {
+            const companyLastRow = 2 + companies.length;
+            const companyCol = colLetter(colIndex['company']);
+            for (let r = DATA_START_ROW; r <= DATA_END_ROW; r++) {
+                sheet1.getCell(`${companyCol}${r}`).dataValidation = {
+                    type: 'list',
+                    formulae: [`='Reference Lists'!$E$3:$E$${companyLastRow}`],
+                    ...validationBase,
+                };
+            }
+        }
+
+        // Branch dropdown — cascading from Company via INDIRECT + named ranges
+        // The SUBSTITUTE chain mirrors the server-side sanitizeForNamedRange function:
+        //   - spaces → _, dots → _, commas → _, apostrophes → _, other special chars handled by the sanitization
+        {
             const branchCol = colLetter(colIndex['branch']);
+            const companyCol = colLetter(colIndex['company']);
             for (let r = DATA_START_ROW; r <= DATA_END_ROW; r++) {
                 sheet1.getCell(`${branchCol}${r}`).dataValidation = {
                     type: 'list',
-                    formulae: [`='Reference Lists'!$B$3:$B$${branchLastRow}`],
-                    ...validationBase,
+                    formulae: [
+                        `=INDIRECT("C_"&SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${companyCol}${r}," ","_"),".","_"),",","_"),"'","_"),"-","_"),"&","_")&"_BRANCHES")`
+                    ],
+                    showErrorMessage: true,
+                    errorTitle: 'Invalid branch',
+                    error: 'Please select a Company first, then choose a Branch from the dropdown',
                 };
             }
         }
@@ -320,6 +350,7 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { key: 'branch', width: 30 },
             { key: 'shiftCode', width: 24 },
             { key: 'shiftName', width: 28 },
+            { key: 'company', width: 30 },
         ];
 
         // Row 1: Section title
@@ -330,7 +361,7 @@ export const exportTemplate = async (req: Request, res: Response) => {
 
         // Row 2: Column headers with descriptive names
         const refHeaderRow = sheet2.getRow(2);
-        const refHeaders = ['Departments (copy exactly)', 'Branches (copy exactly)', 'Shift Codes (copy exactly)', 'Shift Name (for reference)'];
+        const refHeaders = ['Departments (copy exactly)', 'Branches (copy exactly)', 'Shift Codes (copy exactly)', 'Shift Name (for reference)', 'Companies (copy exactly)'];
         refHeaders.forEach((h, idx) => {
             const cell = refHeaderRow.getCell(idx + 1);
             cell.value = h;
@@ -341,15 +372,51 @@ export const exportTemplate = async (req: Request, res: Response) => {
         refHeaderRow.commit();
 
         // Row 3+: Fill data
-        const maxRefRows = Math.max(departments.length, branches.length, shifts.length);
+        const maxRefRows = Math.max(departments.length, branches.length, shifts.length, companies.length);
         for (let i = 0; i < maxRefRows; i++) {
             const row = sheet2.getRow(i + 3);
             row.getCell(1).value = departments[i]?.name || '';
             row.getCell(2).value = branches[i]?.name || '';
             row.getCell(3).value = shifts[i]?.shiftCode || '';
             row.getCell(4).value = shifts[i]?.name || '';
+            row.getCell(5).value = companies[i]?.name || '';
             row.commit();
         }
+
+        // ── Hidden Sheet: _Lookups (per-company branch lists + named ranges) ──
+        const lookupsSheet = workbook.addWorksheet('_Lookups');
+        lookupsSheet.state = 'hidden';
+
+        companies.forEach((company, colIdx) => {
+            const col = colIdx + 1;
+            // Row 1: Company name as header
+            lookupsSheet.getCell(1, col).value = company.name;
+            lookupsSheet.getCell(1, col).font = { bold: true, size: 9 };
+
+            // Rows 2+: Branch names belonging to this company
+            const companyBranches = company.branches.map(cb => cb.branch.name).sort();
+            companyBranches.forEach((branchName, rowIdx) => {
+                lookupsSheet.getCell(rowIdx + 2, col).value = branchName;
+            });
+
+            // Define named range for this company's branch list
+            const rangeName = sanitizeForNamedRange(company.name);
+            const colLetterStr = colLetter(col);
+            if (companyBranches.length > 0) {
+                const lastRow = 1 + companyBranches.length;
+                // ExcelJS definedNames: add a named range pointing to the branch cells
+                workbook.definedNames.add(
+                    `'_Lookups'!$${colLetterStr}$2:$${colLetterStr}$${lastRow}`,
+                    rangeName
+                );
+            } else {
+                // Even if no branches, define a range pointing to an empty cell to avoid #REF errors
+                workbook.definedNames.add(
+                    `'_Lookups'!$${colLetterStr}$2:$${colLetterStr}$2`,
+                    rangeName
+                );
+            }
+        });
 
         // ── Sheet 3: Instructions ─────────────────────────────────────────────
         const sheet3 = workbook.addWorksheet('Instructions');
@@ -360,9 +427,9 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '',
             '⚠️  ALWAYS DOWNLOAD A FRESH TEMPLATE BEFORE EACH IMPORT',
             'This template is generated live from the database. The dropdown lists for',
-            'Department, Branch, and Shift Code reflect what is currently in the system.',
+            'Company, Department, Branch, and Shift Code reflect what is currently in the system.',
             '',
-            'If new departments, branches, or shifts have been added since you last',
+            'If new companies, departments, branches, or shifts have been added since you last',
             'downloaded this template, your old copy will NOT include them in the dropdowns.',
             '',
             'Rule: Never reuse an old template. Always click "Download Template"',
@@ -377,42 +444,50 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '   • First Name — Legal first name of the employee',
             '   • Last Name — Legal last name of the employee',
             '   • Email — Valid email address (login credentials will be sent here)',
-            '   • Contact Number — 11-digit Philippine mobile number (e.g. 09171234567)',
+            '   • Contact Number — Philippine mobile number (e.g. +639171234567 or 09171234567 — auto-converted)',
+            '   • Company — Select from the dropdown (must be selected BEFORE Branch)',
+            '   • Branch — Filtered by Company. Select Company first, then Branch.',
             '   • Department — Select from the dropdown (values from Reference Lists)',
-            '   • Branch — Select from the dropdown (values from Reference Lists)',
             '',
             '2. OPTIONAL FIELDS (orange headers on Sheet 1):',
-            '   • Middle Name, Suffix, Gender, Date of Birth, Hire Date, Shift Code, Status',
+            '   • Middle Name, Suffix, Gender, Date of Birth, Hire Date, Status',
             '',
-            '3. DATE FORMAT:',
+            '3. COMPANY → BRANCH (CASCADING DROPDOWN):',
+            '   • The Company column must be filled BEFORE selecting a Branch',
+            '   • Branch choices are automatically filtered based on the selected Company',
+            '   • If the Branch dropdown appears empty, re-select the Company value first',
+            '   • Each Company only shows branches that are assigned to it in the system',
+            '',
+            '4. DATE FORMAT:',
             '   • Use YYYY-MM-DD format (e.g. 2025-01-15)',
             '   • Both Date of Birth and Hire Date follow this format',
             '',
-            '4. PHONE NUMBER FORMAT:',
-            '   • Must be exactly 11 digits',
-            '   • Example: 09171234567',
-            '   • Do not include spaces, dashes, or country code',
+            '5. PHONE NUMBER FORMAT:',
+            '   • Accepted: +639171234567, 09171234567, 639171234567, or 9171234567',
+            '   • Numbers starting with 0 or without +63 are auto-converted to +63 format',
+            '   • Spaces and dashes are stripped automatically',
             '',
-            '5. GENDER OPTIONS:',
+            '6. GENDER OPTIONS:',
             '   • Male',
             '   • Female',
             '   • Prefer not to say',
             '',
-            '6. SUFFIX OPTIONS:',
+            '7. SUFFIX OPTIONS:',
             '   • Jr., Sr., II, III, IV, V (or leave blank)',
             '',
-            '7. DROPDOWNS:',
-            '   • Department, Branch, Shift Code, Gender, and Suffix columns have dropdown lists',
+            '8. DROPDOWNS:',
+            '   • Company, Department, Branch, Shift Code, Gender, and Suffix columns have dropdown lists',
             '   • Click a cell in those columns to see the arrow and select a value',
             '   • Typing an invalid value will show an error — use the dropdown instead',
+            '   • Branch dropdown is dependent on Company — always fill Company first',
             '',
-            '8. WHAT HAPPENS AFTER IMPORT:',
+            '9. WHAT HAPPENS AFTER IMPORT:',
             '   • Each employee will be created with ACTIVE status and USER role',
             '   • A random password will be generated and emailed to each employee',
             '   • Employees will be prompted to change their password on first login',
             '   • The employee will be synced to biometric devices automatically',
             '',
-            '9. TIPS:',
+            '10. TIPS:',
             '   • The hint row (row 3) will be automatically skipped during import',
             '   • Duplicate employee numbers or emails will be rejected',
             '   • Row 1 is a color legend — leave it as-is, the system ignores it',
@@ -542,16 +617,16 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             password: hashedPassword,
                             role: 'USER',
                             departmentId: emp.department
-                                ? (await prisma.department.findFirst({ 
-                                    where: { name: { equals: emp.department, mode: 'insensitive' } }, 
-                                    select: { id: true } 
+                                ? (await prisma.department.findFirst({
+                                    where: { name: { equals: emp.department, mode: 'insensitive' } },
+                                    select: { id: true }
                                 }))?.id ?? null
                                 : null,
                             position: null,
                             branchId: emp.branch
-                                ? (await prisma.branch.findFirst({ 
-                                    where: { name: { equals: emp.branch, mode: 'insensitive' } }, 
-                                    select: { id: true } 
+                                ? (await prisma.branch.findFirst({
+                                    where: { name: { equals: emp.branch, mode: 'insensitive' } },
+                                    select: { id: true }
                                 }))?.id ?? null
                                 : null,
                             contactNumber: emp.contactNumber || null,

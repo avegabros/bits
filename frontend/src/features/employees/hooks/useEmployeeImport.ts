@@ -15,6 +15,7 @@ export interface ParsedImportRow {
   dateOfBirth?: string;
   email: string;
   contactNumber: string;
+  company: string;
   department: string;
   branch: string;
   hireDate?: string;
@@ -35,7 +36,8 @@ export type ImportStep = 'select' | 'preview' | 'results';
 
 interface UseEmployeeImportOptions {
   departments: { id: number; name: string }[];
-  branches: { id: number; name: string }[];
+  branches: any[];
+  companies: { id: number; name: string }[];
   shifts: any[];
   onImportComplete: () => void;
 }
@@ -43,6 +45,7 @@ interface UseEmployeeImportOptions {
 export function useEmployeeImport({
   departments,
   branches,
+  companies,
   shifts,
   onImportComplete,
 }: UseEmployeeImportOptions) {
@@ -137,7 +140,20 @@ export function useEmployeeImport({
         const gender = n['gender'];
         const dateOfBirth = n['dateofbirth'] || n['dob'] || n['birthday'];
         const email = n['email'] || n['emailaddress'] || '';
-        const contactNumber = (n['contactnumber'] || n['phonenumber'] || n['phone'] || n['contact'] || '').replace(/\s/g, '');
+        // Fix 3: Extract contact from raw row to prevent Excel numeric formatting issues
+        const contactRawKey = Object.keys(raw).find(k => ['contactnumber', 'phonenumber', 'phone', 'contact'].includes(k.replace(/[\s_]+/g, '').toLowerCase()));
+        const contactRawVal = contactRawKey ? raw[contactRawKey] : '';
+        const contactNumber = typeof contactRawVal === 'number' ? String(Math.round(contactRawVal)) : String(contactRawVal ?? '').replace(/\.0+$/, '');
+        // Fix 2: Normalize phone — silently convert any common PH format to +63XXXXXXXXXX
+        const normalizePhone = (raw: string): string => {
+          const cleaned = String(raw).replace(/[\s\-().]/g, '').trim();
+          if (cleaned.startsWith('0') && cleaned.length === 11) return '+63' + cleaned.slice(1);
+          if (cleaned.startsWith('63') && cleaned.length === 12) return '+' + cleaned;
+          if (/^\d{10}$/.test(cleaned)) return '+63' + cleaned;
+          return cleaned;
+        };
+        const normalizedContact = normalizePhone(contactNumber);
+        const company = n['company'] || '';
         const department = n['department'] || n['dept'] || '';
         const branch = n['branch'] || '';
         const hireDate = n['hiredate'] || n['datehired'];
@@ -147,17 +163,37 @@ export function useEmployeeImport({
         if (!firstName) errors.push('Missing first name');
         if (!lastName) errors.push('Missing last name');
         if (!email) errors.push('Missing email');
-        if (!contactNumber) errors.push('Missing contact');
+        if (!normalizedContact) errors.push('Missing contact');
+        if (!company) errors.push('Missing company');
         if (!department) errors.push('Missing department');
         if (!branch) errors.push('Missing branch');
+        if (!shiftCode || !shiftCode.trim()) errors.push('Missing shift');
 
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Invalid email format');
-        if (contactNumber && contactNumber.replace(/\D/g, '').length !== 11) errors.push('Contact must be 11 digits');
+        if (normalizedContact && !/^\+63\d{10}$/.test(normalizedContact)) errors.push('Contact must be in +63XXXXXXXXXX format (e.g. +639171234567)');
         if (dateOfBirth && isNaN(Date.parse(dateOfBirth))) errors.push('Invalid date of birth');
         if (hireDate && isNaN(Date.parse(hireDate))) errors.push('Invalid hire date');
 
         if (department && !deptNames.some(d => d.toLowerCase() === department.toLowerCase())) errors.push(`Invalid dept: ${department}`);
         if (branch && !branchNames.some(b => b.toLowerCase() === branch.toLowerCase())) errors.push(`Invalid branch: ${branch}`);
+
+        // Cross-validate: branch must belong to selected company
+        if (company && branch) {
+          const matchedBranch = branches.find((b: any) => b.name.toLowerCase() === branch.toLowerCase());
+          if (matchedBranch) {
+            const matchedCompany = companies.find(c => c.name.toLowerCase() === company.toLowerCase());
+            if (matchedCompany) {
+              const branchBelongsToCompany = matchedBranch.companies?.some(
+                (cb: any) => cb.companyId === matchedCompany.id
+              );
+              if (!branchBelongsToCompany) {
+                errors.push(`Branch '${branch}' does not belong to Company '${company}'`);
+              }
+            } else {
+              errors.push(`Invalid company: ${company}`);
+            }
+          }
+        }
 
         let resolvedShiftId: number | null = null;
         if (shiftCode) {
@@ -179,7 +215,7 @@ export function useEmployeeImport({
           _rowNumber: idx + 2,
           employeeNumber: empNum, firstName, lastName,
           middleName, suffix, gender, dateOfBirth,
-          email, contactNumber, department, branch,
+          email, contactNumber: normalizedContact, company, department, branch,
           hireDate, shiftCode, shiftId: resolvedShiftId,
           status: errors.length === 0 ? 'valid' : 'invalid',
           reason: errors.length > 0 ? errors.join('; ') : undefined,

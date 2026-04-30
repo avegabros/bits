@@ -51,7 +51,7 @@ export function EmployeePageHeader({
           </Button>
         )}
         {role === 'admin' && statusFilter === 'Active' && (
-          <EmployeeImportModal departments={departments} branches={branches} shifts={shifts} onImportComplete={onImportComplete} />
+          <EmployeeImportModal departments={departments} branches={branches} companies={companies} shifts={shifts} onImportComplete={onImportComplete} />
         )}
         {(role === 'admin' || role === 'hr') && statusFilter === 'Active' && (
           <EmployeeAddModal departments={departments} branches={branches} companies={companies} shifts={shifts} onSave={onRegisterEmployee} isOpen={isAddOpen} setIsOpen={setIsAddOpen} />
