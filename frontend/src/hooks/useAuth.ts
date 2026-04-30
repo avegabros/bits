@@ -72,7 +72,8 @@ export function useAuth(requiredRole?: Role | Role[]): AuthState {
       }
     }
     verify()
-  }, [router, requiredRole])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, Array.isArray(requiredRole) ? requiredRole.join(',') : requiredRole])
 
   return state
 }
