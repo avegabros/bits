@@ -74,6 +74,74 @@ export interface PaginationMeta {
   totalPages: number
 }
 
+// ─── Session Error ───────────────────────────────────────────────────────────
+export class SessionExpiredError extends Error {
+  constructor() {
+    super('Session expired. Please log in again.')
+    this.name = 'SessionExpiredError'
+  }
+}
+
+// ─── Refresh Lock ────────────────────────────────────────────────────────────
+// Prevents multiple simultaneous refresh calls when several API requests
+// all get 401 at the same time.
+let refreshPromise: Promise<boolean> | null = null
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = fetch('/api/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then(res => res.ok)
+    .catch(() => false)
+    .finally(() => { refreshPromise = null })
+
+  return refreshPromise
+}
+
+// ─── Global Fetch Interceptor ────────────────────────────────────────────────
+// Many components and hooks (like useDashboardData) use raw fetch() instead of apiFetch.
+// This global interceptor ensures EVERY client-side fetch to our API automatically
+// handles 401s, silently refreshes the token, and retries the original request.
+if (typeof window !== 'undefined') {
+  const win = window as any;
+  if (!win.__FETCH_INTERCEPTED__) {
+    win.__FETCH_INTERCEPTED__ = true;
+    const originalFetch = window.fetch;
+
+    window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString();
+
+      // Skip interception for non-API requests or the refresh route itself
+      if (!url.includes('/api/') || url.includes('/api/auth/refresh')) {
+        return originalFetch.apply(this, [input, init]);
+      }
+
+      // 1. Make the original request
+      let response = await originalFetch.apply(this, [input, init]);
+
+      // 2. If 401 Unauthorized, attempt a silent refresh
+      if (response.status === 401) {
+        const refreshed = await tryRefreshToken();
+        
+        if (refreshed) {
+          // 3. Retry the exact same request with the new HttpOnly cookies
+          // Note: If the original request consumed a ReadableStream body, retrying might 
+          // fail without cloning, but 99% of our 401s are GETs or stringified JSON POSTs.
+          response = await originalFetch.apply(this, [input, init]);
+        } else {
+          // 4. If refresh fails, session is completely dead
+          window.dispatchEvent(new CustomEvent('session-expired'));
+        }
+      }
+
+      return response;
+    };
+  }
+}
+
 // ─── Core Fetch Helper ───────────────────────────────────────────────────────
 export type RequestOptions = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>
@@ -88,9 +156,12 @@ export async function apiFetch<T = unknown>(
     ...options.headers,
   }
 
+  // The global fetch interceptor above automatically handles 401s for this
   const res = await fetch(path, { ...options, headers, credentials: 'include' })
 
   if (!res.ok) {
+    if (res.status === 401) throw new SessionExpiredError()
+
     let message = `Request failed: ${res.status} ${res.statusText}`
     try {
       const body = await res.json()

@@ -3,11 +3,16 @@
 import React, { useState, useEffect } from "react"
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout'
+import { useTokenRefresh } from '@/hooks/useTokenRefresh'
+import { SessionExpiredModal } from './shared/SessionExpiredModal'
 import { EmployeeSidebar } from './employee-sidebar'
 import { EmployeeTopbar } from './employee-topbar'
 
 export function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const { employee, isLoading, isAuthenticated } = useAuth('USER')
+    useInactivityTimeout()
+    useTokenRefresh()
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const pathname = usePathname()
@@ -32,6 +37,7 @@ export function EmployeeLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <div className="h-screen bg-gray-50 overflow-hidden relative">
+            <SessionExpiredModal />
             <a
                 href="#main-content"
                 className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-white focus:text-brand focus:font-bold"

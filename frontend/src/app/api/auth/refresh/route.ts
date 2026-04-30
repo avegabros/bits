@@ -1,24 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * POST /api/auth/refresh
  * Calls the backend refresh endpoint, which reads the refresh_token cookie,
- * validates it against the DB, rotates it, and sets new auth cookies.
+ * validates it against the DB, rotates it, and returns new token values.
+ * The Next.js handler sets them as HttpOnly cookies — identical to the login flow.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
     try {
         const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001'
 
-        // Forward the request to the backend — cookies are forwarded via the
-        // Next.js server so the backend can read req.cookies.refresh_token
+        // Forward cookies from the browser so the backend can read refresh_token
+        const cookieHeader = request.headers.get('cookie') || ''
         const res = await fetch(`${backendUrl}/api/auth/refresh`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Pass through cookies from the incoming request
-                'Cookie': '',
+                'Cookie': cookieHeader,
             },
-            credentials: 'include',
         })
 
         const data = await res.json()
@@ -27,13 +26,33 @@ export async function POST() {
             return NextResponse.json(data, { status: res.status })
         }
 
-        // The backend already set the new auth_token + refresh_token cookies
-        // on the Express response — but since we're proxying, we need to
-        // forward those Set-Cookie headers to the browser.
-        const response = NextResponse.json(data)
-        const setCookieHeader = res.headers.get('set-cookie')
-        if (setCookieHeader) {
-            response.headers.set('set-cookie', setCookieHeader)
+        // Strip token values from the browser-facing response body — they must
+        // only live in HttpOnly cookies, never in client-accessible JSON.
+        const { accessToken, refreshToken: refreshTokenValue, ...safeData } = data
+
+        const response = NextResponse.json({ ...safeData, success: true })
+
+        const cookieBase = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax' as const,
+            path: '/',
+        }
+
+        // Set new access token cookie (1 hour)
+        if (accessToken) {
+            response.cookies.set('auth_token', accessToken, {
+                ...cookieBase,
+                maxAge: 60 * 60,
+            })
+        }
+
+        // Set new refresh token cookie (7 days)
+        if (refreshTokenValue) {
+            response.cookies.set('refresh_token', refreshTokenValue, {
+                ...cookieBase,
+                maxAge: 7 * 24 * 60 * 60,
+            })
         }
 
         return response
