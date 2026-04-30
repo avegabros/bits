@@ -43,7 +43,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       TZ: Asia/Manila
-    # No bind mounts — code is baked into the image via Dockerfile
+    # No bind mounts for code, but we MUST mount the uploads directory
+    # so that user avatars survive container restarts/rebuilds.
+    volumes:
+      - bits_uploads:/app/uploads
     ports:
       - "4013:3001"
     depends_on:
@@ -71,6 +74,8 @@ volumes:
   postgres_data:
     external: true
     name: project_postgres_data
+  bits_uploads:
+    name: bits_uploads_data
 
 networks:
   bits_network:
