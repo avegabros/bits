@@ -20,6 +20,7 @@ export type AuditAction =
     | 'ADJUSTMENT_SUBMIT'
     | 'ADJUSTMENT_APPROVE'
     | 'ADJUSTMENT_REJECT'
+    | 'ADJUSTMENT_CANCEL'
     | 'FLAG_MISSING_CHECKOUT'
     // Device / Sync
     | 'SYNC'

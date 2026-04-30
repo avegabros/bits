@@ -24,4 +24,5 @@ export interface Adjustment {
     };
     submittedBy: { firstName: string; lastName: string };
     reviewedBy: { firstName: string; lastName: string } | null;
+    submittedById: number;
 }

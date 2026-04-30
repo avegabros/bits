@@ -374,6 +374,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const handleApplyChanges = useCallback(async () => {
     if (!editingLog) return
 
+    if (editingLog.isPending) {
+      showToast('warning', 'Pending Request Exists', 'This record already has a pending adjustment. Cancel it first or wait for admin review.')
+      return
+    }
+
     // ── Time Validation ──────────────────────────────────────────────────
     const MAX_SHIFT_HOURS = 16
 
@@ -469,6 +474,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   const handleDeleteSubmit = useCallback(async () => {
     if (!deletingLog) return
+
+    if (deletingLog.isPending) {
+      showToast('warning', 'Pending Request Exists', 'This record already has a pending adjustment. Cancel it first or wait for admin review.')
+      return
+    }
 
     if (!deleteReason.trim()) {
       showToast('error', 'Reason Required', 'Please provide a reason for deleting this record.')

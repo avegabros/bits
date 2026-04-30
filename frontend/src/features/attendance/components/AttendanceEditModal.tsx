@@ -60,6 +60,15 @@ export function AttendanceEditModal({
                 <p className="text-xs font-medium text-amber-800">This employee has no existing attendance record for this day. Submitting this form will manually create a new record.</p>
               </div>
             )}
+            {editingLog.isPending && (
+              <div className="bg-[#FFF8E1] border border-[#FFE082] p-3 rounded-xl flex gap-3">
+                <AlertCircle size={16} className="text-[#F57F17] shrink-0 mt-0.5" />
+                <div className="text-[10px] text-[#F57F17]/80 leading-relaxed font-medium">
+                  <strong className="block mb-0.5 text-[#F57F17] tracking-tight uppercase">Pending Request Exists</strong>
+                  A pending adjustment is awaiting admin review. Cancel it first to submit a new one.
+                </div>
+              </div>
+            )}
             {(editingLog.displayStatus === 'missing_checkout' || editingLog.status === 'incomplete') && !String(editingLog.id).startsWith('absent-') && (
               <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex gap-3">
                 <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
@@ -130,7 +139,7 @@ export function AttendanceEditModal({
             <button onClick={() => setShowCancelModal(true)} className="flex-1 px-4 py-3 sm:py-3.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
             <button
               onClick={handleApplyChanges}
-              disabled={actionLoading || !editReason.trim()}
+              disabled={actionLoading || !editReason.trim() || editingLog.isPending}
               className="flex-1 px-4 py-3 sm:py-3.5 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {actionLoading && <Loader2 size={15} className="animate-spin" />}

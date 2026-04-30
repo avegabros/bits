@@ -14,6 +14,14 @@ import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
 
+/** Check if a pending adjustment already exists for an attendance record */
+async function findPendingAdjustment(attendanceId: number) {
+    return prisma.attendanceAdjustment.findFirst({
+        where: { attendanceId, status: 'pending' },
+        select: { id: true, type: true, submittedAt: true },
+    });
+}
+
 
 export const syncAttendance = async (req: Request, res: Response) => {
     try {
@@ -425,6 +433,17 @@ export const updateAttendance = async (req: Request, res: Response) => {
 
         // ── HR users (or Admin acting as HR): create a pending adjustment (do NOT apply immediately) ──
         if (isHRWorkflow) {
+            // ── Duplicate prevention: only one pending adjustment per record ──
+            const existingPending = await findPendingAdjustment(recordId);
+            if (existingPending) {
+                res.status(409).json({
+                    success: false,
+                    message: 'A pending adjustment already exists for this record. Cancel it first or wait for review.',
+                    existingAdjustmentId: existingPending.id,
+                });
+                return;
+            }
+
             const adjustment = await prisma.attendanceAdjustment.create({
                 data: {
                     attendanceId: recordId,
@@ -1190,6 +1209,16 @@ export const deleteAttendance = async (req: Request, res: Response) => {
         }
 
         if (isHRWorkflow) {
+            // ── Duplicate prevention: only one pending adjustment per record ──
+            const existingPending = await findPendingAdjustment(recordId);
+            if (existingPending) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'A pending adjustment already exists for this record. Cancel it first or wait for review.',
+                    existingAdjustmentId: existingPending.id,
+                });
+            }
+
             const adjustment = await prisma.attendanceAdjustment.create({
                 data: {
                     attendanceId: recordId,
@@ -1263,6 +1292,80 @@ export const deleteAttendance = async (req: Request, res: Response) => {
     } catch (error: unknown) {
         console.error('Delete Attendance Failed:', error);
         return res.status(500).json({ success: false, message: 'An unexpected error occurred.' });
+    }
+};
+
+/**
+ * PUT /api/attendance/adjustments/:id/cancel
+ * Cancel a pending adjustment (owner or admin).
+ */
+export const cancelAdjustment = async (req: Request, res: Response) => {
+    try {
+        const adjustmentId = parseInt(String(req.params.id));
+        if (isNaN(adjustmentId)) {
+            return res.status(400).json({ success: false, message: 'Invalid adjustment ID' });
+        }
+
+        const userId = req.user?.employeeId;
+        const userRole = req.user?.role;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+
+        const adjustment = await prisma.attendanceAdjustment.findUnique({
+            where: { id: adjustmentId },
+            include: { attendance: true },
+        });
+
+        if (!adjustment) {
+            return res.status(404).json({ success: false, message: 'Adjustment not found' });
+        }
+
+        // Only pending adjustments can be cancelled
+        if (adjustment.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot cancel — adjustment has already been ${adjustment.status}.`,
+            });
+        }
+
+        // Permission: must be the original submitter (Admins should use Reject instead of Cancel)
+        if (adjustment.submittedById !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only cancel your own pending requests. If you are an Admin, please use the Reject action instead.',
+            });
+        }
+
+        // Cancel the adjustment
+        await prisma.attendanceAdjustment.update({
+            where: { id: adjustmentId },
+            data: { status: 'cancelled', reviewedAt: new Date() },
+        });
+
+        // Cleanup: if this was a manual creation, delete the placeholder
+        if (adjustment.originalCheckIn === null && adjustment.attendance) {
+            await prisma.attendance.delete({
+                where: { id: adjustment.attendance.id },
+            });
+            // We should also emit event so the dashboard refreshes
+            attendanceEmitter.emit('new-record', { type: 'delete', record: adjustment.attendance });
+        }
+
+        void audit({
+            action: 'ADJUSTMENT_CANCEL',
+            entityType: 'Attendance',
+            entityId: adjustment.attendanceId ?? undefined,
+            performedBy: userId,
+            source: 'admin-panel',
+            details: `Pending adjustment #${adjustmentId} cancelled by ${userRole === 'ADMIN' ? 'admin' : 'requester'}`,
+            correlationId: req.correlationId,
+        });
+
+        return res.json({ success: true, message: 'Adjustment cancelled successfully.' });
+    } catch (error: unknown) {
+        console.error('Cancel Adjustment Failed:', error);
+        return res.status(500).json({ success: false, message: 'Failed to cancel adjustment' });
     }
 };
 

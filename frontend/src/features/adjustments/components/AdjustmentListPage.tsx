@@ -26,9 +26,10 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
         rejectingId, setRejectingId,
         rejectionReason, setRejectionReason,
         approvingId, setApprovingId,
+        cancellingId, setCancellingId,
         actionLoading,
-        handleApprove, handleReject,
-        isAdmin, pendingCount,
+        handleApprove, handleReject, handleCancel,
+        isAdmin, pendingCount, currentUserId,
         toasts, dismissToast,
     } = useAdjustmentList(role)
 
@@ -99,7 +100,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                     <CustomSelect 
                         id="status" 
                         value={statusFilter === '' ? 'All Status' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} 
-                        options={['All Status', 'Pending', 'Approved', 'Rejected']} 
+                        options={['All Status', 'Pending', 'Approved', 'Rejected', 'Cancelled']} 
                         onChange={(val) => setStatusFilter(val === 'All Status' ? '' : val.toLowerCase())} 
                         placeholder="Status"
                     />
@@ -136,10 +137,12 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                         sortOrder={sortOrder}
                         statusFilter={statusFilter}
                         isAdmin={isAdmin}
+                        currentUserId={currentUserId}
                         actionLoading={actionLoading}
                         handleSort={handleSort as (key: string) => void}
                         onApprove={setApprovingId}
                         onReject={(id) => { setRejectingId(id); setRejectionReason('') }}
+                        onCancel={setCancellingId}
                     />
                 </div>
                 <DataTablePagination
@@ -236,6 +239,31 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                     </div>
                 )
             })()}
+
+            {/* Cancel Confirmation Modal */}
+            {cancellingId !== null && (
+                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[150] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[360px] overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-[32px] text-center space-y-[24px]">
+                            <div className="w-[64px] h-[64px] rounded-full bg-[#FFF8E1] flex items-center justify-center mx-auto">
+                                <AlertCircle className="w-[32px] h-[32px] text-[#F57F17]" />
+                            </div>
+                            <div className="space-y-[8px]">
+                                <h3 className="text-[20px] font-bold text-[#212121] tracking-tight">Cancel Request?</h3>
+                                <p className="text-[14px] text-[#757575]">This will withdraw your pending adjustment request.</p>
+                            </div>
+                            <div className="flex gap-[12px] pt-[8px]">
+                                <button onClick={() => setCancellingId(null)} className="flex-1 h-[44px] border border-[#E0E0E0] text-[#757575] rounded-[8px] text-[14px] font-bold hover:bg-[#F5F5F5] transition-all">Keep</button>
+                                <button onClick={handleCancel} disabled={actionLoading}
+                                    className="flex-1 h-[44px] text-white rounded-[8px] text-[14px] font-bold disabled:opacity-50 transition-all active:scale-[0.98] bg-[#F57F17] hover:bg-[#F9A825] shadow-lg shadow-[#F57F17]/20 flex items-center justify-center gap-[8px]">
+                                    {actionLoading && <Loader2 size={16} className="animate-spin" />}
+                                    Confirm Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </div>

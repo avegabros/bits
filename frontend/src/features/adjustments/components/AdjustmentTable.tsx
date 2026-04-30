@@ -11,6 +11,7 @@ const statusConfig: Record<string, { label: string; bg: string; text: string; bo
     pending: { label: 'Pending', bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', icon: Clock },
     approved: { label: 'Approved', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 },
     rejected: { label: 'Rejected', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: XCircle },
+    cancelled: { label: 'Cancelled', bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', icon: XCircle },
 }
 
 export interface AdjustmentTableProps {
@@ -20,10 +21,12 @@ export interface AdjustmentTableProps {
     sortOrder: 'asc' | 'desc' | null
     statusFilter: string
     isAdmin: boolean
+    currentUserId: number | null
     actionLoading: boolean
     handleSort: (key: string) => void
     onApprove: (id: number) => void
     onReject: (id: number) => void
+    onCancel: (id: number) => void
 }
 
 export function AdjustmentTable({
@@ -33,10 +36,12 @@ export function AdjustmentTable({
     sortOrder,
     statusFilter,
     isAdmin,
+    currentUserId,
     actionLoading,
     handleSort,
     onApprove,
     onReject,
+    onCancel,
 }: AdjustmentTableProps) {
     return (
         <table className="w-full border-collapse">
@@ -50,7 +55,7 @@ export function AdjustmentTable({
                     <th className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">REASON</th>
                     <SortableHeader label="SUBMITTED BY" sortKey="submittedBy.lastName" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-left text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
                     <SortableHeader label="STATUS" sortKey="status" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-[20px] py-[16px] text-center text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]" />
-                    <th className="px-[20px] py-[16px] text-center text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">{isAdmin ? 'ACTIONS / REVIEWED' : 'REVIEWED BY'}</th>
+                    <th className="px-[20px] py-[16px] text-center text-[11px] font-semibold text-[#9E9E9E] uppercase tracking-[0.8px]">ACTIONS / REVIEWED</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-[#E0E0E0]">
@@ -164,6 +169,13 @@ export function AdjustmentTable({
                                         <button onClick={() => onReject(adj.id)} disabled={actionLoading}
                                             className="h-[32px] px-[12px] bg-[#F5F5F5] border border-[#E0E0E0] text-[#757575] rounded-[6px] text-[11px] font-bold uppercase tracking-[0.5px] hover:bg-[#EEEEEE] hover:text-[#212121] transition-all active:scale-[0.95] inline-flex items-center gap-[6px]">
                                             <XCircle size={12} /> Reject
+                                        </button>
+                                    </div>
+                                ) : (!isAdmin && adj.status === 'pending' && adj.submittedById === currentUserId) ? (
+                                    <div className="flex items-center justify-center gap-[8px]">
+                                        <button onClick={() => onCancel(adj.id)} disabled={actionLoading}
+                                            className="h-[32px] px-[12px] bg-white border border-[#E0E0E0] text-[#9E9E9E] rounded-[6px] text-[11px] font-bold uppercase tracking-[0.5px] hover:bg-[#FFEBEE] hover:text-[#C62828] hover:border-[#FFCDD2] transition-all active:scale-[0.95] inline-flex items-center gap-[6px]">
+                                            <XCircle size={12} /> Cancel
                                         </button>
                                     </div>
                                 ) : (

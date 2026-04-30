@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/useToast'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import { useTableSort } from '@/hooks/useTableSort'
+import { useAuth } from '@/hooks/useAuth'
 import { Adjustment } from '@/features/adjustments/types'
 
 interface EmployeeName {
@@ -47,6 +48,9 @@ export function empName(emp: EmployeeName | null | undefined): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useAdjustmentList(role: 'admin' | 'hr') {
+    const { employee } = useAuth()
+    const currentUserId = employee?.id ?? null
+
     // Filter state
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState(role === 'admin' ? 'pending' : '')
@@ -66,6 +70,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
 
     // Modal state
     const [rejectingId, setRejectingId] = useState<number | null>(null)
+    const [cancellingId, setCancellingId] = useState<number | null>(null)
     const [rejectionReason, setRejectionReason] = useState('')
     const [approvingId, setApprovingId] = useState<number | null>(null)
     const [actionLoading, setActionLoading] = useState(false)
@@ -186,6 +191,30 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         }
     }
 
+    const handleCancel = async () => {
+        if (!cancellingId) return
+        setActionLoading(true)
+        try {
+            const res = await fetch(`/api/attendance/adjustments/${cancellingId}/cancel`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+            })
+            const data = await res.json()
+            if (data.success) {
+                showToast('success', 'Request Cancelled', 'Your pending adjustment has been cancelled.')
+                setCancellingId(null)
+                fetchAdjustments()
+            } else {
+                showToast('error', 'Cancel Failed', data.message || 'Failed to cancel')
+            }
+        } catch (e: unknown) {
+            showToast('error', 'Cancel Failed', e instanceof Error ? e.message : 'Network error')
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     return {
         // Filter state
         searchQuery, setSearchQuery,
@@ -205,12 +234,14 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         rejectingId, setRejectingId,
         rejectionReason, setRejectionReason,
         approvingId, setApprovingId,
+        cancellingId, setCancellingId,
         actionLoading,
         // Actions
         handleApprove,
         handleReject,
+        handleCancel,
         // Derived
-        isAdmin, pendingCount,
+        isAdmin, pendingCount, currentUserId,
         // Toast
         toasts, dismissToast,
     }

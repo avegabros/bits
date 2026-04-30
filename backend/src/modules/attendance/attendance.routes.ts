@@ -12,6 +12,7 @@ import {
     getAdjustments,
     reviewAdjustment,
     deleteAttendance,
+    cancelAdjustment,
 } from './attendance.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminOrHR, adminOnly } from '../../shared/middleware/role.middleware';
@@ -347,5 +348,31 @@ router.put('/:id', updateAttendance);
  *         description: Record deleted or deletion request submitted
  */
 router.delete('/:id', deleteAttendance);
+
+/**
+ * @swagger
+ * /api/attendance/adjustments/{id}/cancel:
+ *   put:
+ *     summary: Cancel a pending attendance adjustment
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Adjustment cancelled successfully
+ *       400:
+ *         description: Invalid request or adjustment not pending
+ *       403:
+ *         description: You can only cancel your own pending requests
+ *       404:
+ *         description: Adjustment not found
+ */
+router.put('/adjustments/:id/cancel', cancelAdjustment);
 
 export default router;
