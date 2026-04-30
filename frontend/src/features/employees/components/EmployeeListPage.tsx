@@ -9,6 +9,7 @@ import RFIDCardEnrollmentModal from '@/features/biometrics/components/RFIDCardEn
 import FingerprintDashboardModal from '@/features/biometrics/components/FingerprintDashboardModal';
 import { EmployeePageHeader } from './EmployeePageHeader';
 import { EmployeeFiltersBar } from './EmployeeFiltersBar';
+import { CompanyTabs } from '@/features/attendance/components/CompanyTabs';
 import { useEmployeeList } from '../hooks/useEmployeeList';
 
 interface EmployeeListPageProps {
@@ -46,22 +47,33 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
         }}
       />
 
-      <EmployeeFiltersBar filters={list.filters} departments={list.departments} branches={list.branches} shifts={list.shifts} />
+      {/* Company Tabs + Filters + Table (tight spacing) */}
+      <div className="space-y-2">
+        <CompanyTabs
+          activeCompany={list.filters.selectedCompany}
+          onCompanyChange={list.filters.setSelectedCompany}
+          companies={list.companyNames}
+        />
 
-      <EmployeeTable
-        employees={list.paginatedEmployees} loading={list.loading} filteredCount={list.employees.length}
-        currentPage={list.currentPage} totalPages={list.totalPages}
-        sortKey={list.tableSort.sortKey as string} sortOrder={list.tableSort.sortOrder}
-        onSort={list.tableSort.handleSort} onPageChange={list.setCurrentPage}
-        pageSize={list.rowsPerPage}
-        onEdit={(emp) => { list.setEditingEmployee(emp); list.setEditForm({ ...emp }); }}
-        onResetPassword={list.setConfirmResetPassword}
-        onFingerprintOpen={(id, name) => list.setFingerprintDashboardOpen({ open: true, employeeId: id, employeeName: name })}
-        onCardEnrollOpen={(id, name, card) => list.setCardEnrollOpen({ open: true, employeeId: id, employeeName: name, currentCard: card ?? null })}
-        enrollStatus={list.enrollStatus} dragScrollRef={dragScrollRef}
-        role={role}
-        {...(statusFilter === 'Inactive' ? { onRestore: list.setConfirmRestore, onPermanentDelete: list.setConfirmPermanentDelete } : {})}
-      />
+        <EmployeeFiltersBar filters={list.filters} departments={list.departments} branches={list.filteredBranches} shifts={list.shifts} />
+
+        <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border">
+          <EmployeeTable
+            employees={list.paginatedEmployees} loading={list.loading} filteredCount={list.employees.length}
+            currentPage={list.currentPage} totalPages={list.totalPages}
+            sortKey={list.tableSort.sortKey as string} sortOrder={list.tableSort.sortOrder}
+            onSort={list.tableSort.handleSort} onPageChange={list.setCurrentPage}
+            pageSize={list.rowsPerPage}
+            onEdit={(emp) => { list.setEditingEmployee(emp); list.setEditForm({ ...emp }); }}
+            onResetPassword={list.setConfirmResetPassword}
+            onFingerprintOpen={(id, name) => list.setFingerprintDashboardOpen({ open: true, employeeId: id, employeeName: name })}
+            onCardEnrollOpen={(id, name, card) => list.setCardEnrollOpen({ open: true, employeeId: id, employeeName: name, currentCard: card ?? null })}
+            enrollStatus={list.enrollStatus} dragScrollRef={dragScrollRef}
+            role={role}
+            {...(statusFilter === 'Inactive' ? { onRestore: list.setConfirmRestore, onPermanentDelete: list.setConfirmPermanentDelete } : {})}
+          />
+        </div>
+      </div>
 
       {list.editingEmployee && <EmployeeEditModal
         employee={list.editingEmployee} editForm={list.editForm}

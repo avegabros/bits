@@ -12,7 +12,7 @@ interface UseEmployeeListOptions {
 const ROWS_PER_PAGE = 10;
 
 export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOptions = {}) {
-  const { employees, rawEmployees, departments, branches, companies, shifts, loading, refresh, filters, tableSort, actions } =
+  const { employees, rawEmployees, departments, branches, filteredBranches, companies, companyNames, shifts, loading, refresh, filters, tableSort, actions } =
     useEmployees({ statusFilter });
   const { toasts, showToast, dismissToast } = useToast();
 
@@ -23,6 +23,9 @@ export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOpti
     (currentPage - 1) * ROWS_PER_PAGE,
     currentPage * ROWS_PER_PAGE,
   );
+
+  // Reset to page 1 when company tab changes
+  useEffect(() => { setCurrentPage(1); }, [filters.selectedCompany]);
 
   // ── Edit modal ──────────────────────────────────────────────────────────────
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -251,7 +254,9 @@ export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOpti
     rawEmployees,
     departments,
     branches,
+    filteredBranches,
     companies,
+    companyNames,
     shifts,
     loading,
     refresh,
