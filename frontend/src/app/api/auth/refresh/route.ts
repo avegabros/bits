@@ -22,8 +22,17 @@ export async function POST(request: NextRequest) {
 
         const data = await res.json()
 
+        const errorResponse = NextResponse.json(data, { status: res.status })
+
         if (!res.ok) {
-            return NextResponse.json(data, { status: res.status })
+            // If the backend rejects the refresh (e.g. expired or invalid), 
+            // aggressively clear the HttpOnly cookies on the frontend too
+            // so the edge proxy doesn't think the user is still logged in.
+            if (res.status === 401 || res.status === 403) {
+                errorResponse.cookies.delete('auth_token')
+                errorResponse.cookies.delete('refresh_token')
+            }
+            return errorResponse
         }
 
         // Strip token values from the browser-facing response body — they must
