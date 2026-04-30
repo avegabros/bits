@@ -251,20 +251,13 @@ export const createManualAttendance = async (req: Request, res: Response) => {
 
         // If HR User (or Admin acting as HR): Create a pending record + Adjustment Request
         if (isHRWorkflow) {
-             const calculatedStatus = calculateAttendanceStatus(
-                 effectiveCheckIn,
-                 effectiveCheckOut,
-                 recordDate,
-                 employee.Shift ?? null
-             );
-
              const newRecord = await prisma.attendance.create({
                  data: {
                      employeeId: Number(employeeId),
                      date: recordDate,
                      checkInTime: effectiveCheckIn,
                      checkOutTime: effectiveCheckOut,
-                     status: calculatedStatus,
+                     status: 'pending',
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
                      checkoutSource: null
                  }
