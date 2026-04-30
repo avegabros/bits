@@ -61,12 +61,13 @@ export function EmployeeTable({
               <SortableHeader label="Employee ID" sortKey="employeeNumber" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-4 py-4" />
               <th className="px-6 py-4">Shift</th>
               <SortableHeader label="Branch" sortKey="branch" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-6 py-4" />
+              <th className="px-6 py-4">Date Hired</th>
               <th className="px-6 py-4">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">Loading employees...</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">Loading employees...</td></tr>
             ) : employees.length > 0 ? (
               employees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-red-50/50 transition-colors duration-200 group">
@@ -99,6 +100,7 @@ export function EmployeeTable({
                     ) : (<span className="text-[10px] text-slate-300 font-bold">Unassigned</span>)}
                   </td>
                   <td className="px-6 py-4"><span className="text-xs font-medium text-slate-500">{employee.Branch?.name || '—'}</span></td>
+                  <td className="px-6 py-4"><span className="text-xs font-medium text-slate-500">{employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</span></td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
                       {isInactiveMode ? (
@@ -157,7 +159,7 @@ export function EmployeeTable({
                 </tr>
               ))
             ) : (
-              <tr><td colSpan={7} className="px-6 py-20 text-center text-slate-400 font-bold uppercase text-xs tracking-widest">No matching employees found</td></tr>
+              <tr><td colSpan={8} className="px-6 py-20 text-center text-slate-400 font-bold uppercase text-xs tracking-widest">No matching employees found</td></tr>
             )}
           </tbody>
         </table>

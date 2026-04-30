@@ -166,12 +166,12 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { header: 'Gender', key: 'gender', width: 14, required: false, hint: 'Male / Female / Prefer not to say' },
             { header: 'Date of Birth', key: 'dateOfBirth', width: 18, required: false, hint: 'YYYY-MM-DD format' },
             { header: 'Email', key: 'email', width: 28, required: true, hint: 'Valid email (login credentials sent here)' },
-            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: '11 digits (e.g. 09171234567)' },
+            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: '+63 format (e.g. +639171234567) or 0XXXXXXXXXX — auto-converted' },
             { header: 'Company', key: 'company', width: 24, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (filtered by Company)' },
             { header: 'Department', key: 'department', width: 20, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Hire Date', key: 'hireDate', width: 16, required: false, hint: 'YYYY-MM-DD format' },
-            { header: 'Shift Code', key: 'shiftCode', width: 16, required: false, hint: 'Select from dropdown (see Reference Lists)' },
+            { header: 'Shift Code', key: 'shiftCode', width: 16, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Status', key: 'employmentStatus', width: 14, required: false, hint: 'ACTIVE (default) / INACTIVE' },
         ];
 
@@ -302,7 +302,6 @@ export const exportTemplate = async (req: Request, res: Response) => {
                     formulae: [
                         `=INDIRECT("C_"&SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${companyCol}${r}," ","_"),".","_"),",","_"),"'","_"),"-","_"),"&","_")&"_BRANCHES")`
                     ],
-                    showDropDown: false,
                     showErrorMessage: true,
                     errorTitle: 'Invalid branch',
                     error: 'Please select a Company first, then choose a Branch from the dropdown',
@@ -445,13 +444,13 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '   • First Name — Legal first name of the employee',
             '   • Last Name — Legal last name of the employee',
             '   • Email — Valid email address (login credentials will be sent here)',
-            '   • Contact Number — 11-digit Philippine mobile number (e.g. 09171234567)',
+            '   • Contact Number — Philippine mobile number (e.g. +639171234567 or 09171234567 — auto-converted)',
             '   • Company — Select from the dropdown (must be selected BEFORE Branch)',
             '   • Branch — Filtered by Company. Select Company first, then Branch.',
             '   • Department — Select from the dropdown (values from Reference Lists)',
             '',
             '2. OPTIONAL FIELDS (orange headers on Sheet 1):',
-            '   • Middle Name, Suffix, Gender, Date of Birth, Hire Date, Shift Code, Status',
+            '   • Middle Name, Suffix, Gender, Date of Birth, Hire Date, Status',
             '',
             '3. COMPANY → BRANCH (CASCADING DROPDOWN):',
             '   • The Company column must be filled BEFORE selecting a Branch',
@@ -464,9 +463,9 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '   • Both Date of Birth and Hire Date follow this format',
             '',
             '5. PHONE NUMBER FORMAT:',
-            '   • Must be exactly 11 digits',
-            '   • Example: 09171234567',
-            '   • Do not include spaces, dashes, or country code',
+            '   • Accepted: +639171234567, 09171234567, 639171234567, or 9171234567',
+            '   • Numbers starting with 0 or without +63 are auto-converted to +63 format',
+            '   • Spaces and dashes are stripped automatically',
             '',
             '6. GENDER OPTIONS:',
             '   • Male',
@@ -618,16 +617,16 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             password: hashedPassword,
                             role: 'USER',
                             departmentId: emp.department
-                                ? (await prisma.department.findFirst({ 
-                                    where: { name: { equals: emp.department, mode: 'insensitive' } }, 
-                                    select: { id: true } 
+                                ? (await prisma.department.findFirst({
+                                    where: { name: { equals: emp.department, mode: 'insensitive' } },
+                                    select: { id: true }
                                 }))?.id ?? null
                                 : null,
                             position: null,
                             branchId: emp.branch
-                                ? (await prisma.branch.findFirst({ 
-                                    where: { name: { equals: emp.branch, mode: 'insensitive' } }, 
-                                    select: { id: true } 
+                                ? (await prisma.branch.findFirst({
+                                    where: { name: { equals: emp.branch, mode: 'insensitive' } },
+                                    select: { id: true }
                                 }))?.id ?? null
                                 : null,
                             contactNumber: emp.contactNumber || null,

@@ -113,7 +113,7 @@ export function EditAssignmentSection({
           <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Date Hired</label>
           <input
             type="date"
-            value={editForm.hireDate || ''}
+            value={editForm.hireDate ? (editForm.hireDate as string).split('T')[0] : ''}
             onChange={(e) => {
               onFormChange({ ...editForm, hireDate: e.target.value })
               if (formErrors.hireDate) onClearError('hireDate')
