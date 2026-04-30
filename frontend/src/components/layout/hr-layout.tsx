@@ -1,15 +1,32 @@
 'use client'
 
 import React, { useState } from "react"
+import { useAuth } from '@/hooks/useAuth'
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout'
+import { useTokenRefresh } from '@/hooks/useTokenRefresh'
+import { SessionExpiredModal } from './shared/SessionExpiredModal'
 import Sidebar from './hr-sidebar'
 import TopBar from './hr-topbar'
 
 export function HRLayout({ children }: { children: React.ReactNode }) {
+    const { isLoading, isAuthenticated } = useAuth('HR')
+    useInactivityTimeout()
+    useTokenRefresh()
     const [isMobileOpen, setIsMobileOpen] = useState(false)
     const [isCollapsed, setIsCollapsed] = useState(false)
 
+    // Show loading state while checking auth
+    if (isLoading || !isAuthenticated) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-gray-50">
+                <div className="text-gray-500">Loading...</div>
+            </div>
+        )
+    }
+
     return (
         <div className="h-screen bg-slate-50 overflow-hidden relative">
+            <SessionExpiredModal />
             <a
                 href="#main-content"
                 className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-white focus:text-brand focus:font-bold"

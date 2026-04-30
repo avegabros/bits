@@ -46,19 +46,7 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
                 setTotalCount(data.meta.total)
                 setTotalPages(data.meta.totalPages)
 
-                // Extract unique branches for the filter if not already fetched
-                if (branches.length === 1) {
-                    const branchSet = new Set<string>()
-                    data.data.forEach((log: AuditLog) => {
-                        if (log.attendance?.employee?.Branch?.name) {
-                            branchSet.add(log.attendance.employee.Branch.name)
-                        }
-                    })
-                    setBranches(prev => {
-                        const merged = new Set([...prev, ...branchSet])
-                        return Array.from(merged).sort()
-                    })
-                }
+
             }
         } catch (err) {
             console.error('Failed to fetch audit logs:', err)
@@ -74,7 +62,7 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
             .then(d => {
                 if (d.success) {
                     const names = (d.branches || d.data || []).map((b: RawBranch) => b.name)
-                    setBranches(prev => Array.from(new Set([...prev, ...names])).sort())
+                    setBranches(['All Branches', ...names.sort()])
                 }
             })
             .catch(() => { })
@@ -112,13 +100,20 @@ export function useAdjustmentLogs({ initialItemsPerPage = 15, initialEntityId = 
             const adjuster = first.adjustedBy
             const employeeName = emp ? `${emp.firstName}${ emp.middleName ? ` ${ emp.middleName[0]}.` : ''} ${emp.lastName}${ emp.suffix ? ` ${ emp.suffix}` : ''}` : 'Unknown'
             const adjusterName = adjuster ? `${adjuster.firstName} ${adjuster.lastName}` : 'System'
-            const branch = emp?.Branch?.name || '—'
+            const approver = first.approvedBy
+            const approverName = approver ? `${approver.firstName} ${approver.lastName}` : undefined
+            const branch = emp?.Branch?.name || ''
             const reason = group.logs.find(l => l.reason)?.reason || '—'
+            const actionType = first.actionType || 'Edit'
+            const attendanceDate = first.attendance?.date
 
             return {
                 ...group,
                 createdAt: first.createdAt,
+                actionType,
+                attendanceDate,
                 adjusterName,
+                approverName,
                 employeeName,
                 branch,
                 reason,

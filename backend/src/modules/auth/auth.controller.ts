@@ -172,16 +172,28 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         // ── Store refresh token in DB ──────────────────────────────────────────
         const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-        // Delete any previous refresh tokens for this user (old sessions)
-        // and globally expired tokens to keep the table clean
+        // Clean up globally expired tokens (any user) to keep the table lean
         await prisma.refreshToken.deleteMany({
             where: {
-                OR: [
-                    { employeeId: employee.id },          // all previous sessions for this user
-                    { expiresAt: { lt: new Date() } },    // any expired tokens from any user
-                ]
+                expiresAt: { lt: new Date() },
             }
         });
+
+        // Enforce per-user session cap (max 5 concurrent sessions).
+        // If at limit, delete the oldest session to make room for the new one.
+        const MAX_SESSIONS = 5;
+        const existingSessions = await prisma.refreshToken.findMany({
+            where: { employeeId: employee.id },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+        });
+
+        if (existingSessions.length >= MAX_SESSIONS) {
+            const sessionsToDelete = existingSessions.slice(0, existingSessions.length - MAX_SESSIONS + 1);
+            await prisma.refreshToken.deleteMany({
+                where: { id: { in: sessionsToDelete.map(s => s.id) } },
+            });
+        }
 
         await prisma.refreshToken.create({
             data: {
@@ -325,7 +337,14 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
         res.cookie('auth_token', newAccessToken, { ...cookieOptions, maxAge: 60 * 60 * 1000 });
         res.cookie('refresh_token', newRefreshTokenValue, { ...cookieOptions, maxAge: REFRESH_TOKEN_TTL_MS });
 
-        res.status(200).json({ success: true, message: 'Token refreshed successfully' });
+        res.status(200).json({
+            success: true,
+            message: 'Token refreshed successfully',
+            // Returned so the Next.js proxy can relay them as HttpOnly cookies.
+            // These are stripped from the browser-facing response in the route handler.
+            accessToken: newAccessToken,
+            refreshToken: newRefreshTokenValue,
+        });
 
     } catch (error: unknown) {
         console.error('Token refresh failed:', error);

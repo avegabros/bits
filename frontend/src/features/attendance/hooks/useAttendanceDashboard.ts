@@ -19,7 +19,8 @@ interface RawAttendanceLog {
     suffix?: string
     Department?: { name: string }
     Branch?: { name: string }
-    Shift?: { shiftCode: string; isNightShift: boolean }
+    Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
+    profilePicture?: string | null
   }
   status: string
   checkInTime: string | null
@@ -55,7 +56,8 @@ interface RawEmployee {
   lastName: string
   Department?: { name: string }
   Branch?: { name: string }
-  Shift?: { shiftCode: string; isNightShift: boolean }
+  Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
+  profilePicture?: string | null
 }
 
 interface EditRequestBody {
@@ -259,6 +261,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             id: log.id,
             employeeId: log.employeeId,
             employeeName: emp?.firstName ? `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}` : 'Unknown',
+            profilePicture: emp?.profilePicture,
             department: emp?.Department?.name || 'General',
             branchName: emp?.Branch?.name || '—',
             date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
@@ -266,6 +269,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
             checkOut: isPendingManualCreation ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
             status: computedStatus, 
             displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes, shiftCode,
+            shiftStartTime: emp?.Shift?.startTime,
+            shiftEndTime: emp?.Shift?.endTime,
             isNightShift: emp?.Shift?.isNightShift ?? false,
             isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
             notes: log.notes || null,
@@ -289,7 +294,12 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
           )
         } catch { /* ignore */ }
 
-        const presentIds = new Set(mapped.map(r => r.employeeId))
+        // Pending manual creations should NOT count as "present" for absent-row injection.
+        // Records with UPDATE/DELETE adjustments (isPending + real status) still count as present.
+        // Only brand-new unapproved creation placeholders (isPending + notes flag) are excluded.
+        const isPendingManualCreation = (r: AttendanceRecord) =>
+          r.isPending === true && (r.notes ?? '').includes('[Pending] Manual creation')
+        const presentIds = new Set(mapped.filter(r => !isPendingManualCreation(r)).map(r => r.employeeId))
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
         const isFutureDate = selectedDate > todayStr
 
@@ -301,17 +311,22 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
               id: `absent-${e.id}`,
               employeeId: e.id,
               employeeName: `${e.firstName} ${e.lastName}`,
+              profilePicture: e.profilePicture,
               department: e.Department?.name || 'General',
               branchName: e.Branch?.name || '—',
               date: selectedDate,
               checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
               lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
               shiftCode: e.Shift?.shiftCode ?? null,
+              shiftStartTime: e.Shift?.startTime,
+              shiftEndTime: e.Shift?.endTime,
               isNightShift: e.Shift?.isNightShift ?? false,
               isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
               isEarlyPunch: false, isMissingCheckout: false,
             }))
 
+        // All mapped records (including pending manual creations) go into the table so the PR badge
+        // is visible — consistent with how UPDATE/DELETE adjustment records are displayed.
         let full = (statusFilter === 'all' || statusFilter === 'absent')
           ? [...mapped, ...absentRows]
           : [...mapped]
@@ -323,17 +338,21 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
         setRecords(full)
         setTotalPages(Math.max(1, Math.ceil(full.length / ROW_PER_PAGE)))
+
+        // Stats: exclude pending manual creation records — they are unapproved and must not
+        // inflate or deflate any stat counter (present, late, absent, hours, etc.).
+        const statsRecords = full.filter(r => !isPendingManualCreation(r))
         setStats({
-          onTime: full.filter(r => r.status === 'present').length,
-          late: full.filter(r => r.status === 'late').length,
-          absent: full.filter(r => r.status === 'absent').length,
-          incomplete: full.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout').length,
-          total: full.length,
-          avgHours: full.length > 0
-            ? (full.filter(r => r.totalHours > 0).reduce((s, r) => s + r.totalHours, 0) /
-              (full.filter(r => r.totalHours > 0).length || 1)).toFixed(1) : '0',
-          totalOT: (full.reduce((s, r) => s + (r.overtimeMinutes ?? 0), 0) / 60).toFixed(1),
-          totalUT: (full.reduce((s, r) => s + (r.undertimeMinutes ?? 0), 0) / 60).toFixed(1),
+          onTime: statsRecords.filter(r => r.status === 'present').length,
+          late: statsRecords.filter(r => r.status === 'late').length,
+          absent: statsRecords.filter(r => r.status === 'absent').length,
+          incomplete: statsRecords.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout').length,
+          total: statsRecords.length,
+          avgHours: statsRecords.length > 0
+            ? (statsRecords.filter(r => r.totalHours > 0).reduce((s, r) => s + r.totalHours, 0) /
+              (statsRecords.filter(r => r.totalHours > 0).length || 1)).toFixed(1) : '0',
+          totalOT: (statsRecords.reduce((s, r) => s + (r.overtimeMinutes ?? 0), 0) / 60).toFixed(1),
+          totalUT: (statsRecords.reduce((s, r) => s + (r.undertimeMinutes ?? 0), 0) / 60).toFixed(1),
         })
       } else {
         setError(data.message || 'Failed to fetch attendance')
@@ -373,6 +392,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   const handleApplyChanges = useCallback(async () => {
     if (!editingLog) return
+
+    if (editingLog.isPending) {
+      showToast('warning', 'Pending Request Exists', 'This record already has a pending adjustment. Cancel it first or wait for admin review.')
+      return
+    }
 
     // ── Time Validation ──────────────────────────────────────────────────
     const MAX_SHIFT_HOURS = 16
@@ -469,6 +493,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
   const handleDeleteSubmit = useCallback(async () => {
     if (!deletingLog) return
+
+    if (deletingLog.isPending) {
+      showToast('warning', 'Pending Request Exists', 'This record already has a pending adjustment. Cancel it first or wait for admin review.')
+      return
+    }
 
     if (!deleteReason.trim()) {
       showToast('error', 'Reason Required', 'Please provide a reason for deleting this record.')

@@ -702,12 +702,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
     // Enrich each record with shift-based calculations
     const data = records.map((record) => {
         const shift = record.employee?.Shift ?? null;
-        let finalStatus = record.status;
-        if (finalStatus === 'pending') {
-            finalStatus = record.checkInTime 
-                ? calculateAttendanceStatus(record.checkInTime, record.checkOutTime, record.date, shift)
-                : 'absent';
-        }
+        const finalStatus = record.status;
 
         const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift);
         return {

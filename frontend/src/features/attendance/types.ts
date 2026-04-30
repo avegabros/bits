@@ -2,6 +2,7 @@ export interface AttendanceRecord {
   id: number | string;
   employeeId: number;
   employeeName: string;
+  profilePicture?: string | null;
   department: string;
   branchName: string;
   date: string;
@@ -16,6 +17,8 @@ export interface AttendanceRecord {
   overtimeMinutes: number;
   undertimeMinutes: number;
   shiftCode: string | null;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   isNightShift: boolean;
   isAnomaly?: boolean;
   isEarlyOut?: boolean;

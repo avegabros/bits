@@ -50,8 +50,21 @@ export function AttendanceMobileCards({
           )}
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="relative group/avatar">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0 uppercase tracking-tight">{row.employeeName.charAt(0)}</div>
+              <div className="relative group/avatar shrink-0">
+                {row.profilePicture ? (
+                  <img 
+                    src={row.profilePicture} 
+                    alt={row.employeeName}
+                    className="w-8 h-8 rounded-full object-cover border border-border"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.employeeName)}&background=random`
+                    }}
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px] uppercase tracking-tight">
+                    {row.employeeName.charAt(0)}
+                  </div>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-foreground text-sm truncate uppercase tracking-tight">{row.employeeName}</p>

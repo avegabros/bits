@@ -7,10 +7,10 @@ interface UseTableSortProps<T> {
 }
 
 export function useTableSort<T>({ initialData = [] }: UseTableSortProps<T>) {
-  const [sortKey, setSortKey] = useState<keyof T | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
 
-  const handleSort = (key: keyof T) => {
+  const handleSort = (key: string) => {
     let newOrder: SortOrder = 'asc';
     
     // Toggle logic: asc -> desc -> null (reset)
@@ -23,25 +23,25 @@ export function useTableSort<T>({ initialData = [] }: UseTableSortProps<T>) {
     setSortOrder(newOrder);
   };
 
+  const getNestedValue = (obj: any, path: string) => {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+  };
+
   const sortedData = useMemo(() => {
     if (!sortKey || !sortOrder) return initialData;
 
     return [...initialData].sort((a, b) => {
-      let aVal = a[sortKey];
-      let bVal = b[sortKey];
+      let aVal = getNestedValue(a, sortKey);
+      let bVal = getNestedValue(b, sortKey);
 
-      // Handle nested or derived state if passed specifically, 
-      // but for generic strings/numbers:
-      if (typeof aVal === 'string') {
-        aVal = aVal.toLowerCase() as any;
-      }
-      if (typeof bVal === 'string') {
-        bVal = bVal.toLowerCase() as any;
-      }
-
+      // Handle nulls/undefined early
       if (aVal === bVal) return 0;
-      if (aVal === null || aVal === undefined) return 1; // Push nulls/undefined to bottom
+      if (aVal === null || aVal === undefined) return 1;
       if (bVal === null || bVal === undefined) return -1;
+
+      // Handle strings for case-insensitive comparison
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
 
       const comparison = aVal > bVal ? 1 : -1;
       return sortOrder === 'asc' ? comparison : -comparison;

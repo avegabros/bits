@@ -98,8 +98,8 @@ export function BaseSidebar({
     `}>
 
       {/* Header Section */}
-      <div className="flex items-center h-16 shrink-0 px-7 justify-start relative">
-        <div className="w-6 flex items-center justify-center shrink-0">
+      <div className="flex items-center h-20 shrink-0 px-7 justify-start relative z-20">
+        <div className="w-8 flex items-center justify-center shrink-0">
           <button
             onClick={onToggleCollapse}
             className="text-white hover:bg-white/10 p-2 rounded-xl transition-colors hidden lg:block"
@@ -124,9 +124,9 @@ export function BaseSidebar({
       <nav 
         aria-label="Sidebar navigation"
         role="navigation"
-        className="flex-1 -mt-[30px] relative z-10 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide-hover scrollbar-slim"
+        className="flex-1 relative z-10 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide-hover scrollbar-slim"
       >
-        <ul ref={listRef} className="relative pb-4 pt-[30px]">
+        <ul ref={listRef} className="relative pb-4 pt-2">
 
           {/* Sliding indicator */}
           {indicator && activeIndex >= 0 && (
@@ -145,11 +145,11 @@ export function BaseSidebar({
               }}
             >
               {/* Only show the inverse curves when NOT collapsed */}
-              <div className="absolute right-0 -top-[30px] w-[30px] h-[30px] bg-gray-50 hidden lg:block" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
-                <div className="absolute inset-0 bg-brand rounded-br-[30px]" />
+              <div className="absolute right-0 -top-[20px] w-[20px] h-[20px] bg-gray-50 hidden lg:block" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                <div className="absolute inset-0 bg-brand rounded-br-[20px]" />
               </div>
-              <div className="absolute right-0 -bottom-[30px] w-[30px] h-[30px] bg-gray-50 hidden lg:block" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
-                <div className="absolute inset-0 bg-brand rounded-tr-[30px]" />
+              <div className="absolute right-0 -bottom-[20px] w-[20px] h-[20px] bg-gray-50 hidden lg:block" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                <div className="absolute inset-0 bg-brand rounded-tr-[20px]" />
               </div>
             </div>
           )}

@@ -16,9 +16,11 @@ export type AuditAction =
     | 'CHECK_OUT'
     | 'AUTO_CHECKOUT'
     | 'ATTENDANCE_OVERRIDE'
+    | 'ATTENDANCE_DELETE'
     | 'ADJUSTMENT_SUBMIT'
     | 'ADJUSTMENT_APPROVE'
     | 'ADJUSTMENT_REJECT'
+    | 'ADJUSTMENT_CANCEL'
     | 'FLAG_MISSING_CHECKOUT'
     // Device / Sync
     | 'SYNC'
