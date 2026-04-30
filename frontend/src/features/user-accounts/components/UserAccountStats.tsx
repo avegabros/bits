@@ -11,9 +11,10 @@ export function UserAccountStats({ users }: UserAccountStatsProps) {
   const totalUsers = users.length
   const adminCount = users.filter(u => u.role === 'ADMIN').length
   const hrCount = users.filter(u => u.role === 'HR').length
+  const managerCount = users.filter(u => u.role === 'MANAGER').length
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
       <Card className="bg-white border-slate-200 p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -35,6 +36,18 @@ export function UserAccountStats({ users }: UserAccountStatsProps) {
           </div>
           <div className="p-2.5 rounded-lg bg-blue-50">
             <Shield className="w-5 h-5 text-blue-600" />
+          </div>
+        </div>
+      </Card>
+      <Card className="bg-white border-slate-200 p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-slate-400 font-medium">Managers</p>
+            <p className="text-3xl font-bold text-slate-800 mt-1">{managerCount}</p>
+            <p className="text-xs text-slate-400 mt-1">Manager role accounts</p>
+          </div>
+          <div className="p-2.5 rounded-lg bg-purple-50">
+            <Shield className="w-5 h-5 text-purple-600" />
           </div>
         </div>
       </Card>

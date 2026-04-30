@@ -90,7 +90,7 @@ export const addUserToDevice = async (zkId: number, name: string, role: string =
         console.log(`[ZK] Enqueuing UPSERT_USER for zkId=${zkId} (${name})...`);
 
         const { enqueueGlobalUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
-        const deviceRole = role === 'ADMIN' ? 14 : 0;
+        const deviceRole = ['ADMIN', 'MANAGER'].includes(role) ? 14 : 0;
         
         await enqueueGlobalUpsertUser({
             zkId,
@@ -193,7 +193,7 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
                     const fullName = `${employee.firstName} ${employee.lastName}`;
                     const zkId = employee.zkId!;
                     const visibleId = zkId.toString();
-                    const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
+                    const deviceRole = ['ADMIN', 'MANAGER'].includes(employee.role) ? 14 : 0;
                     const deviceUid = zkId;
 
                     if (PROTECTED_DEVICE_UIDS.includes(deviceUid)) {

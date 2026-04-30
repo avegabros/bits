@@ -3,7 +3,7 @@ import { register, login, refreshToken, logout, me } from './auth.controller';
 import { validate } from '../../shared/middleware/validation.middleware';
 import { registerValidator, loginValidator } from './auth.validator';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOnly } from '../../shared/middleware/role.middleware';
+import { managerOrAdmin } from '../../shared/middleware/role.middleware';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 // ── Rate Limiters ─────────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ const router = Router();
  *       403:
  *         description: Forbidden - ADMIN role required
  */
-router.post('/register', registerLimiter, authenticate, adminOnly, validate(registerValidator), register);
+router.post('/register', registerLimiter, authenticate, managerOrAdmin, validate(registerValidator), register);
 
 /**
  * @swagger

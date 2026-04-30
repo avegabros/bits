@@ -8,6 +8,7 @@ interface UserAccountAddEditModalProps {
   onClose: () => void
   editingUser: UserAccount | null
   onSave: (data: any, editingUserId: number | null) => Promise<{ success: boolean; message?: string }>
+  currentUserRole?: string
 }
 
 export function UserAccountAddEditModal({
@@ -15,12 +16,13 @@ export function UserAccountAddEditModal({
   onClose,
   editingUser,
   onSave,
+  currentUserRole = 'ADMIN',
 }: UserAccountAddEditModalProps) {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    role: 'ADMIN',
+    role: currentUserRole === 'MANAGER' ? 'MANAGER' : 'ADMIN',
     password: '',
     confirmPassword: '',
   })
@@ -44,7 +46,7 @@ export function UserAccountAddEditModal({
           firstName: '',
           lastName: '',
           email: '',
-          role: 'ADMIN',
+          role: currentUserRole === 'MANAGER' ? 'MANAGER' : 'ADMIN',
           password: '',
           confirmPassword: '',
         })
@@ -142,7 +144,8 @@ export function UserAccountAddEditModal({
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
             >
-              <option value="ADMIN">Administrator</option>
+              {currentUserRole === 'ADMIN' && <option value="ADMIN">Administrator</option>}
+              <option value="MANAGER">Manager</option>
               <option value="HR">HR</option>
             </select>
           </div>

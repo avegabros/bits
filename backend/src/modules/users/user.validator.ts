@@ -6,14 +6,14 @@ export const createUserSchema = z.object({
     lastName: z.string().min(1, 'Last name is required').max(USER_LIMITS.NAME_MAX).trim(),
     email: z.string().email('Valid email is required'),
     password: z.string().min(USER_LIMITS.PASSWORD_MIN, `Password must be at least ${USER_LIMITS.PASSWORD_MIN} characters`).max(USER_LIMITS.PASSWORD_MAX),
-    role: z.enum(['ADMIN', 'HR'], { message: 'Role must be ADMIN or HR' }),
+    role: z.enum(['ADMIN', 'MANAGER', 'HR'], { message: 'Role must be ADMIN, MANAGER, or HR' }),
 });
 
 export const updateUserSchema = z.object({
     firstName: z.string().min(1).max(USER_LIMITS.NAME_MAX).trim().optional(),
     lastName: z.string().min(1).max(USER_LIMITS.NAME_MAX).trim().optional(),
     email: z.string().email().optional(),
-    role: z.enum(['ADMIN', 'HR']).optional(),
+    role: z.enum(['ADMIN', 'MANAGER', 'HR']).optional(),
     password: z.string().min(USER_LIMITS.PASSWORD_MIN).max(USER_LIMITS.PASSWORD_MAX).optional(),
 });
 

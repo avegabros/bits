@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-type Role = 'USER' | 'ADMIN' | 'HR';
+type Role = 'USER' | 'HR' | 'MANAGER' | 'ADMIN';
 
 /**
  * Role-Based Authorization Middleware
@@ -10,7 +10,7 @@ type Role = 'USER' | 'ADMIN' | 'HR';
  * @returns Middleware function
  * 
  * @example
- * router.get('/employees', authenticate, authorize(['ADMIN', 'HR']), getAllEmployees);
+ * router.get('/employees', authenticate, authorize(['ADMIN', 'MANAGER', 'HR']), getAllEmployees);
  */
 export const authorize = (allowedRoles: Role[]) => {
     return (req: Request, res: Response, next: NextFunction): void => {
@@ -45,6 +45,20 @@ export const authorize = (allowedRoles: Role[]) => {
 export const adminOnly = authorize(['ADMIN']);
 
 /**
- * Convenience middleware for ADMIN and HR routes
+ * Convenience middleware for MANAGER or ADMIN routes
+ * Used for features that Manager shares with Admin but HR cannot access
+ */
+export const managerOrAdmin = authorize(['MANAGER', 'ADMIN']);
+
+/**
+ * Convenience middleware for ADMIN, MANAGER, and HR routes
+ * Replaces the old adminOrHR for routes where all three management roles need access
+ */
+export const adminManagerOrHR = authorize(['ADMIN', 'MANAGER', 'HR']);
+
+/**
+ * @deprecated Use adminManagerOrHR instead for new routes.
+ * Kept for backward compatibility — equivalent to authorize(['ADMIN', 'HR'])
+ * Does NOT include MANAGER. Use adminManagerOrHR if Manager should have access.
  */
 export const adminOrHR = authorize(['ADMIN', 'HR']);

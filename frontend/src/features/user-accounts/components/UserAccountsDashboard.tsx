@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { UserCog, Plus, Search } from 'lucide-react'
 import ToastContainer from '@/components/ui/ToastContainer'
 import { useTableSort } from '@/hooks/useTableSort'
+import { useAuth } from '@/hooks/useAuth'
 
 import { useUserAccounts } from '../hooks/useUserAccounts'
 import { UserAccount } from '../utils/user-types'
@@ -17,6 +18,8 @@ import { UserAccountAddEditModal } from './UserAccountAddEditModal'
 import { UserAccountStatusConfirm } from './UserAccountStatusConfirm'
 
 export function UserAccountsDashboard() {
+  const { employee } = useAuth(['ADMIN', 'MANAGER'])
+  const currentUserRole = employee?.role ?? 'ADMIN'
   const { users, loading, fetchUsers, saveUser, toggleStatus, toasts, dismissToast } = useUserAccounts()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -119,6 +122,7 @@ export function UserAccountsDashboard() {
             <SelectContent className="bg-white border-slate-200">
               <SelectItem value="all">All Roles</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
               <SelectItem value="hr">HR</SelectItem>
             </SelectContent>
           </Select>
@@ -147,6 +151,7 @@ export function UserAccountsDashboard() {
         handleSort={handleSort as any}
         onEdit={handleOpenEdit}
         onToggleStatus={handleOpenToggleStatus}
+        currentUserRole={currentUserRole}
       />
 
       <UserAccountAddEditModal
@@ -154,6 +159,7 @@ export function UserAccountsDashboard() {
         onClose={() => setIsAddEditOpen(false)}
         editingUser={editingUser}
         onSave={saveUser}
+        currentUserRole={currentUserRole}
       />
 
       <UserAccountStatusConfirm

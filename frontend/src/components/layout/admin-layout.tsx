@@ -6,7 +6,7 @@ import { AdminSidebar } from './admin-sidebar'
 import { AdminTopbar } from './admin-topbar'
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { isLoading, isAuthenticated } = useAuth('ADMIN')
+    const { isLoading, isAuthenticated, employee } = useAuth(['ADMIN', 'MANAGER'])
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -45,6 +45,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 isCollapsed={sidebarCollapsed}
                 onClose={() => setSidebarOpen(false)}
                 onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+                role={employee?.role}
             />
 
             {/* Main Content Area */}

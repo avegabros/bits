@@ -1,7 +1,7 @@
 import express from 'express';
 import { getAllDepartments, createDepartment, renameDepartment, deleteDepartment } from './department.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = express.Router();
 
@@ -31,7 +31,7 @@ router.get('/', getAllDepartments);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/', adminOrHR, createDepartment);
+router.post('/', adminManagerOrHR, createDepartment);
 
 /**
  * @swagger
@@ -62,7 +62,7 @@ router.post('/', adminOrHR, createDepartment);
  *       404:
  *         description: Department not found
  */
-router.put('/:id', adminOrHR, renameDepartment);
+router.put('/:id', adminManagerOrHR, renameDepartment);
 
 /**
  * @swagger
@@ -84,6 +84,6 @@ router.put('/:id', adminOrHR, renameDepartment);
  *       404:
  *         description: Department not found
  */
-router.delete('/:id', adminOrHR, deleteDepartment);
+router.delete('/:id', adminManagerOrHR, deleteDepartment);
 
 export default router;

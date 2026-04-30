@@ -1,7 +1,7 @@
 import express from 'express';
 import { getCompanies, getCompanyById, createCompany, updateCompany, deleteCompany } from './company.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = express.Router();
 
@@ -53,7 +53,7 @@ router.get('/:id', getCompanyById);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/', adminOrHR, createCompany);
+router.post('/', adminManagerOrHR, createCompany);
 
 /**
  * @swagger
@@ -70,7 +70,7 @@ router.post('/', adminOrHR, createCompany);
  *         schema:
  *           type: integer
  */
-router.put('/:id', adminOrHR, updateCompany);
+router.put('/:id', adminManagerOrHR, updateCompany);
 
 /**
  * @swagger
@@ -92,6 +92,6 @@ router.put('/:id', adminOrHR, updateCompany);
  *       404:
  *         description: Company not found
  */
-router.delete('/:id', adminOrHR, deleteCompany);
+router.delete('/:id', adminManagerOrHR, deleteCompany);
 
 export default router;

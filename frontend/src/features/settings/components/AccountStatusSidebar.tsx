@@ -4,12 +4,14 @@ import type { UserData } from '../types'
 interface AccountStatusSidebarProps {
   userData: UserData
   displayName: string
-  role: 'admin' | 'hr'
+  role: 'admin' | 'hr' | 'manager'
 }
 
 export function AccountStatusSidebar({ userData, displayName, role }: AccountStatusSidebarProps) {
   const permissions = role === 'admin'
     ? ['System Administration', 'User Management', 'Full Data Access', 'Report Generation']
+    : role === 'manager'
+    ? ['User Management', 'Attendance Management', 'Report Generation', 'Device Management']
     : ['Attendance Monitoring', 'Attendance Correction', 'Report Generation', 'Employee Management']
 
   return (
@@ -27,7 +29,7 @@ export function AccountStatusSidebar({ userData, displayName, role }: AccountSta
           <div className="pb-4 border-b border-white/10">
             <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Account Role</p>
             <p className="text-sm font-black text-red-500 uppercase tracking-tighter">
-              {role === 'admin' ? 'Administrator' : userData.role === 'HR' ? 'HR Personnel' : userData.role || 'HR'}
+              {role === 'admin' ? 'Administrator' : role === 'manager' ? 'Manager' : userData.role === 'HR' ? 'HR Personnel' : userData.role || 'HR'}
             </p>
           </div>
           <div className="space-y-3">

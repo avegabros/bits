@@ -650,8 +650,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
             }
         }
 
-        // Block role escalation — prevent promoting USER to ADMIN/HR via this endpoint
-        if (req.body.role && ['ADMIN', 'HR'].includes(req.body.role) && existingEmployee.role === 'USER') {
+        // Block role escalation — prevent promoting USER to ADMIN/MANAGER/HR via this endpoint
+        if (req.body.role && ['ADMIN', 'MANAGER', 'HR'].includes(req.body.role) && existingEmployee.role === 'USER') {
             void audit({
                 action: 'UPDATE',
                 level: 'WARN',
@@ -666,7 +666,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
             return res.status(403).json({
                 success: false,
-                message: 'Role escalation not allowed. Admin/HR accounts must be managed via User Accounts.'
+                message: 'Role escalation not allowed. Admin/Manager/HR accounts must be managed via User Accounts.'
             });
         }
 

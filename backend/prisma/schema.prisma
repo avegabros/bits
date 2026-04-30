@@ -361,8 +361,9 @@ enum EmploymentStatus {
 
 enum Role {
   USER
-  ADMIN
   HR
+  MANAGER
+  ADMIN
 }
 
 enum HolidayType {

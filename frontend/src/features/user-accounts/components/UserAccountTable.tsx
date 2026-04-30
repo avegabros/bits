@@ -17,6 +17,7 @@ interface UserAccountTableProps {
   handleSort: (key: string) => void
   onEdit: (user: UserAccount) => void
   onToggleStatus: (user: UserAccount) => void
+  currentUserRole?: string
 }
 
 export function UserAccountTable({
@@ -31,6 +32,7 @@ export function UserAccountTable({
   handleSort,
   onEdit,
   onToggleStatus,
+  currentUserRole = 'ADMIN',
 }: UserAccountTableProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -104,7 +106,7 @@ export function UserAccountTable({
                 <tr key={user.id} className="hover:bg-red-50/50 transition-colors duration-200 group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${user.role === 'ADMIN' ? 'bg-blue-500' : 'bg-emerald-500'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${user.role === 'ADMIN' ? 'bg-blue-500' : user.role === 'MANAGER' ? 'bg-purple-500' : 'bg-emerald-500'}`}>
                         {user.firstName.charAt(0)}
                       </div>
                       <div className="min-w-0">
@@ -119,12 +121,15 @@ export function UserAccountTable({
                   <td className="px-6 py-4">
                     <Badge
                       variant="outline"
-                      className={user.role === 'ADMIN'
-                        ? 'bg-blue-50 text-blue-600 border-blue-200 text-xs'
-                        : 'bg-emerald-50 text-emerald-600 border-emerald-200 text-xs'
+                      className={
+                        user.role === 'ADMIN'
+                          ? 'bg-blue-50 text-blue-600 border-blue-200 text-xs'
+                          : user.role === 'MANAGER'
+                          ? 'bg-purple-50 text-purple-600 border-purple-200 text-xs'
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-200 text-xs'
                       }
                     >
-                      {user.role === 'ADMIN' ? 'Admin' : 'HR'}
+                      {user.role === 'ADMIN' ? 'Admin' : user.role === 'MANAGER' ? 'Manager' : 'HR'}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 hidden sm:table-cell">
@@ -144,28 +149,33 @@ export function UserAccountTable({
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => onEdit(user)}
-                        className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                        title="Edit user"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onToggleStatus(user)}
-                        className={`p-2.5 rounded-xl transition-all active:scale-90 ${user.status === 'active'
-                          ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                          : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                        }`}
-                        title={user.status === 'active' ? 'Deactivate account' : 'Reactivate account'}
-                      >
-                        {user.status === 'active'
-                          ? <Ban className="w-4 h-4" />
-                          : <UserCheck className="w-4 h-4" />
-                        }
-                      </button>
-                    </div>
+                    {/* Managers cannot edit/toggle Admin accounts */}
+                    {currentUserRole === 'MANAGER' && user.role === 'ADMIN' ? (
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Protected</span>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onEdit(user)}
+                          className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                          title="Edit user"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onToggleStatus(user)}
+                          className={`p-2.5 rounded-xl transition-all active:scale-90 ${user.status === 'active'
+                            ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          title={user.status === 'active' ? 'Deactivate account' : 'Reactivate account'}
+                        >
+                          {user.status === 'active'
+                            ? <Ban className="w-4 h-4" />
+                            : <UserCheck className="w-4 h-4" />
+                          }
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))

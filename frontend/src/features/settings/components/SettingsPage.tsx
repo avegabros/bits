@@ -7,7 +7,7 @@ import { PasswordCard } from './PasswordCard'
 import { AccountStatusSidebar } from './AccountStatusSidebar'
 
 interface SettingsPageProps {
-  role: 'admin' | 'hr'
+  role: 'admin' | 'hr' | 'manager'
 }
 
 export default function SettingsPage({ role }: SettingsPageProps) {
@@ -51,7 +51,7 @@ export default function SettingsPage({ role }: SettingsPageProps) {
         <AccountStatusSidebar
           userData={s.userData}
           displayName={s.displayName}
-          role={role}
+          role={(s.userData.role ? s.userData.role.toLowerCase() : role) as 'admin' | 'hr' | 'manager'}
         />
       </div>
 

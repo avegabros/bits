@@ -22,7 +22,7 @@ import {
     exportTemplate
 } from './index';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 import { validate } from '../../shared/middleware/validation.middleware';
 import { createEmployeeValidator, employeeQueryValidator, enrollFingerprintValidator, enrollCardValidator } from './employee.validator';
 import { uploadAvatar, handleMulterError } from '../profile-picture/profilePicture.validator';
@@ -33,8 +33,8 @@ const router = Router();
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Apply role-based authorization to all routes (ADMIN or HR only)
-router.use(adminOrHR);
+// Apply role-based authorization to all routes (ADMIN, MANAGER, or HR)
+router.use(adminManagerOrHR);
 
 /**
  * @swagger

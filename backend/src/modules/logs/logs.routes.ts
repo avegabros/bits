@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { getLogs, logExportEvent } from './logs.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = Router();
 
 router.use(authenticate);
-router.use(adminOrHR);
+router.use(adminManagerOrHR);
 
 /**
  * @swagger

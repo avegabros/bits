@@ -45,6 +45,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot assign the Admin role during registration.' });
+            return;
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await prisma.employee.create({

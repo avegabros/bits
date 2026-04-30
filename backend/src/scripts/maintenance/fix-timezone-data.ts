@@ -13,7 +13,7 @@ import { prisma } from '../../shared/lib/prisma';
  * 
  * What this does:
  * - Subtracts 8 hours from all AttendanceLog timestamps
- * - Subtracts 8 hours from all Attendance checkIn/checkOut times
+ * - Subtracts 8 hours from all Attendance cheackIn/checkOut times
  * - Updates the 'date' field to match the corrected date
  */
 

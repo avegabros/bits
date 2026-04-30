@@ -30,7 +30,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     try {
         const users = await prisma.employee.findMany({
             where: {
-                role: { in: ['ADMIN', 'HR'] }
+                role: { in: ['ADMIN', 'MANAGER', 'HR'] }
             },
             select: {
                 id: true,
@@ -83,6 +83,13 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Privilege escalation guard: MANAGER cannot create ADMIN accounts
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot create Admin accounts. Only Admins can assign the Admin role.' });
+            return;
+        }
 
         const newUser = await prisma.employee.create({
             data: {
@@ -153,8 +160,19 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
 
         // Verify user exists and is ADMIN/HR
         const user = await prisma.employee.findUnique({ where: { id } });
-        if (!user || !['ADMIN', 'HR'].includes(user.role)) {
+        if (!user || !['ADMIN', 'MANAGER', 'HR'].includes(user.role)) {
             res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Privilege escalation guard: MANAGER cannot modify ADMIN accounts
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && user.role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot modify Admin accounts.' });
+            return;
+        }
+        if (requesterRole === 'MANAGER' && role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot promote users to Admin.' });
             return;
         }
 
@@ -183,7 +201,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
             ...(firstName && { firstName }),
             ...(lastName && { lastName }),
             ...(email && { email }),
-            ...(role && ['ADMIN', 'HR'].includes(role) && { role }),
+            ...(role && ['ADMIN', 'MANAGER', 'HR'].includes(role) && { role }),
         };
 
         // If password is provided, hash it
@@ -275,8 +293,15 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
         }
 
         const user = await prisma.employee.findUnique({ where: { id } });
-        if (!user || !['ADMIN', 'HR'].includes(user.role)) {
+        if (!user || !['ADMIN', 'MANAGER', 'HR'].includes(user.role)) {
             res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Privilege escalation guard: MANAGER cannot delete ADMIN accounts
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && user.role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot deactivate Admin accounts.' });
             return;
         }
 
@@ -345,8 +370,15 @@ export const toggleUserStatus = async (req: Request, res: Response): Promise<voi
         const id = parseInt(req.params.id as string);
 
         const user = await prisma.employee.findUnique({ where: { id } });
-        if (!user || !['ADMIN', 'HR'].includes(user.role)) {
+        if (!user || !['ADMIN', 'MANAGER', 'HR'].includes(user.role)) {
             res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Privilege escalation guard: MANAGER cannot toggle ADMIN accounts
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && user.role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot change Admin account status.' });
             return;
         }
 
@@ -543,8 +575,15 @@ export const permanentDeleteUser = async (req: Request, res: Response): Promise<
             select: { id: true, firstName: true, lastName: true, email: true, role: true, employmentStatus: true, zkId: true },
         });
 
-        if (!user || !['ADMIN', 'HR'].includes(user.role)) {
+        if (!user || !['ADMIN', 'MANAGER', 'HR'].includes(user.role)) {
             res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Privilege escalation guard: MANAGER cannot delete ADMIN accounts
+        const requesterRole = req.user?.role;
+        if (requesterRole === 'MANAGER' && user.role === 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Managers cannot permanently delete Admin accounts.' });
             return;
         }
 

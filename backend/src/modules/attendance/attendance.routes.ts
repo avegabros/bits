@@ -14,15 +14,15 @@ import {
     deleteAttendance,
 } from './attendance.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR, adminOnly } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR, managerOrAdmin } from '../../shared/middleware/role.middleware';
 
 const router = Router();
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Apply role-based authorization to all routes (ADMIN or HR only)
-router.use(adminOrHR);
+// Apply role-based authorization to all routes (ADMIN, MANAGER, or HR)
+router.use(adminManagerOrHR);
 
 /**
  * @swagger
@@ -272,7 +272,7 @@ router.get('/adjustments', getAdjustments);
  *       200:
  *         description: Adjustment reviewed
  */
-router.put('/adjustments/:id/review', adminOnly, reviewAdjustment);
+router.put('/adjustments/:id/review', managerOrAdmin, reviewAdjustment);
 
 /**
  * @swagger

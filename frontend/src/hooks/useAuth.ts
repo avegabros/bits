@@ -8,7 +8,7 @@ interface Employee {
   firstName: string
   lastName: string
   email: string
-  role: 'USER' | 'ADMIN' | 'HR'
+  role: 'USER' | 'ADMIN' | 'HR' | 'MANAGER'
   needsPasswordChange: boolean
 }
 
@@ -18,14 +18,16 @@ interface AuthState {
   employee: Employee | null
 }
 
+type Role = 'ADMIN' | 'HR' | 'USER' | 'MANAGER';
+
 /**
  * Auth guard hook. Verifies session by calling /api/auth/me (reads HttpOnly cookie).
  * The actual auth token is an HttpOnly cookie — invisible to JS.
  * Redirects to /login if the session check fails or role doesn't match.
  *
- * @param requiredRole - If provided, only allows users with this role
+ * @param requiredRole - If provided, only allows users with this role (or one of the roles if array)
  */
-export function useAuth(requiredRole?: 'ADMIN' | 'HR' | 'USER'): AuthState {
+export function useAuth(requiredRole?: Role | Role[]): AuthState {
   const router = useRouter()
   const [state, setState] = useState<AuthState>({
     isLoading: true,
@@ -44,9 +46,15 @@ export function useAuth(requiredRole?: 'ADMIN' | 'HR' | 'USER'): AuthState {
         const data = await res.json()
         const employee: Employee = data.employee ?? data
 
-        if (requiredRole && employee.role !== requiredRole) {
-          router.replace('/login')
-          return
+        if (requiredRole) {
+          const isAllowed = Array.isArray(requiredRole) 
+              ? requiredRole.includes(employee.role)
+              : employee.role === requiredRole;
+              
+          if (!isAllowed) {
+            router.replace('/login')
+            return
+          }
         }
 
         setState({ isLoading: false, isAuthenticated: true, employee })

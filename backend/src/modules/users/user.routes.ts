@@ -10,7 +10,7 @@ import {
     permanentDeleteUser,
 } from './user.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOnly, adminOrHR } from '../../shared/middleware/role.middleware';
+import { managerOrAdmin, adminManagerOrHR } from '../../shared/middleware/role.middleware';
 import { validateZod } from '../../shared/middleware/validation.middleware';
 import { createUserSchema, updateUserSchema, updateProfileSchema, changePasswordSchema } from './user.validator';
 
@@ -57,7 +57,7 @@ router.use(authenticate);
  *       401:
  *         description: Not authenticated
  */
-router.put('/profile', adminOrHR, validateZod(updateProfileSchema), updateProfile);
+router.put('/profile', adminManagerOrHR, validateZod(updateProfileSchema), updateProfile);
 
 /**
  * @swagger
@@ -90,7 +90,7 @@ router.put('/profile', adminOrHR, validateZod(updateProfileSchema), updateProfil
  *       401:
  *         description: Current password is incorrect
  */
-router.put('/change-password', adminOrHR, validateZod(changePasswordSchema), changePassword);
+router.put('/change-password', adminManagerOrHR, validateZod(changePasswordSchema), changePassword);
 
 // ── User management routes (ADMIN only) ────────────────────
 
@@ -108,7 +108,7 @@ router.put('/change-password', adminOrHR, validateZod(changePasswordSchema), cha
  *       403:
  *         description: Admin role required
  */
-router.get('/', adminOnly, getAllUsers);
+router.get('/', managerOrAdmin, getAllUsers);
 
 /**
  * @swagger
@@ -152,7 +152,7 @@ router.get('/', adminOnly, getAllUsers);
  *       403:
  *         description: Admin role required
  */
-router.post('/', adminOnly, validateZod(createUserSchema), createUser);
+router.post('/', managerOrAdmin, validateZod(createUserSchema), createUser);
 
 /**
  * @swagger
@@ -189,7 +189,7 @@ router.post('/', adminOnly, validateZod(createUserSchema), createUser);
  *       404:
  *         description: User not found
  */
-router.put('/:id', adminOnly, validateZod(updateUserSchema), updateUser);
+router.put('/:id', managerOrAdmin, validateZod(updateUserSchema), updateUser);
 
 /**
  * @swagger
@@ -211,7 +211,7 @@ router.put('/:id', adminOnly, validateZod(updateUserSchema), updateUser);
  *       404:
  *         description: User not found
  */
-router.delete('/:id', adminOnly, deleteUser);
+router.delete('/:id', managerOrAdmin, deleteUser);
 
 /**
  * @swagger
@@ -233,7 +233,7 @@ router.delete('/:id', adminOnly, deleteUser);
  *       404:
  *         description: User not found
  */
-router.patch('/:id/toggle-status', adminOnly, toggleUserStatus);
+router.patch('/:id/toggle-status', managerOrAdmin, toggleUserStatus);
 
 /**
  * @swagger
@@ -257,6 +257,6 @@ router.patch('/:id/toggle-status', adminOnly, toggleUserStatus);
  *       404:
  *         description: User not found
  */
-router.delete('/:id/permanent', adminOnly, permanentDeleteUser);
+router.delete('/:id/permanent', managerOrAdmin, permanentDeleteUser);
 
 export default router;

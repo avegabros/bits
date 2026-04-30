@@ -1,7 +1,7 @@
 import express from 'express';
 import { getBranches, createBranch, renameBranch, deleteBranch, addCompanyToBranch, removeCompanyFromBranch } from './branch.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = express.Router();
 
@@ -31,7 +31,7 @@ router.get('/', getBranches);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/', adminOrHR, createBranch);
+router.post('/', adminManagerOrHR, createBranch);
 
 /**
  * @swagger
@@ -62,7 +62,7 @@ router.post('/', adminOrHR, createBranch);
  *       404:
  *         description: Branch not found
  */
-router.put('/:id', adminOrHR, renameBranch);
+router.put('/:id', adminManagerOrHR, renameBranch);
 
 /**
  * @swagger
@@ -84,7 +84,7 @@ router.put('/:id', adminOrHR, renameBranch);
  *       404:
  *         description: Branch not found
  */
-router.delete('/:id', adminOrHR, deleteBranch);
+router.delete('/:id', adminManagerOrHR, deleteBranch);
 
 /**
  * @swagger
@@ -113,7 +113,7 @@ router.delete('/:id', adminOrHR, deleteBranch);
  *       200:
  *         description: Company assigned to branch
  */
-router.post('/:id/companies', adminOrHR, addCompanyToBranch);
+router.post('/:id/companies', adminManagerOrHR, addCompanyToBranch);
 
 /**
  * @swagger
@@ -138,6 +138,6 @@ router.post('/:id/companies', adminOrHR, addCompanyToBranch);
  *       200:
  *         description: Company unassigned from branch
  */
-router.delete('/:id/companies/:companyId', adminOrHR, removeCompanyFromBranch);
+router.delete('/:id/companies/:companyId', adminManagerOrHR, removeCompanyFromBranch);
 
 export default router;
