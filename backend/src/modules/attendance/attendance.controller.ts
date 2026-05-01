@@ -214,11 +214,6 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         // Time Validation
         const effectiveCheckIn = new Date(checkInTime);
         const effectiveCheckOut = checkOutTime ? new Date(checkOutTime) : null;
-        const now = new Date();
-
-        if (effectiveCheckIn > now) {
-            return res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
-        }
 
         if (effectiveCheckOut) {
             if (effectiveCheckOut <= effectiveCheckIn) {
@@ -247,6 +242,25 @@ export const createManualAttendance = async (req: Request, res: Response) => {
 
         if (!employee) {
              return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
+
+        // Future check-in validation (night-shift aware)
+        // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
+        // so we only block future DATES for them. Day-shift employees keep strict validation.
+        const isNightShift = employee.Shift?.isNightShift ?? false;
+        
+        console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${employee.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
+
+        if (isNightShift) {
+            const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            if (date > todayStr) {
+                return res.status(400).json({ success: false, message: 'Cannot set check-in for a future date.' });
+            }
+        } else {
+            if (effectiveCheckIn > new Date()) {
+                return res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
+            }
         }
 
         // If HR User (or Admin acting as HR): Create a pending record + Adjustment Request
@@ -405,10 +419,27 @@ export const updateAttendance = async (req: Request, res: Response) => {
             return;
         }
 
-        const now = new Date();
-        if (effectiveCheckIn > now) {
-            res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
-            return;
+        // Future check-in validation (night-shift aware)
+        // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
+        // so we only block future DATES for them. Day-shift employees keep strict validation.
+        const isNightShift = existing.employee?.Shift?.isNightShift ?? false;
+        
+        console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${existing.employee?.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
+
+        if (isNightShift) {
+            const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            const recordDateStr = existing.date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            if (recordDateStr > todayStr) {
+                res.status(400).json({ success: false, message: 'Cannot set check-in for a future date.' });
+                return;
+            }
+        } else {
+            const now = new Date();
+            if (effectiveCheckIn > now) {
+                res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
+                return;
+            }
         }
 
         if (effectiveCheckOut) {

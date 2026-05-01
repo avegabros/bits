@@ -453,17 +453,34 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     // Build full Date objects for comparison using the record's date
     const checkInDate = new Date(`${editingLog.date}T${effectiveCheckIn}:00+08:00`)
 
-    // Check-in can't be in the future
-    const nowPHT = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }))
-    if (checkInDate > nowPHT) {
-      showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
-      return
+    // Check-in future validation (night-shift aware)
+    // Night-shift employees may need check-ins later today (e.g. 22:00 at 10 AM),
+    // so we only block future DATES for them. Day-shift employees keep strict validation.
+    const todayPHT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+    if (editingLog.isNightShift) {
+      if (editingLog.date > todayPHT) {
+        showToast('error', 'Invalid Date', 'Cannot set check-in for a future date.')
+        return
+      }
+    } else {
+      if (checkInDate > new Date()) {
+        showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
+        return
+      }
     }
 
     if (effectiveCheckOut) {
-      const checkOutDate = new Date(`${editingLog.date}T${effectiveCheckOut}:00+08:00`)
+      let checkOutDate = new Date(`${editingLog.date}T${effectiveCheckOut}:00+08:00`)
 
-      // Check-out must be after check-in
+      // Overnight / night-shift handling: if the checkout time is earlier than
+      // the checkin time (e.g. in 22:00 → out 06:00), the checkout falls on the
+      // next calendar day.
+      if (checkOutDate <= checkInDate) {
+        checkOutDate = new Date(checkOutDate.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      // After the overnight adjustment the checkout MUST still be after checkin.
+      // (This guards against edge-cases like identical times after +1 day.)
       if (checkOutDate <= checkInDate) {
         showToast('error', 'Invalid Time', 'Check-out time must be later than check-in time.')
         return
@@ -492,7 +509,16 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
       }
 
       if (editCheckIn) body.checkInTime = `${editingLog.date}T${editCheckIn}:00+08:00`
-      if (editCheckOut) body.checkOutTime = `${editingLog.date}T${editCheckOut}:00+08:00`
+      if (editCheckOut) {
+        // For overnight shifts the checkout falls on the next calendar day
+        let checkOutDateStr = editingLog.date
+        if (editCheckIn && editCheckOut < editCheckIn) {
+          const nextDay = new Date(`${editingLog.date}T00:00:00+08:00`)
+          nextDay.setDate(nextDay.getDate() + 1)
+          checkOutDateStr = nextDay.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+        }
+        body.checkOutTime = `${checkOutDateStr}T${editCheckOut}:00+08:00`
+      }
 
       const endpoint = isAbsentRecord ? '/api/attendance/manual' : `/api/attendance/${editingLog.id}`
       const method = isAbsentRecord ? 'POST' : 'PUT'
