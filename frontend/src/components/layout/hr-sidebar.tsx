@@ -10,6 +10,7 @@ import {
   History,
   Building2,
   Fingerprint,
+  CalendarDays,
 } from 'lucide-react';
 import { BaseSidebar, useSidebarCollapsed } from './shared/BaseSidebar';
 import { SidebarNavItem } from './shared/SidebarNavItem';
@@ -27,6 +28,7 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
   const isOnAdjust = pathname === '/hr/adjust';
   const isOnOrganization = pathname.startsWith('/hr/organization') || pathname.startsWith('/hr/branches');
   const isOnShifts = pathname.startsWith('/hr/shifts');
+  const isOnHolidays = pathname.startsWith('/hr/holidays');
 
   const [employeesOpen, setEmployeesOpen] = useState(isOnEmployees || isInactivePage);
 
@@ -36,6 +38,7 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
     { href: '/hr/attendance' },
     { href: '/hr/employees', matchPrefix: '/hr/employees' },
     { href: '/hr/shifts', matchPrefix: '/hr/shifts' },
+    { href: '/hr/holidays', matchPrefix: '/hr/holidays' },
     { href: '/hr/organization', matchFn: () => isOnOrganization },
     { href: '/hr/reports', matchFn: () => isOnReports },
     { href: '/hr/adjust' },
@@ -89,6 +92,9 @@ function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollaps
 
       {/* Shifts */}
       <SidebarNavItem href="/hr/shifts" label="Shifts" icon={Clock} active={isOnShifts} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Holidays */}
+      <SidebarNavItem href="/hr/holidays" label="Holidays" icon={CalendarDays} active={isOnHolidays} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
 
       {/* Organization */}
       <SidebarNavItem href="/hr/organization" label="Organization" icon={Building2} active={isOnOrganization} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />

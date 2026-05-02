@@ -14,7 +14,7 @@ interface HolidayFormData {
 const emptyForm: HolidayFormData = { name: '', date: '', description: '', type: 'REGULAR' };
 
 export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' }) {
-    const isAdmin = role === 'admin';
+    const isAdmin = role === 'admin' || role === 'hr';
     const [viewYear, setViewYear] = useState(new Date().getFullYear());
     const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
 
