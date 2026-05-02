@@ -95,7 +95,8 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
     if (Object.keys(allErrors).length > 0) { setFormErrors(allErrors); return; }
     
     setIsRegistering(true);
-    const success = await onSave(data as EmployeeFormInput);
+    const dataWithCompany = { ...(data as EmployeeFormInput), companyId: selectedCompanyId ? parseInt(selectedCompanyId) : undefined };
+    const success = await onSave(dataWithCompany);
     if (success) {
       setIsOpen(false);
       resetForm();

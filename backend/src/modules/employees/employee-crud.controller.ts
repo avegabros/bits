@@ -42,6 +42,8 @@ export const getEmployeeById = async (req: Request, res: Response) => {
                 Department: { select: { name: true } },
                 branchId: true,
                 Branch: { select: { name: true } },
+                companyId: true,
+                Company: { select: { id: true, name: true } },
                 position: true,
                 contactNumber: true,
                 hireDate: true,
@@ -128,6 +130,8 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 Department: { select: { name: true } },
                 branchId: true,
                 Branch: { select: { name: true } },
+                companyId: true,
+                Company: { select: { id: true, name: true } },
                 position: true,
                 contactNumber: true,
                 hireDate: true,
@@ -341,7 +345,8 @@ export const createEmployee = async (req: Request, res: Response) => {
             contactNumber,
             hireDate,
             employmentStatus,
-            shiftId
+            shiftId,
+            companyId
         } = req.body;
 
         // The validators have already handled empty formats
@@ -452,6 +457,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                     departmentId: departmentId ? parseInt(departmentId, 10) : null,
                     position,
                     branchId: branchId ? parseInt(branchId, 10) : null,
+                    companyId: companyId ? parseInt(companyId, 10) : null,
                     contactNumber,
                     hireDate: hireDate ? new Date(hireDate) : undefined,
                     employmentStatus: employmentStatus || 'ACTIVE',
@@ -477,6 +483,8 @@ export const createEmployee = async (req: Request, res: Response) => {
                     position: true,
                     branchId: true,
                     Branch: { select: { name: true } },
+                    companyId: true,
+                    Company: { select: { id: true, name: true } },
                     contactNumber: true,
                     hireDate: true,
                     employmentStatus: true,
@@ -596,6 +604,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             branchId,
             hireDate,
             shiftId,
+            companyId,
             employmentStatus
         } = req.body;
 
@@ -692,6 +701,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             updateData.hireDate = new Date(hireDate);
         }
         if (shiftId !== undefined) updateData.shiftId = shiftId ? parseInt(shiftId, 10) : null;
+        if (companyId !== undefined) updateData.companyId = companyId ? parseInt(companyId, 10) : null;
         if (employmentStatus !== undefined && ['ACTIVE', 'INACTIVE', 'TERMINATED'].includes(employmentStatus)) {
             updateData.employmentStatus = employmentStatus;
         }
@@ -719,6 +729,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
                 position: true,
                 branchId: true,
                 Branch: { select: { name: true } },
+                companyId: true,
+                Company: { select: { id: true, name: true } },
                 contactNumber: true,
                 hireDate: true,
                 employmentStatus: true,

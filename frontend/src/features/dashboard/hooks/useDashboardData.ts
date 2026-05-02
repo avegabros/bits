@@ -129,7 +129,8 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 return (emp.role === 'USER' || !emp.role) && a.status !== 'pending';
             });
 
-            const activeCount = emps.filter(e => e.employmentStatus === 'ACTIVE').length;
+            const activeEmps = emps.filter((e: any) => e.employmentStatus === 'ACTIVE');
+            const activeCount = activeEmps.length;
             setTotalEmployees(activeCount);
 
             const todayPHTStr = phtStr(new Date());
@@ -145,7 +146,12 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 const onTime = dayAtts.filter(a => a.checkInTime && (a.lateMinutes ?? 0) === 0).length;
                 const totalCheckedIn = onTime + late;
                 const isDateHoliday = holidayDateSet.has(dateStr);
-                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, activeCount - totalCheckedIn) : 0);
+                // Only count employees whose hireDate is on or before this day
+                const eligibleCount = activeEmps.filter((e: any) => {
+                    if (!e.hireDate) return true; // no hireDate = always eligible
+                    return phtStr(new Date(e.hireDate)) <= dateStr;
+                }).length;
+                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0);
                 return { day, present: onTime, late, absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
@@ -183,7 +189,12 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const todayPresent = todayOnTime + todayLate; // total who checked in, used for absent calc
             setTotalPresent(todayOnTime);
             setTotalLate(todayLate);
-            const missingCount = Math.max(0, activeCount - todayPresent);
+            // Only count employees whose hireDate is on or before today for absent/holiday calc
+            const todayEligible = activeEmps.filter((e: any) => {
+                if (!e.hireDate) return true;
+                return phtStr(new Date(e.hireDate)) <= todayPHTStr;
+            }).length;
+            const missingCount = Math.max(0, todayEligible - todayPresent);
             if (todayHoliday) {
                 setTotalAbsent(0);
                 setTotalHoliday(missingCount);

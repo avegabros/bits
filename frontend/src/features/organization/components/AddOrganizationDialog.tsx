@@ -11,8 +11,6 @@ interface AddOrganizationDialogProps {
   setNewName: (name: string) => void
   newAddress?: string
   setNewAddress?: (address: string) => void
-  newLogo?: string
-  setNewLogo?: (logo: string) => void
   addLoading: boolean
   addError: string | null
   setAddError: (error: string | null) => void
@@ -24,12 +22,11 @@ export function AddOrganizationDialog({
   addType, setAddType,
   newName, setNewName,
   newAddress = '', setNewAddress,
-  newLogo = '', setNewLogo,
   addLoading, addError, setAddError,
   onAdd,
 }: AddOrganizationDialogProps) {
   return (
-    <Dialog open={isAddOpen} onOpenChange={v => { setIsAddOpen(v); if (!v) { setNewName(''); setNewAddress?.(''); setNewLogo?.(''); setAddError(null) } }}>
+    <Dialog open={isAddOpen} onOpenChange={v => { setIsAddOpen(v); if (!v) { setNewName(''); setNewAddress?.(''); setAddError(null) } }}>
       <DialogTrigger asChild>
         <Button className="bg-red-600 hover:bg-red-700 gap-2 text-white shadow-lg shadow-red-600/20">
           <Plus className="w-4 h-4" />
@@ -102,15 +99,7 @@ export function AddOrganizationDialog({
                   onChange={e => setNewAddress?.(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Logo URL</label>
-                <input
-                  placeholder="https://example.com/logo.png"
-                  className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
-                  value={newLogo}
-                  onChange={e => setNewLogo?.(e.target.value)}
-                />
-              </div>
+
             </>
           )}
           {addError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{addError}</p>}
@@ -118,7 +107,7 @@ export function AddOrganizationDialog({
         <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-slate-100">
           <button
             className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
-            onClick={() => { setNewName(''); setNewAddress?.(''); setNewLogo?.(''); setIsAddOpen(false); setAddError(null) }}
+            onClick={() => { setNewName(''); setNewAddress?.(''); setIsAddOpen(false); setAddError(null) }}
             disabled={addLoading}
           >
             Discard

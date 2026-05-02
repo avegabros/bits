@@ -107,6 +107,7 @@ model Company {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   branches  CompanyBranch[]
+  employees Employee[]
 }
 
 model Branch {
@@ -182,6 +183,7 @@ model Employee {
   // Relations
   departmentId                  Int?
   branchId                      Int?
+  companyId                     Int?
   shiftId                       Int?
   Attendance                    Attendance[]
   AdjustmentsReviewed           AttendanceAdjustment[]          @relation("AdjustmentReviewedBy")
@@ -189,6 +191,7 @@ model Employee {
   AttendanceLog                 AttendanceLog[]
   AuditLogs                     AuditLog[]
   Branch                        Branch?                         @relation(fields: [branchId], references: [id])
+  Company                       Company?                        @relation(fields: [companyId], references: [id])
   Department                    Department?                     @relation(fields: [departmentId], references: [id])
   Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
@@ -198,6 +201,7 @@ model Employee {
 
   @@index([departmentId])
   @@index([branchId])
+  @@index([companyId])
   @@index([shiftId])
   @@index([email])
   @@index([employeeNumber])

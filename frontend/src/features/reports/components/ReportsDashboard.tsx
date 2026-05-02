@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState } from 'react';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Building, Loader2, AlertTriangle } from 'lucide-react';
 import { useReportData } from '../hooks/useReportData';
 import { useTableSort } from '@/hooks/useTableSort';
 import { ReportFilters } from './ReportFilters';
 import { ReportTable } from './ReportTable';
 import { EmployeeModal } from './EmployeeModal';
-import { handleExport, handleExportIndividual } from '../lib/exportReport';
+import { handleExport, handleExportIndividual, handleExportAllCompanies } from '../lib/exportReport';
 import { formatDateShort } from '../lib/formatters';
 import { ReportRow } from '@/types/reports';
 import { useHolidays } from '@/features/holidays/hooks/useHolidays';
@@ -34,6 +34,8 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
   const [selectedEmployee, setSelectedEmployee] = useState<ReportRow | null>(
     null
   );
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportWarning, setExportWarning] = useState<string | null>(null);
 
   // Custom hook for data fetching & initial aggregation
   const { reportData, allRecords, loading, error } = useReportData(
@@ -133,15 +135,68 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
                 </p>
             </div>
         </div>
-        <button
-          onClick={() => handleExport(filteredData, startDate, endDate, role === 'hr' ? 'hr-panel' : 'admin-panel')}
-          className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-red-600/20 w-full sm:w-auto justify-center"
-        >
-          <Download className="w-4 h-4" />
-          Attendance Report: {formatDateShort(startDate)} –{' '}
-          {formatDateShort(endDate)}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => handleExport(filteredData, startDate, endDate, role === 'hr' ? 'hr-panel' : 'admin-panel')}
+            className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-red-600/20 w-full sm:w-auto justify-center"
+          >
+            <Download className="w-4 h-4" />
+            Attendance Report: {formatDateShort(startDate)} –{' '}
+            {formatDateShort(endDate)}
+          </button>
+          <button
+            disabled={exportingAll}
+            onClick={async () => {
+              setExportingAll(true);
+              setExportWarning(null);
+              try {
+                const result = await handleExportAllCompanies(
+                  startDate,
+                  endDate,
+                  role === 'hr' ? 'hr-panel' : 'admin-panel'
+                );
+                const warnings: string[] = [];
+                if (result.excludedCount > 0)
+                  warnings.push(
+                    `${result.excludedCount} employee(s) were excluded — no branch/company assigned.`
+                  );
+                if (result.truncationWarning)
+                  warnings.push(
+                    'Data may be incomplete — record limits were reached. Consider narrowing the date range.'
+                  );
+                if (warnings.length > 0) setExportWarning(warnings.join(' '));
+              } catch (err) {
+                console.error('Export failed:', err);
+                setExportWarning('Export failed. Please try again.');
+              } finally {
+                setExportingAll(false);
+              }
+            }}
+            className="flex items-center gap-2 px-5 py-3 border-2 border-red-600 text-red-600 hover:bg-red-50 font-bold text-sm rounded-xl transition-colors w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {exportingAll ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Building className="w-4 h-4" />
+            )}
+            {exportingAll ? 'Exporting...' : 'Export All Companies'}
+          </button>
+        </div>
       </div>
+
+      {/* Export Warning Banner */}
+      {exportWarning && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 mt-4">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+          <span className="flex-1">{exportWarning}</span>
+          <button
+            onClick={() => setExportWarning(null)}
+            className="text-amber-500 hover:text-amber-700 font-bold text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <ReportFilters

@@ -23,8 +23,9 @@ export function EditAssignmentSection({
   editForm, formErrors, departments, branches, companies, shifts, onFormChange, onClearError,
 }: EditAssignmentSectionProps) {
 
-  // Derive initial company from current branchId
+  // Derive initial company from editForm.companyId (direct) or fallback to branch inference
   const initialCompanyId = useMemo(() => {
+    if (editForm.companyId) return String(editForm.companyId)
     if (!editForm.branchId) return ''
     const branch = branches.find((b: any) => b.id === editForm.branchId)
     if (branch?.companies?.length > 0) {
@@ -53,9 +54,10 @@ export function EditAssignmentSection({
           <select
             value={selectedCompanyId}
             onChange={(e) => {
-              setSelectedCompanyId(e.target.value)
-              // Reset branch when company changes
-              onFormChange({ ...editForm, branchId: null as any })
+              const newCompanyId = e.target.value
+              setSelectedCompanyId(newCompanyId)
+              // Reset branch and persist companyId
+              onFormChange({ ...editForm, companyId: newCompanyId ? parseInt(newCompanyId) : null, branchId: null as any })
               if (formErrors.branchId) onClearError('branchId')
             }}
             className={`${inputBase} ${inputNormal}`}

@@ -64,7 +64,7 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
     org.setEditingCompany(company)
     org.setEditCompanyName(company.name)
     org.setEditCompanyAddress(company.address || '')
-    org.setEditCompanyLogo(company.logo || '')
+
     org.setEditCompanyError(null)
   }
 
@@ -126,8 +126,7 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
         setEditCompanyName={org.setEditCompanyName}
         editCompanyAddress={org.editCompanyAddress}
         setEditCompanyAddress={org.setEditCompanyAddress}
-        editCompanyLogo={org.editCompanyLogo}
-        setEditCompanyLogo={org.setEditCompanyLogo}
+
         editCompanyLoading={org.editCompanyLoading}
         editCompanyError={org.editCompanyError}
         onSave={org.handleEditCompanySave}
@@ -155,8 +154,6 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
           setNewName={org.setNewName}
           newAddress={org.newAddress}
           setNewAddress={org.setNewAddress}
-          newLogo={org.newLogo}
-          setNewLogo={org.setNewLogo}
           addLoading={org.addLoading}
           addError={org.addError}
           setAddError={org.setAddError}

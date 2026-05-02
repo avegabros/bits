@@ -7,8 +7,7 @@ interface EditCompanyDialogProps {
   setEditCompanyName: (name: string) => void
   editCompanyAddress: string
   setEditCompanyAddress: (address: string) => void
-  editCompanyLogo: string
-  setEditCompanyLogo: (logo: string) => void
+
   editCompanyLoading: boolean
   editCompanyError: string | null
   onSave: () => void
@@ -18,7 +17,6 @@ interface EditCompanyDialogProps {
 export function EditCompanyDialog({
   editingCompany, editCompanyName, setEditCompanyName,
   editCompanyAddress, setEditCompanyAddress,
-  editCompanyLogo, setEditCompanyLogo,
   editCompanyLoading, editCompanyError, onSave, onCancel,
 }: EditCompanyDialogProps) {
   if (!editingCompany) return null
@@ -55,15 +53,7 @@ export function EditCompanyDialog({
               onChange={e => setEditCompanyAddress(e.target.value)}
             />
           </div>
-          <div>
-            <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Logo URL</label>
-            <input
-              placeholder="https://example.com/logo.png"
-              className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
-              value={editCompanyLogo}
-              onChange={e => setEditCompanyLogo(e.target.value)}
-            />
-          </div>
+
           {editCompanyError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{editCompanyError}</p>}
         </div>
         <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-slate-100">

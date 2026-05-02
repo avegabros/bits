@@ -27,7 +27,6 @@ export function useOrganization() {
   const [addType, setAddType] = useState<'department' | 'branch' | 'company'>('department')
   const [newName, setNewName] = useState('')
   const [newAddress, setNewAddress] = useState('')
-  const [newLogo, setNewLogo] = useState('')
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -48,7 +47,6 @@ export function useOrganization() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null)
   const [editCompanyName, setEditCompanyName] = useState('')
   const [editCompanyAddress, setEditCompanyAddress] = useState('')
-  const [editCompanyLogo, setEditCompanyLogo] = useState('')
   const [editCompanyLoading, setEditCompanyLoading] = useState(false)
   const [editCompanyError, setEditCompanyError] = useState<string | null>(null)
 
@@ -129,12 +127,12 @@ export function useOrganization() {
       if (addType === 'company') {
         const res = await fetch('/api/companies', {
           method: 'POST', headers: authHeaders(), credentials: 'include',
-          body: JSON.stringify({ name: trimmed, address: newAddress.trim() || null, logo: newLogo.trim() || null }),
+          body: JSON.stringify({ name: trimmed, address: newAddress.trim() || null }),
         })
         const data = await res.json()
         if (!data.success) { setAddError(data.message || 'Failed to create'); return }
         setCompanies(prev => [...prev, data.company].sort((a, b) => a.name.localeCompare(b.name)))
-        setNewName(''); setNewAddress(''); setNewLogo(''); setIsAddOpen(false)
+        setNewName(''); setNewAddress(''); setIsAddOpen(false)
         showToast('success', 'Company Created', `${trimmed} has been added successfully`)
       } else {
         const endpoint = addType === 'department' ? '/api/departments' : '/api/branches'
@@ -266,7 +264,6 @@ export function useOrganization() {
         body: JSON.stringify({
           name: editCompanyName.trim(),
           address: editCompanyAddress.trim() || null,
-          logo: editCompanyLogo.trim() || null,
         }),
       })
       const data = await res.json()
@@ -356,7 +353,7 @@ export function useOrganization() {
     searchTerm, setSearchTerm, branchFilter, setBranchFilter,
     viewMode, setViewMode,
     isAddOpen, setIsAddOpen, addType, setAddType,
-    newName, setNewName, newAddress, setNewAddress, newLogo, setNewLogo,
+    newName, setNewName, newAddress, setNewAddress,
     addLoading, addError, setAddError, handleAdd,
     editingDept, setEditingDept, editName, setEditName,
     editLoading, editError, setEditError, handleEditSave,
@@ -366,7 +363,6 @@ export function useOrganization() {
     editingCompany, setEditingCompany,
     editCompanyName, setEditCompanyName,
     editCompanyAddress, setEditCompanyAddress,
-    editCompanyLogo, setEditCompanyLogo,
     editCompanyLoading, editCompanyError, setEditCompanyError, handleEditCompanySave,
     confirmDeleteDept, setConfirmDeleteDept,
     confirmDeleteBranch, setConfirmDeleteBranch,

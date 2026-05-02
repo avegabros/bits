@@ -99,7 +99,14 @@ export function EmployeeTable({
                       </div>
                     ) : (<span className="text-[10px] text-slate-300 font-bold">Unassigned</span>)}
                   </td>
-                  <td className="px-6 py-4"><span className="text-xs font-medium text-slate-500">{employee.Branch?.name || '—'}</span></td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-medium text-slate-500">{employee.Branch?.name || '—'}</span>
+                    {employee.Company ? (
+                      <p className="text-[10px] text-slate-400 mt-0.5">{employee.Company.name}</p>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 mt-0.5">No Company</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4"><span className="text-xs font-medium text-slate-500">{employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</span></td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">

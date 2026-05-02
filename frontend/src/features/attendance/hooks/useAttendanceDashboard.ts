@@ -56,6 +56,7 @@ interface RawEmployee {
   lastName: string
   Department?: { name: string }
   Branch?: { name: string }
+  Company?: { id: number; name: string } | null
   Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
   profilePicture?: string | null
 }
@@ -319,6 +320,17 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
           )
         } catch { /* ignore */ }
 
+        // Build employee → company lookup for company filtering on attendance records
+        const companyByEmployeeId = new Map<number, string | null>()
+        for (const e of allEmployees) {
+          companyByEmployeeId.set(e.id, e.Company?.name ?? null)
+        }
+
+        // Stamp companyName onto each mapped attendance record
+        for (const r of mapped) {
+          (r as any).companyName = companyByEmployeeId.get(r.employeeId) ?? null
+        }
+
         // Pending manual creations should NOT count as "present" for absent-row injection.
         // Records with UPDATE/DELETE adjustments (isPending + real status) still count as present.
         // Only brand-new unapproved creation placeholders (isPending + notes flag) are excluded.
@@ -339,6 +351,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
               profilePicture: e.profilePicture,
               department: e.Department?.name || 'General',
               branchName: e.Branch?.name || '—',
+              companyName: e.Company?.name ?? null,
               date: selectedDate,
               checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
               lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
@@ -358,13 +371,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
 
         // Apply client-side filters
         if (debouncedSearch) full = full.filter(r => r.employeeName.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        // Company filter: use direct companyName — null-company employees excluded from specific tabs
         if (companyFilter !== 'All Companies') {
-          const validBranches = new Set(
-            branchesList
-              .filter(b => b.companies?.some(link => link.company.name === companyFilter))
-              .map(b => b.name)
-          )
-          full = full.filter(r => validBranches.has(r.branchName))
+          full = full.filter(r => (r as any).companyName === companyFilter)
         }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== 'All Departments') full = full.filter(r => r.department === deptFilter)

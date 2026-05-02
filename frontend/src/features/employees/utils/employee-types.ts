@@ -15,6 +15,8 @@ export type Employee = {
   Department: { name: string } | null
   branchId: number | null
   Branch: { name: string } | null
+  companyId: number | null
+  Company: { id: number; name: string } | null
   position: string | null
   contactNumber: string | null
   hireDate: string | null

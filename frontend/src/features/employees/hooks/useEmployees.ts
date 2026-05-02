@@ -82,15 +82,6 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
   }, [selectedCompany]);
 
   const filteredEmployees = useMemo(() => {
-    // Pre-compute valid branch names for the selected company
-    const companyBranchNames = selectedCompany === 'All Companies'
-      ? null
-      : new Set(
-          branches
-            .filter((b: any) => b.companies?.some((link: any) => link.company.name === selectedCompany))
-            .map((b: any) => b.name)
-        );
-
     return employees.filter((emp) => {
       const fullName = formatFullName(emp.firstName, emp.middleName, emp.lastName, emp.suffix).toLowerCase();
       const searchStr = searchTerm.toLowerCase().trim();
@@ -107,13 +98,14 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
         // Only compare zkId if the query is purely numeric (it's an Int)
         (isNumericSearch && emp.zkId === Number(searchStr));
 
-      const matchesCompany = !companyBranchNames || companyBranchNames.has(emp.Branch?.name || '');
+      // Direct company match — null-company employees only show under "All Companies"
+      const matchesCompany = selectedCompany === 'All Companies' || emp.Company?.name === selectedCompany;
       const matchesDept = selectedDept === 'all' || emp.Department?.name === selectedDept;
       const matchesBranch = selectedBranch === 'all' || emp.Branch?.name === selectedBranch;
       const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift;
       return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift;
     });
-  }, [employees, searchTerm, selectedCompany, branches, selectedDept, selectedBranch, selectedShift]);
+  }, [employees, searchTerm, selectedCompany, selectedDept, selectedBranch, selectedShift]);
 
   const tableSort = useTableSort<Employee>({ initialData: filteredEmployees });
 

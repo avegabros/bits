@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import * as XLSXS from 'xlsx-js-style';
 import { ReportRow, AttendanceRecord } from '@/types/reports';
 import {
   formatDateShort,
@@ -332,4 +333,390 @@ export const handleExportIndividual = (
       fileName,
     }),
   }).catch(() => {});
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// handleExportAllCompanies — Multi-company per-sheet export
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Helper: set a styled cell on a worksheet (xlsx-js-style) */
+function setStyledCell(
+  ws: any,
+  row: number,
+  col: number,
+  value: string | number,
+  style: Record<string, unknown>
+) {
+  const addr = XLSXS.utils.encode_cell({ r: row, c: col });
+  ws[addr] = { v: value, t: typeof value === 'number' ? 'n' : 's', s: style };
+}
+
+/** Sanitize a string for use as an Excel sheet name (max 31 chars, no special chars) */
+function sanitizeSheetName(name: string): string {
+  return name.replace(/[\\/*?:\[\]]/g, '_').substring(0, 31);
+}
+
+const COLS_PER_EMP = 6;
+const SEPARATOR_COLS = 1;
+const HEADER_ROWS = 3;
+
+const STYLE_BOLD: Record<string, unknown> = { font: { bold: true } };
+
+// Header row 0-1: light blue-gray background, bold
+const STYLE_INFO_HEADER: Record<string, unknown> = {
+  font: { bold: true },
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
+};
+const STYLE_INFO_VALUE: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
+};
+// Header row 2 (DATE, DAY, IN, OUT, REMARKS): gray, bold, centered
+const STYLE_COL_HEADER: Record<string, unknown> = {
+  font: { bold: true },
+  alignment: { horizontal: 'center' as const },
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
+};
+
+// Data row fills — use full 8-char ARGB hex for xlsx-js-style compatibility
+const FILL_REST_DAY: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFFFD700' } },
+};
+const FILL_HOLIDAY: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FF92D050' } },
+};
+const FILL_ABSENT: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFFF9999' } },
+};
+const FILL_LATE: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFFFD966' } },
+};
+const FILL_ON_TIME: Record<string, unknown> = {
+  fill: { patternType: 'solid', fgColor: { rgb: 'FFC6EFCE' } },
+};
+const FILL_NONE: Record<string, unknown> = {};
+
+// Locale-independent day name lookup (index matches Date.getUTCDay())
+const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export const handleExportAllCompanies = async (
+  startDate: string,
+  endDate: string,
+  exportSource: 'admin-panel' | 'hr-panel' = 'admin-panel'
+): Promise<{ excludedCount: number; truncationWarning: boolean }> => {
+  // ── 1. Fetch all required data ─────────────────────────────────────
+  const startYear = new Date(startDate + 'T00:00:00Z').getFullYear();
+  const [empRes, attRes, branchRes, holRes] = await Promise.all([
+    fetch('/api/employees?limit=5000', { credentials: 'include' }),
+    fetch(
+      `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=10000`,
+      { credentials: 'include' }
+    ),
+    fetch('/api/branches', { credentials: 'include' }),
+    fetch(`/api/holidays?year=${startYear}`, { credentials: 'include' }),
+  ]);
+
+  const empData = await empRes.json();
+  const attData = attRes.ok ? await attRes.json() : { success: false };
+  const branchData = branchRes.ok
+    ? await branchRes.json()
+    : { success: false };
+  const holData = holRes.ok ? await holRes.json() : { success: false };
+
+  // ── 2. Parse & filter ──────────────────────────────────────────────
+  const allEmps: any[] = (
+    empData.employees ||
+    empData.data ||
+    []
+  ).filter(
+    (e: any) => e.employmentStatus === 'ACTIVE' && (e.role === 'USER' || !e.role)
+  );
+  const records: any[] = attData.success ? attData.data || [] : [];
+  const branches: any[] = branchData.success
+    ? branchData.branches || branchData.data || []
+    : [];
+  const holidays: any[] = holData.success ? holData.holidays || [] : [];
+
+  // ── 3. Truncation check ────────────────────────────────────────────
+  const truncationWarning = allEmps.length >= 5000 || records.length >= 10000;
+
+  // ── 4. Build lookup maps ───────────────────────────────────────────
+  // Holiday date set & name map
+  const holidayDateSet = new Set<string>();
+  const holidayNameMap = new Map<string, string>();
+  for (const h of holidays) {
+    const d = new Date(h.date).toISOString().split('T')[0];
+    holidayDateSet.add(d);
+    holidayNameMap.set(d, h.name);
+  }
+
+  // Attendance: employeeId → dateStr → record
+  const attByEmployee = new Map<number, Map<string, any>>();
+  for (const r of records) {
+    const empId = r.employeeId;
+    if (!attByEmployee.has(empId)) attByEmployee.set(empId, new Map());
+    const dateStr = new Date(r.date).toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Manila',
+    });
+    if (!attByEmployee.get(empId)!.has(dateStr)) {
+      attByEmployee.get(empId)!.set(dateStr, r);
+    }
+  }
+
+  // ── 5. Group employees by company (direct companyId) ────────────────
+  const companyEmployees = new Map<string, any[]>();
+  let excludedCount = 0;
+
+  for (const emp of allEmps) {
+    const companyName = emp.Company?.name;
+    if (!companyName) {
+      // Employee has no companyId assigned — exclude from per-company sheets
+      excludedCount++;
+      continue;
+    }
+    if (!companyEmployees.has(companyName))
+      companyEmployees.set(companyName, []);
+    companyEmployees.get(companyName)!.push(emp);
+  }
+
+  // ── 6. Build calendar dates array ──────────────────────────────────
+  const calDates: Date[] = [];
+  const cursorDate = new Date(startDate + 'T00:00:00Z');
+  const endD = new Date(endDate + 'T00:00:00Z');
+  while (cursorDate <= endD) {
+    calDates.push(new Date(cursorDate));
+    cursorDate.setUTCDate(cursorDate.getUTCDate() + 1);
+  }
+  const todayStr = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Manila',
+  });
+
+  // ── 7. Create workbook ─────────────────────────────────────────────
+  const wb = XLSXS.utils.book_new();
+  const sortedCompanies = Array.from(companyEmployees.keys()).sort();
+
+  if (sortedCompanies.length === 0) {
+    const ws: any = {};
+    setStyledCell(ws, 0, 0, 'No company data found for this period.', STYLE_BOLD);
+    ws['!ref'] = 'A1:D1';
+    XLSXS.utils.book_append_sheet(wb, ws, 'No Data');
+  }
+
+  for (const companyName of sortedCompanies) {
+    const emps = companyEmployees.get(companyName)!;
+    emps.sort((a: any, b: any) =>
+      `${a.lastName} ${a.firstName}`.localeCompare(
+        `${b.lastName} ${b.firstName}`
+      )
+    );
+
+    const ws: any = {};
+
+    if (emps.length === 0) {
+      setStyledCell(ws, 0, 0, 'No employees found.', STYLE_BOLD);
+      ws['!ref'] = 'A1:D1';
+      XLSXS.utils.book_append_sheet(wb, ws, sanitizeSheetName(companyName));
+      continue;
+    }
+
+    // ── Write each employee block horizontally ─────────────────────
+    for (let empIdx = 0; empIdx < emps.length; empIdx++) {
+      const emp = emps[empIdx];
+      const c0 = empIdx * (COLS_PER_EMP + SEPARATOR_COLS);
+
+      // Build display values
+      const fullName = `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}`.trim();
+      const empNumber = emp.employeeNumber || '—';
+      const deptName = emp.Department?.name || '—';
+      const branchName = emp.Branch?.name || '—';
+      const position = emp.position || '—';
+
+      // Row 0: [EmpNumber] | [FullName] | (empty) | DEPARTMENT | [DeptName] | (empty)
+      setStyledCell(ws, 0, c0, empNumber, STYLE_INFO_HEADER);
+      setStyledCell(ws, 0, c0 + 1, fullName, STYLE_INFO_HEADER);
+      setStyledCell(ws, 0, c0 + 2, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 0, c0 + 3, 'DEPARTMENT', STYLE_INFO_HEADER);
+      setStyledCell(ws, 0, c0 + 4, deptName, STYLE_INFO_VALUE);
+      setStyledCell(ws, 0, c0 + 5, '', STYLE_INFO_VALUE);
+
+      // Row 1: POSITION | [Position] | (empty) | SITE | [Branch] | (empty)
+      setStyledCell(ws, 1, c0, 'POSITION', STYLE_INFO_HEADER);
+      setStyledCell(ws, 1, c0 + 1, position, STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 2, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 3, 'SITE', STYLE_INFO_HEADER);
+      setStyledCell(ws, 1, c0 + 4, branchName, STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 5, '', STYLE_INFO_VALUE);
+
+      // Row 2: DATE | DAY | IN | OUT | REMARKS | (empty)
+      setStyledCell(ws, 2, c0, 'DATE', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0 + 1, 'DAY', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0 + 2, 'IN', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0 + 3, 'OUT', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0 + 4, 'REMARKS', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0 + 5, '', STYLE_COL_HEADER);
+
+      // Parse employee work days from shift
+      let workDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      if (emp.Shift?.workDays) {
+        try {
+          const parsed =
+            typeof emp.Shift.workDays === 'string'
+              ? JSON.parse(emp.Shift.workDays)
+              : emp.Shift.workDays;
+          if (Array.isArray(parsed)) workDayNames = parsed;
+        } catch {
+          /* keep default */
+        }
+      }
+
+      const empRecords = attByEmployee.get(emp.id) || new Map();
+      const empHireDate = emp.hireDate
+        ? new Date(emp.hireDate).toLocaleDateString('en-CA', {
+            timeZone: 'Asia/Manila',
+          })
+        : null;
+
+      // ── Walk every calendar date ───────────────────────────────
+      for (let dayIdx = 0; dayIdx < calDates.length; dayIdx++) {
+        const date = calDates[dayIdx];
+        const rowIdx = HEADER_ROWS + dayIdx;
+        const dateStr = date.toISOString().split('T')[0];
+        // Use locale-independent day name lookup
+        const dayShort = SHORT_DAY_NAMES[date.getUTCDay()];
+        const dayFull = date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          timeZone: 'UTC',
+        });
+
+        const isRestDay = !workDayNames.includes(dayShort);
+        const isFuture = dateStr > todayStr;
+        const isHoliday = holidayDateSet.has(dateStr);
+        const isBeforeHire = empHireDate ? dateStr < empHireDate : false;
+        const record = empRecords.get(dateStr);
+
+        const formattedDate = fmtFullDate(date);
+
+        if (isBeforeHire || isFuture) {
+          // Blank row — before hire or future — no fill
+          setStyledCell(ws, rowIdx, c0, formattedDate, FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 2, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 3, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 4, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+        } else if (record) {
+          // Has attendance record
+          const checkIn = new Date(record.checkInTime);
+          const checkOut = record.checkOutTime
+            ? new Date(record.checkOutTime)
+            : null;
+          const checkInStr = checkIn.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+          const checkOutStr = checkOut
+            ? checkOut.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })
+            : '';
+
+          let remarks = '';
+          const lateMins = record.lateMinutes ?? 0;
+          const utMins = record.undertimeMinutes ?? 0;
+          if (lateMins > 0) remarks = `Late ${formatLateHrs(lateMins)}`;
+          else if (utMins > 0) remarks = `UT ${formatLateHrs(utMins)}`;
+
+          // Priority: Holiday > Rest Day > Late > On Time
+          let rowFill: Record<string, unknown>;
+          if (isHoliday) rowFill = FILL_HOLIDAY;
+          else if (isRestDay) rowFill = FILL_REST_DAY;
+          else if (lateMins > 0) rowFill = FILL_LATE;
+          else rowFill = FILL_ON_TIME;
+
+          setStyledCell(ws, rowIdx, c0, formattedDate, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 2, checkInStr, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 4, remarks, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+        } else {
+          // No record — determine status & fill
+          // Priority: Holiday > Rest Day > Absent
+          let remarks = '';
+          let rowFill: Record<string, unknown>;
+          if (isHoliday) {
+            const hName = holidayNameMap.get(dateStr);
+            remarks = hName ? `Holiday — ${hName}` : 'Holiday';
+            rowFill = FILL_HOLIDAY;
+          } else if (isRestDay) {
+            remarks = 'Rest Day';
+            rowFill = FILL_REST_DAY;
+          } else {
+            remarks = 'Absent';
+            rowFill = FILL_ABSENT;
+          }
+
+          setStyledCell(ws, rowIdx, c0, formattedDate, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 2, '', rowFill);
+          setStyledCell(ws, rowIdx, c0 + 3, '', rowFill);
+          setStyledCell(ws, rowIdx, c0 + 4, remarks, rowFill);
+          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+        }
+      }
+    }
+
+    // ── Set worksheet range & column widths ─────────────────────────
+    const totalCols =
+      emps.length * (COLS_PER_EMP + SEPARATOR_COLS) - SEPARATOR_COLS;
+    const totalRows = HEADER_ROWS + calDates.length;
+    ws['!ref'] = XLSXS.utils.encode_range({
+      s: { r: 0, c: 0 },
+      e: { r: totalRows - 1, c: totalCols - 1 },
+    });
+
+    const cols: any[] = [];
+    for (let i = 0; i < emps.length; i++) {
+      const base = i * (COLS_PER_EMP + SEPARATOR_COLS);
+      cols[base] = { wch: 20 }; // DATE / EmpNum
+      cols[base + 1] = { wch: 16 }; // DAY / Name
+      cols[base + 2] = { wch: 12 }; // IN / label
+      cols[base + 3] = { wch: 14 }; // OUT / value
+      cols[base + 4] = { wch: 18 }; // REMARKS
+      cols[base + 5] = { wch: 6 }; // Extra
+      if (i < emps.length - 1) {
+        cols[base + 6] = { wch: 2 }; // Separator
+      }
+    }
+    ws['!cols'] = cols;
+
+    XLSXS.utils.book_append_sheet(wb, ws, sanitizeSheetName(companyName));
+  }
+
+  // ── 8. Write file ──────────────────────────────────────────────────
+  const fileName = `Attendance_Report_All_Companies_${formatDateShort(startDate)}_to_${formatDateShort(endDate)}.xlsx`;
+  XLSXS.writeFile(wb, fileName);
+
+  // ── 9. Audit log ───────────────────────────────────────────────────
+  fetch('/api/logs/export-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      exportType: 'report',
+      entityType: 'Attendance',
+      source: exportSource,
+      details: `Exported all-companies report (${sortedCompanies.length} companies, ${allEmps.length - excludedCount} employees) for ${startDate} to ${endDate}`,
+      filters: { dateFrom: startDate, dateTo: endDate, type: 'all-companies' },
+      recordCount: records.length,
+      fileFormat: 'xlsx',
+      fileName,
+    }),
+  }).catch(() => {});
+
+  return { excludedCount, truncationWarning };
 };
