@@ -453,22 +453,6 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     // Build full Date objects for comparison using the record's date
     const checkInDate = new Date(`${editingLog.date}T${effectiveCheckIn}:00+08:00`)
 
-    // Check-in future validation (night-shift aware)
-    // Night-shift employees may need check-ins later today (e.g. 22:00 at 10 AM),
-    // so we only block future DATES for them. Day-shift employees keep strict validation.
-    const todayPHT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
-    if (editingLog.isNightShift) {
-      if (editingLog.date > todayPHT) {
-        showToast('error', 'Invalid Date', 'Cannot set check-in for a future date.')
-        return
-      }
-    } else {
-      if (checkInDate > new Date()) {
-        showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
-        return
-      }
-    }
-
     if (effectiveCheckOut) {
       let checkOutDate = new Date(`${editingLog.date}T${effectiveCheckOut}:00+08:00`)
 
@@ -495,6 +479,40 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     }
 
     setActionLoading(true)
+
+    // Fetch exact server time to prevent client-side clock tampering/drift bypassing future checks
+    let serverNow = new Date()
+    let serverTodayPHT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+    try {
+      const timeRes = await fetch('/api/time/now', { credentials: 'include' })
+      if (timeRes.ok) {
+        const timeData = await timeRes.json()
+        if (timeData.success && timeData.data?.utc) {
+          serverNow = new Date(timeData.data.utc)
+          serverTodayPHT = serverNow.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+        }
+      }
+    } catch {
+      // Fallback to client clock if server time fetch fails
+    }
+
+    // Check-in future validation (night-shift aware)
+    // Night-shift employees may need check-ins later today (e.g. 22:00 at 10 AM),
+    // so we only block future DATES for them. Day-shift employees keep strict validation.
+    if (editingLog.isNightShift) {
+      if (editingLog.date > serverTodayPHT) {
+        setActionLoading(false)
+        showToast('error', 'Invalid Date', 'Cannot set check-in for a future date.')
+        return
+      }
+    } else {
+      if (checkInDate > serverNow) {
+        setActionLoading(false)
+        showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
+        return
+      }
+    }
+
     try {
       const isAbsentRecord = String(editingLog.id).startsWith('absent-')
       
