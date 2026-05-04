@@ -71,7 +71,9 @@ export function useLogin() {
         path = '/employee/profile'
       } else if (data.employee.role === 'HR') {
         path = '/hr'
-      } else if (data.employee.role === 'ADMIN' || data.employee.role === 'MANAGER') {
+      } else if (data.employee.role === 'MANAGER') {
+        path = '/manager/dashboard'
+      } else if (data.employee.role === 'ADMIN') {
         path = '/dashboard'
       } else if (data.employee.role === 'USER') {
         path = '/employee'

@@ -40,6 +40,13 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
                 role: true,
                 employmentStatus: true,
                 createdAt: true,
+                ManagerDepartments: {
+                    include: {
+                        department: {
+                            select: { name: true }
+                        }
+                    }
+                }
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -49,6 +56,8 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
             users: users.map(u => ({
                 ...u,
                 status: u.employmentStatus === 'ACTIVE' ? 'active' : 'inactive',
+                departmentNames: u.role === 'MANAGER' ? u.ManagerDepartments.map(md => md.department.name) : undefined,
+                ManagerDepartments: undefined // Remove from output
             })),
         });
     } catch (error: unknown) {
@@ -84,12 +93,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Privilege escalation guard: MANAGER cannot create ADMIN accounts
-        const requesterRole = req.user?.role;
-        if (requesterRole === 'MANAGER' && role === 'ADMIN') {
-            res.status(403).json({ success: false, message: 'Managers cannot create Admin accounts. Only Admins can assign the Admin role.' });
-            return;
-        }
+
 
         const newUser = await prisma.employee.create({
             data: {
@@ -165,16 +169,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
             return;
         }
 
-        // Privilege escalation guard: MANAGER cannot modify ADMIN accounts
-        const requesterRole = req.user?.role;
-        if (requesterRole === 'MANAGER' && user.role === 'ADMIN') {
-            res.status(403).json({ success: false, message: 'Managers cannot modify Admin accounts.' });
-            return;
-        }
-        if (requesterRole === 'MANAGER' && role === 'ADMIN') {
-            res.status(403).json({ success: false, message: 'Managers cannot promote users to Admin.' });
-            return;
-        }
+
 
         // Check email uniqueness if changed
         if (email && email !== user.email) {

@@ -71,7 +71,7 @@ interface EditRequestBody {
 
 const ROW_PER_PAGE = 10
 
-export function useAttendanceDashboard(role: 'admin' | 'hr') {
+export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const searchParams = useSearchParams()
   const { toasts, showToast, dismissToast } = useToast()
 
@@ -85,7 +85,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [branchFilter, setBranchFilter] = useState('All Branches')
-  const [deptFilter, setDeptFilter] = useState('All Departments')
+  const allDeptLabel = role === 'manager' ? 'All Assigned Departments' : 'All Departments'
+  const [deptFilter, setDeptFilter] = useState(allDeptLabel)
 
   // ── Data State ────────────────────────────────────────────────────────────
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -131,7 +132,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     ? branchesList
     : branchesList.filter(b => b.companies?.some(link => link.company.name === companyFilter))
   const branches = ['All Branches', ...filteredBranchesList.map(b => b.name)]
-  const departments = ['All Departments', ...departmentsList.map(d => d.name)]
+  const departments = [allDeptLabel, ...departmentsList.map(d => d.name)]
   const statuses = [
     { value: 'all', label: 'All Status' },
     { value: 'present', label: 'On Time' },
@@ -179,13 +180,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
   useEffect(() => {
     const run = async () => {
       try {
-        const res = await fetch('/api/departments', { credentials: 'include' })
+        const url = role === 'manager' ? '/api/me/departments' : '/api/departments'
+        const res = await fetch(url, { credentials: 'include' })
         const data = await res.json()
         if (data.success && data.departments) setDepartmentsList(data.departments)
       } catch { /* ignore */ }
     }
     run()
-  }, [])
+  }, [role])
 
   // Fetch companies — on mount only
   useEffect(() => {
@@ -376,7 +378,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
           full = full.filter(r => (r as any).companyName === companyFilter)
         }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
-        if (deptFilter !== 'All Departments') full = full.filter(r => r.department === deptFilter)
+        if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
 
         setRecords(full)
         setTotalPages(Math.max(1, Math.ceil(full.length / ROW_PER_PAGE)))
@@ -619,7 +621,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
     const date = new Date(selectedDate + 'T00:00:00Z')
     const formattedDate = `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`
     const branchLabel = branchFilter === 'All Branches' ? 'All Branches' : branchFilter
-    const deptLabel = deptFilter === 'All Departments' ? 'All Departments' : deptFilter
+    const deptLabel = deptFilter === allDeptLabel ? allDeptLabel : deptFilter
 
     const presentCount = records.filter(r => r.status === 'present').length
     const lateCount = records.filter(r => r.status === 'late').length
@@ -676,7 +678,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr') {
         entityType: 'Attendance',
         source: role === 'admin' ? 'admin-panel' : 'hr-panel',
         details: `Exported attendance records (${records.length} rows) for ${selectedDate}`,
-        filters: { branch: branchLabel, date: selectedDate, department: deptFilter !== 'All Departments' ? deptFilter : undefined, status: statusFilter !== 'all' ? statusFilter : undefined },
+        filters: { branch: branchLabel, date: selectedDate, department: deptFilter !== allDeptLabel ? deptFilter : undefined, status: statusFilter !== 'all' ? statusFilter : undefined },
         recordCount: records.length,
         fileFormat: 'xlsx',
         fileName,

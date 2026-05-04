@@ -59,6 +59,7 @@ interface AttendanceFilters {
     status?: string;
     branchId?: number;        // filter by employee.branchId (FK)
     departmentId?: number;    // filter by employee.departmentId (FK)
+    managerDepartmentIds?: number[];
 }
 
 /**
@@ -659,14 +660,20 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
     const empConditions: Prisma.EmployeeWhereInput = {}
     if (filters.branchId) empConditions.branchId = filters.branchId
 
-    if (filters.departmentId) {
-        if (Object.keys(empConditions).length > 0) {
-            where.employee = { ...empConditions, departmentId: filters.departmentId }
+    if (filters.managerDepartmentIds) {
+        if (filters.departmentId) {
+            empConditions.departmentId = filters.managerDepartmentIds.includes(filters.departmentId) 
+                ? filters.departmentId 
+                : -1; // User requested a department they don't have access to
         } else {
-            where.employee = { departmentId: filters.departmentId }
+            empConditions.departmentId = { in: filters.managerDepartmentIds };
         }
-    } else if (Object.keys(empConditions).length > 0) {
-        where.employee = empConditions
+    } else if (filters.departmentId) {
+        empConditions.departmentId = filters.departmentId;
+    }
+
+    if (Object.keys(empConditions).length > 0) {
+        where.employee = empConditions;
     }
 
     // Calculate pagination

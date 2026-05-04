@@ -47,13 +47,13 @@ export function empName(emp: EmployeeName | null | undefined): string {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useAdjustmentList(role: 'admin' | 'hr') {
+export function useAdjustmentList(role: 'admin' | 'hr' | 'manager') {
     const { employee } = useAuth()
     const currentUserId = employee?.id ?? null
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState(role === 'admin' ? 'pending' : '')
+    const [statusFilter, setStatusFilter] = useState((role === 'admin' || role === 'manager') ? 'pending' : '')
     const [branchFilter, setBranchFilter] = useState('All Branches')
     const [branches, setBranches] = useState<string[]>(['All Branches'])
 
@@ -71,6 +71,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
     // Modal state
     const [rejectingId, setRejectingId] = useState<number | null>(null)
     const [cancellingId, setCancellingId] = useState<number | null>(null)
+    const [reopeningId, setReopeningId] = useState<number | null>(null)
     const [rejectionReason, setRejectionReason] = useState('')
     const [approvingId, setApprovingId] = useState<number | null>(null)
     const [actionLoading, setActionLoading] = useState(false)
@@ -85,7 +86,7 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
     const sortKeyStr = sortKey as string | null
 
     // ── Derived ──────────────────────────────────────────────────────────────
-    const isAdmin = role === 'admin'
+    const isAdmin = role === 'admin' || role === 'manager'
     const pendingCount = (isAdmin && statusFilter === 'pending') ? totalCount : null
 
 
@@ -215,6 +216,29 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         }
     }
 
+    const handleReopen = async (id: number) => {
+        setReopeningId(null)
+        setActionLoading(true)
+        try {
+            const res = await fetch(`/api/attendance/adjustments/${id}/reopen`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+            })
+            const data = await res.json()
+            if (data.success) {
+                showToast('success', 'Adjustment Reopened', 'The adjustment has been moved back to pending.')
+                fetchAdjustments()
+            } else {
+                showToast('error', 'Reopen Failed', data.message || 'Failed to reopen')
+            }
+        } catch (e: unknown) {
+            showToast('error', 'Reopen Failed', e instanceof Error ? e.message : 'Network error')
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     return {
         // Filter state
         searchQuery, setSearchQuery,
@@ -235,13 +259,15 @@ export function useAdjustmentList(role: 'admin' | 'hr') {
         rejectionReason, setRejectionReason,
         approvingId, setApprovingId,
         cancellingId, setCancellingId,
+        reopeningId, setReopeningId,
         actionLoading,
         // Actions
         handleApprove,
         handleReject,
         handleCancel,
+        handleReopen,
         // Derived
-        isAdmin, pendingCount, currentUserId,
+        role, isAdmin, pendingCount, currentUserId,
         // Toast
         toasts, dismissToast,
     }

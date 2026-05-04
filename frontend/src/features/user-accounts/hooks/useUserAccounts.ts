@@ -41,6 +41,7 @@ export function useUserAccounts() {
       const url = editingUserId ? `/api/users/${editingUserId}` : '/api/users'
       const method = editingUserId ? 'PUT' : 'POST'
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -66,7 +67,7 @@ export function useUserAccounts() {
           editingUserId ? 'Account Updated' : 'Account Created', 
           editingUserId ? 'User account updated successfully' : 'User account created successfully'
         )
-        return { success: true }
+        return { success: true, userId: data.user?.id || editingUserId }
       } else {
         return { success: false, message: data.message || 'Failed to save user' }
       }

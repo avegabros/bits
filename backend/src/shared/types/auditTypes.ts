@@ -21,6 +21,7 @@ export type AuditAction =
     | 'ADJUSTMENT_APPROVE'
     | 'ADJUSTMENT_REJECT'
     | 'ADJUSTMENT_CANCEL'
+    | 'ADJUSTMENT_REOPEN'
     | 'FLAG_MISSING_CHECKOUT'
     // Device / Sync
     | 'SYNC'
@@ -38,7 +39,8 @@ export type AuditAction =
     | 'EXPORT'
     | 'BULK_IMPORT'
     | 'EMAIL_SENT'
-    | 'EMAIL_FAILED';
+    | 'EMAIL_FAILED'
+    | 'MANAGER_DEPARTMENT_UPDATE';
 
 // ── Entity Types ─────────────────────────────────────────────────────────
 export type AuditEntity =

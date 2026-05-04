@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Mail, Eye, EyeOff, X as XIcon } from 'lucide-react'
+import { Mail, Eye, EyeOff, X as XIcon, Building2, Search, CheckCircle2, Loader2 } from 'lucide-react'
 import { UserAccount, getPasswordStrength } from '../utils/user-types'
+
+interface Department {
+  id: number
+  name: string
+}
 
 interface UserAccountAddEditModalProps {
   isOpen: boolean
   onClose: () => void
   editingUser: UserAccount | null
-  onSave: (data: any, editingUserId: number | null) => Promise<{ success: boolean; message?: string }>
+  onSave: (data: any, editingUserId: number | null) => Promise<{ success: boolean; message?: string; userId?: number }>
   currentUserRole?: string
 }
 
@@ -30,6 +35,51 @@ export function UserAccountAddEditModal({
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
+  // Department assignment state
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [selectedDeptIds, setSelectedDeptIds] = useState<number[]>([])
+  const [deptSearchQuery, setDeptSearchQuery] = useState('')
+  const [loadingDepts, setLoadingDepts] = useState(false)
+
+  // Fetch departments when role is MANAGER
+  useEffect(() => {
+    if (!isOpen || formData.role !== 'MANAGER') return
+
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch('/api/departments', { credentials: 'include' })
+        const data = await res.json()
+        if (data.success) {
+          setDepartments(data.departments || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch departments:', err)
+      }
+    }
+    fetchDepartments()
+  }, [isOpen, formData.role])
+
+  // Fetch assigned departments when editing a manager
+  useEffect(() => {
+    if (!isOpen || !editingUser || editingUser.role !== 'MANAGER') return
+
+    const fetchAssigned = async () => {
+      setLoadingDepts(true)
+      try {
+        const res = await fetch(`/api/users/${editingUser.id}/departments`, { credentials: 'include' })
+        const data = await res.json()
+        if (data.success) {
+          setSelectedDeptIds(data.departments.map((d: Department) => d.id))
+        }
+      } catch (err) {
+        console.error('Failed to fetch assigned departments:', err)
+      } finally {
+        setLoadingDepts(false)
+      }
+    }
+    fetchAssigned()
+  }, [isOpen, editingUser])
+
   useEffect(() => {
     if (isOpen) {
       if (editingUser) {
@@ -41,6 +91,11 @@ export function UserAccountAddEditModal({
           password: '',
           confirmPassword: '',
         })
+        // Only reset dept selections if the user being edited is NOT a manager
+        // (the fetch effect above handles loading assignments for managers)
+        if (editingUser.role !== 'MANAGER') {
+          setSelectedDeptIds([])
+        }
       } else {
         setFormData({
           firstName: '',
@@ -50,11 +105,22 @@ export function UserAccountAddEditModal({
           password: '',
           confirmPassword: '',
         })
+        setSelectedDeptIds([])
       }
       setFormError('')
       setShowPassword(false)
+      setDeptSearchQuery('')
+      setLoadingDepts(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingUser])
+
+  // Reset department selections when role changes away from MANAGER
+  useEffect(() => {
+    if (formData.role !== 'MANAGER') {
+      setSelectedDeptIds([])
+    }
+  }, [formData.role])
 
   const handleSave = async () => {
     setFormError('')
@@ -72,15 +138,46 @@ export function UserAccountAddEditModal({
     }
 
     setIsSaving(true)
+
+    // Save the user first
     const result = await onSave(formData, editingUser ? editingUser.id : null)
-    setIsSaving(false)
 
     if (result.success) {
+      // If the role is MANAGER, also save department assignments
+      if (formData.role === 'MANAGER') {
+        const userId = editingUser?.id || result.userId
+        if (userId) {
+          try {
+            await fetch(`/api/users/${userId}/departments`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ departmentIds: selectedDeptIds }),
+            })
+          } catch (err) {
+            console.error('Failed to save department assignments:', err)
+          }
+        }
+      }
+      setIsSaving(false)
       onClose()
     } else {
+      setIsSaving(false)
       setFormError(result.message || 'Failed to save user')
     }
   }
+
+  const handleToggleDept = (deptId: number) => {
+    setSelectedDeptIds(prev =>
+      prev.includes(deptId)
+        ? prev.filter(id => id !== deptId)
+        : [...prev, deptId]
+    )
+  }
+
+  const filteredDepartments = departments.filter(d =>
+    d.name.toLowerCase().includes(deptSearchQuery.toLowerCase())
+  )
 
   const strength = getPasswordStrength(formData.password)
 
@@ -149,6 +246,100 @@ export function UserAccountAddEditModal({
               <option value="HR">HR</option>
             </select>
           </div>
+
+          {/* Department Assignment — only visible for MANAGER role */}
+          {formData.role === 'MANAGER' && (
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-purple-500" />
+                <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+                  Assigned Departments
+                </label>
+              </div>
+
+              {loadingDepts ? (
+                <div className="flex items-center justify-center py-4 text-slate-400 gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs font-medium">Loading...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+                    <input
+                      type="text"
+                      placeholder="Search departments..."
+                      value={deptSearchQuery}
+                      onChange={e => setDeptSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all placeholder:text-slate-300"
+                    />
+                  </div>
+
+                  {/* Selected count */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {selectedDeptIds.length} selected
+                    </span>
+                    {filteredDepartments.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filteredIds = filteredDepartments.map(d => d.id)
+                          const allSelected = filteredIds.every(id => selectedDeptIds.includes(id))
+                          if (allSelected) {
+                            setSelectedDeptIds(prev => prev.filter(id => !filteredIds.includes(id)))
+                          } else {
+                            setSelectedDeptIds(prev => Array.from(new Set([...prev, ...filteredIds])))
+                          }
+                        }}
+                        className="text-[10px] font-bold text-purple-600 hover:text-purple-700 transition-colors"
+                      >
+                        {filteredDepartments.every(d => selectedDeptIds.includes(d.id)) ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Department list */}
+                  <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                    {filteredDepartments.length === 0 ? (
+                      <p className="text-center text-slate-300 text-xs py-3 font-medium">No departments found</p>
+                    ) : (
+                      filteredDepartments.map(dept => {
+                        const isSelected = selectedDeptIds.includes(dept.id)
+                        return (
+                          <button
+                            key={dept.id}
+                            type="button"
+                            onClick={() => handleToggleDept(dept.id)}
+                            className={`flex items-center justify-between w-full p-2.5 rounded-xl border text-left transition-all text-xs font-medium ${
+                              isSelected
+                                ? 'bg-purple-50 border-purple-200 text-purple-800'
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>{dept.name}</span>
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'bg-purple-600 border-purple-600'
+                                : 'border-slate-300'
+                            }`}>
+                              {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                            </div>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+
+                  {/* Hint */}
+                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                    Managers can only view attendance and adjustments for their assigned departments.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">

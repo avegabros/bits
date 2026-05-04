@@ -14,10 +14,9 @@ interface AdminSidebarProps {
   isCollapsed: boolean
   onClose: () => void
   onToggleCollapse: () => void
-  role?: string
 }
 
-export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse, role }: AdminSidebarProps) {
+export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }: AdminSidebarProps) {
   const pathname = usePathname()
   const { collapsed, labelStyle } = useSidebarCollapsed(isCollapsed)
 
@@ -153,21 +152,18 @@ export function AdminSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse, r
         labelStyle={labelStyle}
         onClose={onClose}
         subItems={[
-          // Managers should only see User Accounts. Admins see everything.
-          ...(role === 'ADMIN' ? [
-            {
-              href: '/system',
-              label: 'System Settings',
-              icon: Server,
-              isActive: pathname === '/system',
-            },
-            {
-              href: '/logs',
-              label: 'System Logs',
-              icon: ScrollText,
-              isActive: pathname === '/logs',
-            }
-          ] : []),
+          {
+            href: '/system',
+            label: 'System Settings',
+            icon: Server,
+            isActive: pathname === '/system',
+          },
+          {
+            href: '/logs',
+            label: 'System Logs',
+            icon: ScrollText,
+            isActive: pathname === '/logs',
+          },
           {
             href: '/user-accounts',
             label: 'User Accounts',

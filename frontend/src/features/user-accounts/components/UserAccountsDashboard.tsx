@@ -16,6 +16,7 @@ import { UserAccountStats } from './UserAccountStats'
 import { UserAccountTable } from './UserAccountTable'
 import { UserAccountAddEditModal } from './UserAccountAddEditModal'
 import { UserAccountStatusConfirm } from './UserAccountStatusConfirm'
+import { ManagerDepartmentModal } from './ManagerDepartmentModal'
 
 export function UserAccountsDashboard() {
   const { employee } = useAuth(['ADMIN', 'MANAGER'])
@@ -37,6 +38,12 @@ export function UserAccountsDashboard() {
     userName: string
     currentStatus: string
   }>({ open: false, userId: null, userName: '', currentStatus: '' })
+
+  const [deptModal, setDeptModal] = useState<{
+    open: boolean
+    userId: number | null
+    userName: string
+  }>({ open: false, userId: null, userName: '' })
 
   useEffect(() => {
     fetchUsers()
@@ -76,6 +83,14 @@ export function UserAccountsDashboard() {
       userId: user.id,
       userName: `${user.firstName} ${user.lastName}`,
       currentStatus: user.status,
+    })
+  }
+
+  const handleAssignDepartments = (user: UserAccount) => {
+    setDeptModal({
+      open: true,
+      userId: user.id,
+      userName: `${user.firstName} ${user.lastName}`,
     })
   }
 
@@ -148,9 +163,11 @@ export function UserAccountsDashboard() {
         setCurrentPage={setCurrentPage}
         sortKey={sortKey as string | null}
         sortOrder={sortOrder as 'asc' | 'desc'}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handleSort={handleSort as any}
         onEdit={handleOpenEdit}
         onToggleStatus={handleOpenToggleStatus}
+        onAssignDepartments={handleAssignDepartments}
         currentUserRole={currentUserRole}
       />
 
@@ -169,6 +186,13 @@ export function UserAccountsDashboard() {
         userName={statusConfirm.userName}
         currentStatus={statusConfirm.currentStatus}
         onConfirm={toggleStatus}
+      />
+
+      <ManagerDepartmentModal
+        isOpen={deptModal.open}
+        onClose={() => setDeptModal({ ...deptModal, open: false })}
+        userId={deptModal.userId}
+        userName={deptModal.userName}
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />

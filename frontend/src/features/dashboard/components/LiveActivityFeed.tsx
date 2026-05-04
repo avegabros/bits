@@ -6,7 +6,7 @@ import { Activity, ArrowRight, Clock, LogIn, LogOut, Trash2 } from 'lucide-react
 import type { LiveRecord } from '../hooks/useDashboardData';
 
 export interface LiveActivityFeedProps {
-    role: 'admin' | 'hr';
+    role: 'admin' | 'hr' | 'manager';
     activity: LiveRecord[];
     activityScrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -19,7 +19,7 @@ function getInitials(name: string) {
 
 export function LiveActivityFeed({ role, activity, activityScrollRef }: LiveActivityFeedProps) {
     const router = useRouter();
-    const basePath = role === 'admin' ? '' : '/hr';
+    const basePath = role === 'admin' ? '' : role === 'manager' ? '/manager' : '/hr';
 
     return (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm flex flex-col min-h-[280px] lg:min-h-0 lg:flex-1 overflow-hidden">

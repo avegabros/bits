@@ -7,7 +7,7 @@ import { AdjustmentListPage } from './AdjustmentListPage';
 import { AdjustmentAuditLogsDashboard } from './AdjustmentAuditLogsDashboard';
 
 interface AdjustmentsDashboardProps {
-  role: 'admin' | 'hr';
+  role: 'admin' | 'hr' | 'manager';
 }
 
 export function AdjustmentsDashboard({ role }: AdjustmentsDashboardProps) {

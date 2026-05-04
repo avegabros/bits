@@ -96,6 +96,15 @@ export const getEmployeeById = async (req: Request, res: Response) => {
             });
         }
 
+        if (req.managerDepartmentIds) {
+            if (!employee.departmentId || !req.managerDepartmentIds.includes(employee.departmentId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Forbidden: Employee belongs to a department you do not manage.',
+                });
+            }
+        }
+
         res.json({
             success: true,
             employee,
@@ -112,7 +121,13 @@ export const getEmployeeById = async (req: Request, res: Response) => {
 // GET /api/employees - Get all employees
 export const getAllEmployees = async (req: Request, res: Response) => {
     try {
+        const where: Prisma.EmployeeWhereInput = {};
+        if (req.managerDepartmentIds && req.query.scope !== 'company') {
+            where.departmentId = { in: req.managerDepartmentIds };
+        }
+
         const employees = await prisma.employee.findMany({
+            where,
             select: {
                 id: true,
                 zkId: true,

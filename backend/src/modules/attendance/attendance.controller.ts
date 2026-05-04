@@ -73,9 +73,11 @@ export const addUser = async (req: Request, res: Response) => {
  */
 export const getAttendance = async (req: Request, res: Response) => {
     try {
-        const { startDate, endDate, employeeId, status, page = 1, limit = 10, branchName, departmentId, departmentName } = req.query;
+        const { startDate, endDate, employeeId, status, page = 1, limit = 10, branchName, departmentId, departmentName, branchId, shiftType, sortBy, sortDesc, search } = req.query;
 
-        const filters: AttendanceFilters = {};
+        const filters: AttendanceFilters = {
+            managerDepartmentIds: req.managerDepartmentIds && req.query.scope !== 'company' ? req.managerDepartmentIds : undefined
+        };
 
         // Parse dates using PHT timezone (UTC+8) to match how records are stored.
         // Records are stored with date = midnight PHT (setHours(0,0,0,0) on the server).
@@ -95,6 +97,7 @@ export const getAttendance = async (req: Request, res: Response) => {
         }
         if (departmentId) filters.departmentId = parseInt(String(departmentId));
         if (departmentName) filters.departmentName = String(departmentName);
+        if (req.managerDepartmentIds && req.query.scope !== 'company') filters.managerDepartmentIds = req.managerDepartmentIds;
 
         const pageNum = parseInt(String(page));
         const limitNum = parseInt(String(limit));
@@ -793,6 +796,15 @@ export const getAdjustments = async (req: Request, res: Response) => {
     const where: Prisma.AttendanceAdjustmentWhereInput = {};
     if (statusFilter) where.status = statusFilter;
 
+    if (req.managerDepartmentIds) {
+      const deptFilter = {
+        OR: [
+          { attendance: { employee: { departmentId: { in: req.managerDepartmentIds } } } }
+        ]
+      };
+      where.AND = [deptFilter];
+    }
+
     if (dateStr) {
       const start = new Date(dateStr);
       start.setUTCHours(0, 0, 0, 0);
@@ -934,6 +946,16 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
     }
     if (adjustment.status !== 'pending') {
       return res.status(400).json({ success: false, message: `Adjustment has already been ${adjustment.status}` });
+    }
+
+    if (req.managerDepartmentIds) {
+      if (adjustment.attendance) {
+        if (!adjustment.attendance.employee.departmentId || !req.managerDepartmentIds.includes(adjustment.attendance.employee.departmentId)) {
+          return res.status(403).json({ success: false, message: 'Forbidden: Employee belongs to a department you do not manage.' });
+        }
+      } else {
+        return res.status(403).json({ success: false, message: 'Forbidden: Cannot verify department ownership for deleted attendance.' });
+      }
     }
 
     if (action === 'reject') {
@@ -1390,6 +1412,69 @@ export const cancelAdjustment = async (req: Request, res: Response) => {
     } catch (error: unknown) {
         console.error('Cancel Adjustment Failed:', error);
         return res.status(500).json({ success: false, message: 'Failed to cancel adjustment' });
+    }
+};
+
+/**
+ * PUT /api/attendance/adjustments/:id/reopen
+ * Admin-only: reopen a finalized (approved/rejected) adjustment
+ */
+export const reopenAdjustment = async (req: Request, res: Response) => {
+    try {
+        const adjustmentId = parseInt(String(req.params.id));
+        if (isNaN(adjustmentId)) {
+            return res.status(400).json({ success: false, message: 'Invalid adjustment ID' });
+        }
+
+        const adminId = req.user?.employeeId;
+
+        const adjustment = await prisma.attendanceAdjustment.findUnique({
+            where: { id: adjustmentId },
+            include: { attendance: true }
+        });
+
+        if (!adjustment) {
+            return res.status(404).json({ success: false, message: 'Adjustment not found' });
+        }
+
+        if (adjustment.status === 'pending') {
+            return res.status(400).json({ success: false, message: 'Adjustment is already pending.' });
+        }
+
+        if (adjustment.status === 'cancelled') {
+            return res.status(400).json({ success: false, message: 'Cannot reopen a cancelled adjustment.' });
+        }
+
+        // Reset to pending
+        await prisma.attendanceAdjustment.update({
+            where: { id: adjustmentId },
+            data: {
+                status: 'pending',
+                reviewedById: null,
+                reviewedAt: null,
+                rejectionReason: null
+            }
+        });
+
+        void audit({
+            action: 'ADJUSTMENT_REOPEN',
+            entityType: 'Attendance',
+            entityId: adjustment.attendanceId ?? undefined,
+            performedBy: adminId,
+            source: 'admin-panel',
+            details: `Admin reopened adjustment #${adjustmentId} for re-review`,
+            metadata: { previousStatus: adjustment.status },
+            correlationId: req.correlationId,
+        });
+
+        const isDeletedMsg = (adjustment.status === 'approved' && adjustment.type === 'DELETE') 
+            ? ' Note: The original attendance record was deleted when this was approved.'
+            : '';
+
+        return res.json({ success: true, message: 'Adjustment reopened successfully.' + isDeletedMsg });
+    } catch (error: unknown) {
+        console.error('Reopen Adjustment Failed:', error);
+        return res.status(500).json({ success: false, message: 'Failed to reopen adjustment' });
     }
 };
 

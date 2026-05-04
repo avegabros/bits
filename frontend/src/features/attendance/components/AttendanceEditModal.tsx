@@ -7,7 +7,7 @@ import { toTimeInput } from '../utils/attendance-formatters';
 interface AttendanceEditModalProps {
   editingLog: AttendanceRecord | null;
   setEditingLog: (val: AttendanceRecord | null) => void;
-  role: 'admin' | 'hr';
+  role: 'admin' | 'hr' | 'manager';
   editCheckIn: string;
   setEditCheckIn: (val: string) => void;
   editCheckOut: string;
@@ -159,7 +159,7 @@ export function AttendanceEditModal({
               )}
             </div>
 
-            {role === 'hr' ? (
+            {role === 'hr' || role === 'manager' ? (
               <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex gap-3 shadow-sm">
                 <AlertCircle size={18} className="text-amber-600 shrink-0" />
                 <p className="text-[10px] text-amber-800 leading-relaxed font-medium">

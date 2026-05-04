@@ -6,6 +6,7 @@ export interface AttendanceFilters {
     branchId?: number;
     departmentId?: number;
     departmentName?: string;
+    managerDepartmentIds?: number[];
 }
 
 export interface AttendanceQueryParams {

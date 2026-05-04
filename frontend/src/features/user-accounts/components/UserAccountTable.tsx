@@ -1,6 +1,6 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Edit2, Ban, UserCheck } from 'lucide-react'
+import { Edit2, Ban, UserCheck, Building2 } from 'lucide-react'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { UserAccount } from '../utils/user-types'
@@ -17,6 +17,7 @@ interface UserAccountTableProps {
   handleSort: (key: string) => void
   onEdit: (user: UserAccount) => void
   onToggleStatus: (user: UserAccount) => void
+  onAssignDepartments?: (user: UserAccount) => void
   currentUserRole?: string
 }
 
@@ -32,6 +33,7 @@ export function UserAccountTable({
   handleSort,
   onEdit,
   onToggleStatus,
+  onAssignDepartments,
   currentUserRole = 'ADMIN',
 }: UserAccountTableProps) {
   return (
@@ -161,6 +163,15 @@ export function UserAccountTable({
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
+                        {user.role === 'MANAGER' && onAssignDepartments && (
+                          <button
+                            onClick={() => onAssignDepartments(user)}
+                            className="p-2.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all active:scale-90"
+                            title="Assign Departments"
+                          >
+                            <Building2 className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => onToggleStatus(user)}
                           className={`p-2.5 rounded-xl transition-all active:scale-90 ${user.status === 'active'
