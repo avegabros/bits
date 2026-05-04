@@ -23,16 +23,8 @@ export async function POST(req: NextRequest) {
     // Clear both cookies
     const response = NextResponse.json({ success: true, message: 'Logged out' })
 
-    const cookieOptions = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
-        path: '/',
-        maxAge: 0,
-    }
-
-    response.cookies.set('auth_token', '', cookieOptions)
-    response.cookies.set('refresh_token', '', cookieOptions)
+    response.cookies.delete('auth_token')
+    response.cookies.delete('refresh_token')
 
     return response
 }

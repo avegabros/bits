@@ -138,7 +138,7 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 employmentStatus: true,
                 profilePicture: true,
                 shiftId: true,
-                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true } },
+                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
                 createdAt: true, EmployeeDeviceEnrollment: {
                     select: {
                         enrolledAt: true,

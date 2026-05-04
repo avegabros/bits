@@ -145,6 +145,7 @@ export function AttendanceEditModal({
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
               </div>
             </div>
+
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reason for Adjustment <span className="text-red-500">*</span></label>
               <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)}
