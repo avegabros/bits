@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, AlertCircle, AlertTriangle, Loader2, Moon } from 'lucide-react';
+import { Clock, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { AttendanceRecord } from '../types';
 import { toTimeInput } from '../utils/attendance-formatters';
 
@@ -145,14 +145,7 @@ export function AttendanceEditModal({
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
               </div>
             </div>
-            {editCheckIn && editCheckOut && editCheckOut < editCheckIn && (
-              <div className="bg-indigo-50 border border-indigo-200 p-2.5 rounded-xl flex items-center gap-2.5">
-                <Moon size={14} className="text-indigo-500 shrink-0" />
-                <p className="text-[10px] text-indigo-700 font-semibold leading-snug">
-                  <span className="font-black uppercase tracking-wider">Overnight Shift Detected</span> — Clock-out will be recorded as the next day.
-                </p>
-              </div>
-            )}
+
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reason for Adjustment <span className="text-red-500">*</span></label>
               <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)}
