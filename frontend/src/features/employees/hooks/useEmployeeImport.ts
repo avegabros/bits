@@ -95,7 +95,7 @@ export function useEmployeeImport({
   //
   // CLIENT-SIDE VALIDATION (runs before any API call):
   //   Required fields : employeeNumber, firstName, lastName, email,
-  //                     contactNumber, department, branch
+  //                     contactNumber, department, branch, dateOfBirth, hireDate
   //   Format checks   : email regex, contactNumber must be exactly 11 digits,
   //                     dateOfBirth / hireDate must be parseable as a Date
   //   Reference checks: department must exist in `departments` prop,
@@ -144,12 +144,12 @@ export function useEmployeeImport({
         const contactRawKey = Object.keys(raw).find(k => ['contactnumber', 'phonenumber', 'phone', 'contact'].includes(k.replace(/[\s_]+/g, '').toLowerCase()));
         const contactRawVal = contactRawKey ? raw[contactRawKey] : '';
         const contactNumber = typeof contactRawVal === 'number' ? String(Math.round(contactRawVal)) : String(contactRawVal ?? '').replace(/\.0+$/, '');
-        // Fix 2: Normalize phone — silently convert any common PH format to +63XXXXXXXXXX
+        // Fix 3: Normalize phone — convert +63 format to 0-prefix for DB storage
         const normalizePhone = (raw: string): string => {
           const cleaned = String(raw).replace(/[\s\-().]/g, '').trim();
-          if (cleaned.startsWith('0') && cleaned.length === 11) return '+63' + cleaned.slice(1);
-          if (cleaned.startsWith('63') && cleaned.length === 12) return '+' + cleaned;
-          if (/^\d{10}$/.test(cleaned)) return '+63' + cleaned;
+          if (cleaned.startsWith('+63') && cleaned.length === 13) return '0' + cleaned.slice(3);
+          if (cleaned.startsWith('63') && cleaned.length === 12) return '0' + cleaned.slice(2);
+          if (/^\d{10}$/.test(cleaned)) return '0' + cleaned;
           return cleaned;
         };
         const normalizedContact = normalizePhone(contactNumber);
@@ -168,9 +168,11 @@ export function useEmployeeImport({
         if (!department) errors.push('Missing department');
         if (!branch) errors.push('Missing branch');
         if (!shiftCode || !shiftCode.trim()) errors.push('Missing shift');
+        if (!dateOfBirth) errors.push('Missing date of birth');
+        if (!hireDate) errors.push('Missing hire date');
 
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Invalid email format');
-        if (normalizedContact && !/^\+63\d{10}$/.test(normalizedContact)) errors.push('Contact must be in +63XXXXXXXXXX format (e.g. +639171234567)');
+        if (normalizedContact && !/^0\d{10}$/.test(normalizedContact)) errors.push('Contact must be 11 digits starting with 0 (e.g. 09171234567)');
         if (dateOfBirth && isNaN(Date.parse(dateOfBirth))) errors.push('Invalid date of birth');
         if (hireDate && isNaN(Date.parse(hireDate))) errors.push('Invalid hire date');
 
@@ -253,6 +255,7 @@ export function useEmployeeImport({
         dateOfBirth: r.dateOfBirth || undefined,
         email: r.email,
         contactNumber: r.contactNumber || undefined,
+        company: r.company || undefined,
         department: r.department,
         branch: r.branch,
         hireDate: r.hireDate || undefined,

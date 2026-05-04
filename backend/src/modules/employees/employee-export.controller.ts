@@ -164,13 +164,13 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { header: 'Last Name', key: 'lastName', width: 18, required: true, hint: 'Legal last name' },
             { header: 'Suffix', key: 'suffix', width: 12, required: false, hint: 'Jr., Sr., II, III, etc.' },
             { header: 'Gender', key: 'gender', width: 14, required: false, hint: 'Male / Female / Prefer not to say' },
-            { header: 'Date of Birth', key: 'dateOfBirth', width: 18, required: false, hint: 'YYYY-MM-DD format' },
+            { header: 'Date of Birth', key: 'dateOfBirth', width: 18, required: true, hint: 'MM-DD-YYYY format (required)' },
             { header: 'Email', key: 'email', width: 28, required: true, hint: 'Valid email (login credentials sent here)' },
-            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: '+63 format (e.g. +639171234567) or 0XXXXXXXXXX — auto-converted' },
+            { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: 'Enter in +63 format (e.g. +639171234567) — saved as 09XXXXXXXXX' },
             { header: 'Company', key: 'company', width: 24, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (filtered by Company)' },
             { header: 'Department', key: 'department', width: 20, required: true, hint: 'Select from dropdown (see Reference Lists)' },
-            { header: 'Hire Date', key: 'hireDate', width: 16, required: false, hint: 'YYYY-MM-DD format' },
+            { header: 'Hire Date', key: 'hireDate', width: 16, required: true, hint: 'MM-DD-YYYY format (required)' },
             { header: 'Shift Code', key: 'shiftCode', width: 16, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Status', key: 'employmentStatus', width: 14, required: false, hint: 'ACTIVE (default) / INACTIVE' },
         ];
@@ -533,6 +533,20 @@ export const exportTemplate = async (req: Request, res: Response) => {
         });
     }
 };
+// ── Phone number normalization: +63 → 0-prefix ──────────────────────────
+function normalizePhoneNumber(phone: string | null | undefined): string | null {
+    if (!phone) return null;
+    const cleaned = phone.toString().replace(/[\s\-().]/g, '').trim();
+    if (cleaned.startsWith('+63')) {
+        return '0' + cleaned.slice(3);
+    }
+    if (cleaned.startsWith('63') && cleaned.length === 12) {
+        return '0' + cleaned.slice(2);
+    }
+    // Already 0-prefix or other format — pass through
+    return cleaned;
+}
+
 // POST /api/employees/bulk - Bulk create employees from import
 export const bulkCreateEmployees = async (req: Request, res: Response) => {
     try {
@@ -575,6 +589,40 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                     continue;
                 }
 
+                // ── Fix 1: Date of Birth is required ─────────────────────────
+                if (!emp.dateOfBirth || emp.dateOfBirth.toString().trim() === '') {
+                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Date of Birth is required' });
+                    continue;
+                }
+                if (isNaN(Date.parse(emp.dateOfBirth.toString()))) {
+                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Date of Birth is not a valid date' });
+                    continue;
+                }
+
+                // ── Fix 2: Hire Date is required ─────────────────────────────
+                if (!emp.hireDate || emp.hireDate.toString().trim() === '') {
+                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Hire Date is required' });
+                    continue;
+                }
+                if (isNaN(Date.parse(emp.hireDate.toString()))) {
+                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Hire Date is not a valid date' });
+                    continue;
+                }
+
+                // ── Fix 4: Resolve company name to companyId ─────────────────
+                let resolvedCompanyId: number | null = null;
+                if (emp.company) {
+                    const matchedCompany = await prisma.company.findFirst({
+                        where: { name: { equals: emp.company, mode: 'insensitive' } },
+                        select: { id: true },
+                    });
+                    if (!matchedCompany) {
+                        results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: `Company "${emp.company}" not found` });
+                        continue;
+                    }
+                    resolvedCompanyId = matchedCompany.id;
+                }
+
                 // ── Check DB for duplicates ──────────────────────────────────
                 const existingByNumber = await prisma.employee.findUnique({
                     where: { employeeNumber: empNum },
@@ -612,7 +660,7 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             middleName: emp.middleName || null,
                             suffix: emp.suffix || null,
                             gender: emp.gender || null,
-                            dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth) : null,
+                            dateOfBirth: new Date(emp.dateOfBirth),
                             email: emp.email,
                             password: hashedPassword,
                             role: 'USER',
@@ -629,8 +677,9 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                                     select: { id: true }
                                 }))?.id ?? null
                                 : null,
-                            contactNumber: emp.contactNumber || null,
-                            hireDate: emp.hireDate ? new Date(emp.hireDate) : undefined,
+                            companyId: resolvedCompanyId,
+                            contactNumber: normalizePhoneNumber(emp.contactNumber),
+                            hireDate: new Date(emp.hireDate),
                             employmentStatus: 'ACTIVE',
                             zkId: nextZkId,
                             shiftId: emp.shiftId ? parseInt(emp.shiftId, 10) : null,
