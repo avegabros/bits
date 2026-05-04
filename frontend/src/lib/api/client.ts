@@ -3,6 +3,8 @@
 // Automatically authenticates via HttpOnly cookie (credentials: 'include').
 // Backend base URL is proxied by Next.js rewrites: /api/* → http://backend:3001/api/*
 
+import { activityBus } from '../auth/activityBus'
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type Role = 'ADMIN' | 'HR' | 'USER'
 export type EmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED'
@@ -121,6 +123,11 @@ if (typeof window !== 'undefined') {
 
       // 1. Make the original request
       let response = await originalFetch.apply(this, [input, init]);
+
+      // Step 3: API Activity Signal
+      if (response.ok && !url.includes('/api/auth/')) {
+        activityBus.signal();
+      }
 
       // 2. If 401 Unauthorized, attempt a silent refresh
       if (response.status === 401) {

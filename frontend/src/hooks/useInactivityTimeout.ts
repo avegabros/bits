@@ -1,40 +1,43 @@
 'use client'
-import { useEffect, useRef, useCallback } from 'react'
-
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000 
-const THROTTLE_MS = 5000 // Update at most once per second
+import { useEffect, useCallback } from 'react'
+import { activityBus } from '@/lib/auth/activityBus'
+import { authChannel } from '@/lib/auth/authChannel'
 
 export function useInactivityTimeout() {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const lastActivityRef = useRef<number>(Date.now())
-
   const handleTimeout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } catch { /* best effort */ }
+    
+    // Broadcast logout to other tabs
+    authChannel.broadcastLogout()
     window.dispatchEvent(new CustomEvent('session-expired'))
   }, [])
 
-  const resetTimer = useCallback(() => {
-    const now = Date.now()
-    if (now - lastActivityRef.current < THROTTLE_MS) return
-    lastActivityRef.current = now
-
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(handleTimeout, INACTIVITY_TIMEOUT_MS)
-  }, [handleTimeout])
+  const handleWarning = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('session-expiring-warning'))
+  }, [])
 
   useEffect(() => {
+    // Initialize cross-tab channel (idempotent — safe to call on remount)
+    authChannel.init()
+
+    // Re-register callbacks on the singleton bus (safe to call on remount)
+    activityBus.init(handleTimeout, handleWarning)
+
+    const handleActivity = () => {
+      activityBus.signal()
+    }
+
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
-    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }))
-    
-    // Set initial timer
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(handleTimeout, INACTIVITY_TIMEOUT_MS)
+    events.forEach(e => window.addEventListener(e, handleActivity, { passive: true }))
 
     return () => {
-      events.forEach(e => window.removeEventListener(e, resetTimer))
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      // Only remove DOM listeners on cleanup.
+      // Do NOT destroy the activityBus or authChannel singletons here —
+      // they must survive React remounts (e.g. Next.js page navigation)
+      // to keep the 30-minute idle timer and BroadcastChannel connection alive.
+      events.forEach(e => window.removeEventListener(e, handleActivity))
     }
-  }, [resetTimer, handleTimeout])
+  }, [handleTimeout, handleWarning])
 }
