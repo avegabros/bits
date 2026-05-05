@@ -23,13 +23,16 @@ const options = {
             { name: 'Employees', description: 'Employee CRUD & biometric enrollment' },
             { name: 'Attendance', description: 'Attendance records, sync, & corrections' },
             { name: 'Shifts', description: 'Shift schedule management' },
+            { name: 'Companies', description: 'Company management' },
             { name: 'Branches', description: 'Branch management' },
             { name: 'Departments', description: 'Department management' },
             { name: 'Devices', description: 'ZKTeco biometric device management' },
-            { name: 'Reports', description: 'Attendance summary reports' },
+            { name: 'Holidays', description: 'Holiday management (regular & special)' },
+            { name: 'System', description: 'Sync scheduler configuration, manual triggers, and system health' },
             { name: 'Logs', description: 'System audit / activity logs' },
             { name: 'Me (Employee Self-Service)', description: 'Endpoints for logged-in users to access their own data' },
             { name: 'Time', description: 'Server time synchronization' },
+            { name: 'Health', description: 'Application and device health checks' },
         ],
         components: {
             securitySchemes: {
@@ -63,6 +66,7 @@ const options = {
         ],
     },
     apis: [
+        './src/app.ts',
         './src/modules/**/*.routes.ts',
         './src/modules/**/*.controller.ts',
         './src/modules/**/*.types.ts'

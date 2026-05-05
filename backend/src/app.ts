@@ -85,6 +85,29 @@ app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads'), {
   immutable: true,
 }));
 
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Application health check
+ *     description: Returns a simple OK status with the current server timestamp. No authentication required.
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Application is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: OK
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -93,6 +116,39 @@ app.get('/api/health', (req, res) => {
 // Returns the live isActive status for the primary device (ZK_HOST) from the DB.
 // syncZkData updates isActive on every cron tick (every 30s), so this endpoint
 // reflects real connectivity without making its own TCP connection.
+/**
+ * @swagger
+ * /api/health/device:
+ *   get:
+ *     summary: Primary biometric device connectivity status
+ *     description: Returns the live isActive status for the primary ZKTeco device (ZK_HOST) from the database. Polled by the frontend topbar every 15 seconds.
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Device status (online/offline/unknown)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 online:
+ *                   type: boolean
+ *                 status:
+ *                   type: string
+ *                   enum: [online, offline, unknown, error]
+ *                 deviceName:
+ *                   type: string
+ *                 ip:
+ *                   type: string
+ *                 port:
+ *                   type: integer
+ *                 lastSeen:
+ *                   type: string
+ *                   format: date-time
+ *       500:
+ *         description: Server error
+ */
 app.get('/api/health/device', async (req, res) => {
   try {
     const zkHost = process.env.ZK_HOST || '192.168.1.201';
@@ -121,6 +177,20 @@ app.get('/api/health/device', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/test-db:
+ *   get:
+ *     summary: Database connectivity test
+ *     description: Runs a simple SELECT NOW() query to verify the database connection is alive.
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Database connected
+ *       500:
+ *         description: Database connection failed
+ */
 app.get('/api/test-db', async (req, res) => {
   try {
     const result = await prisma.$queryRaw`SELECT NOW()`;

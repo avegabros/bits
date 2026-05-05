@@ -135,6 +135,46 @@ router.get('/stream', streamAttendance);
  *         name: status
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: branchName
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: departmentId
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: departmentName
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: branchId
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: shiftType
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortDesc
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: List of attendance records

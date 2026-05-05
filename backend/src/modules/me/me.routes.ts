@@ -26,9 +26,15 @@ router.use(authenticate);
  * /api/me/attendance/stream:
  *   get:
  *     summary: Server-Sent Events stream for my own real-time attendance updates
- *     tags: [Me]
+ *     description: Opens a persistent SSE connection that pushes attendance events belonging to the currently authenticated employee only.
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: SSE stream — connection stays open and pushes events
+ *       401:
+ *         description: Not authenticated
  */
 router.get('/attendance/stream', streamMyAttendance);
 
@@ -36,10 +42,29 @@ router.get('/attendance/stream', streamMyAttendance);
  * @swagger
  * /api/me/attendance:
  *   get:
- *     summary: Get my own attendance
- *     tags: [Me]
+ *     summary: Get my own attendance records
+ *     description: Returns the authenticated employee's attendance history with optional date range filtering. Records are enriched with shift-based metrics (late, undertime, overtime, etc.).
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date filter (YYYY-MM-DD, PHT timezone)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date filter (YYYY-MM-DD, PHT timezone)
+ *     responses:
+ *       200:
+ *         description: List of attendance records with computed metrics
+ *       401:
+ *         description: Not authenticated
  */
 router.get('/attendance', getMyAttendance);
 
@@ -48,9 +73,17 @@ router.get('/attendance', getMyAttendance);
  * /api/me/shift:
  *   get:
  *     summary: Get my assigned shift
- *     tags: [Me]
+ *     description: Returns the shift schedule assigned to the authenticated employee.
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Shift details (or null if no shift assigned)
+ *       401:
+ *         description: Not authenticated
+ *       404:
+ *         description: Employee not found
  */
 router.get('/shift', getMyShift);
 
@@ -59,9 +92,17 @@ router.get('/shift', getMyShift);
  * /api/me/profile:
  *   get:
  *     summary: Get my profile information
- *     tags: [Me]
+ *     description: Returns the full profile of the authenticated employee including department, branch, hire date, employment status, and profile picture URL.
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Employee profile data
+ *       401:
+ *         description: Not authenticated
+ *       404:
+ *         description: Employee not found
  */
 router.get('/profile', getMyProfile);
 
@@ -70,9 +111,32 @@ router.get('/profile', getMyProfile);
  * /api/me/password:
  *   put:
  *     summary: Change my password
- *     tags: [Me]
+ *     description: Allows the authenticated employee to change their password. Requires the current password for verification. Also clears the needsPasswordChange flag.
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Missing fields, incorrect current password, or new password too short
+ *       401:
+ *         description: Not authenticated
  */
 router.put('/password', changePassword);
 
@@ -81,9 +145,17 @@ router.put('/password', changePassword);
  * /api/me/departments:
  *   get:
  *     summary: Get my assigned departments (Managers only)
- *     tags: [Me]
+ *     description: Returns the list of departments assigned to the authenticated manager. Returns 403 for non-manager roles.
+ *     tags: [Me (Employee Self-Service)]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of assigned departments
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Only managers have assigned departments
  */
 router.get('/departments', getMyDepartments);
 
