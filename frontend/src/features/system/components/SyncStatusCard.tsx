@@ -133,7 +133,7 @@ export function SyncStatusCard({ status, loading, onStatusRefresh }: SyncStatusC
                 open={showResultModal}
                 onOpenChange={setShowResultModal}
                 syncResult={syncResult}
-                onRetry={handleManualSync}
+                onRetry={syncResult?.type === 'time' ? handleManualTimeSync : handleManualSync}
             />
         </>
     );

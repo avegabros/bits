@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, AlertTriangle, XCircle } from 'lucide-react';
+import { Play, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -17,16 +17,22 @@ interface SyncResultModalProps {
 
 export function SyncResultModal({ open, onOpenChange, syncResult, onRetry }: SyncResultModalProps) {
     const isPartial = syncResult?.status === 'PARTIAL';
+    const isSuccess = syncResult?.status === 'SUCCESS';
+    const isTime = syncResult?.type === 'time';
+    const prefix = isTime ? 'Time Sync' : 'Sync';
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle className={`flex items-center gap-2 ${isPartial ? 'text-amber-600' : 'text-red-600'}`}>
-                        {isPartial
-                            ? <><AlertTriangle className="h-5 w-5" /> Sync Partially Completed</>
-                            : <><XCircle className="h-5 w-5" /> Sync Failed</>
-                        }
+                    <DialogTitle className={`flex items-center gap-2 ${isSuccess ? 'text-emerald-600' : isPartial ? 'text-amber-600' : 'text-red-600'}`}>
+                        {isSuccess ? (
+                            <><CheckCircle2 className="h-5 w-5" /> {prefix} Successful</>
+                        ) : isPartial ? (
+                            <><AlertTriangle className="h-5 w-5" /> {prefix} Partially Completed</>
+                        ) : (
+                            <><XCircle className="h-5 w-5" /> {prefix} Failed</>
+                        )}
                     </DialogTitle>
                     <DialogDescription>
                         {syncResult?.message}
@@ -47,11 +53,15 @@ export function SyncResultModal({ open, onOpenChange, syncResult, onRetry }: Syn
                                 </div>
                             ))}
                         </div>
-                        {syncResult.status === 'PARTIAL' && (
-                            <p className="text-xs text-muted-foreground">
-                                {syncResult.successfulDevices} of {syncResult.totalDevices} device(s) synced successfully ({syncResult.newLogs} new logs).
-                            </p>
-                        )}
+                    </div>
+                )}
+                
+                {syncResult && (syncResult.status === 'PARTIAL' || syncResult.status === 'SUCCESS') && (
+                    <div className="py-2">
+                        <p className="text-sm text-muted-foreground">
+                            {syncResult.successfulDevices} of {syncResult.totalDevices} device(s) {isTime ? 'synchronized time' : 'synced'} successfully
+                            {!isTime && syncResult.newLogs !== undefined && ` (${syncResult.newLogs} new logs)`}.
+                        </p>
                     </div>
                 )}
 

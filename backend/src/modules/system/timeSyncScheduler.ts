@@ -1,5 +1,5 @@
 import { prisma } from '../../shared/lib/prisma';
-import { syncAllDeviceClocks } from '../devices/zk';
+import { syncAllDeviceClocks, SyncZkTimeResult } from '../devices/zk';
 import { audit } from '../../shared/lib/auditLogger';
 
 /** Returns a formatted timestamp string for console logging (e.g. "11:15:30") */
@@ -62,12 +62,12 @@ class TimeSyncScheduler {
         this.scheduleNextTick(intervalMs);
     }
 
-    public async triggerNow(): Promise<{ success: boolean; message: string }> {
+    public async triggerNow(): Promise<{ success: boolean; message: string; result?: SyncZkTimeResult }> {
         console.log(`[${ts()}] [TimeSyncScheduler] Manual clock-sync triggered`);
         try {
             // syncAllDeviceClocks internally catches specific device errors and continues
-            await syncAllDeviceClocks();
-            return { success: true, message: 'Time sync executed for all active devices' };
+            const result = await syncAllDeviceClocks();
+            return { success: result.success, message: result.message, result };
         } catch (error) {
             console.error(`[${ts()}] [TimeSyncScheduler] Manual clock-sync failed:`, error);
             return { success: false, message: 'Failed to execute manual clock sync' };

@@ -294,22 +294,32 @@ export const triggerManualTimeSync = async (req: Request, res: Response) => {
         console.log(`[System] Manual time sync triggered by user ${req.user?.employeeId || 'unknown'}`);
         
         const result = await timeSyncScheduler.triggerNow();
+        const syncResult = result.result;
+        
+        const level = syncResult?.status === 'SUCCESS' ? 'INFO' : (syncResult?.status === 'PARTIAL' ? 'WARN' : 'ERROR');
 
         void audit({
             action: 'MANUAL_SYNC',
             entityType: 'System',
             source: 'admin-panel',
-            level: result.success ? 'INFO' : 'ERROR',
+            level,
             performedBy: req.user?.employeeId,
-            details: result.success ? 'Manual device clock sync completed' : 'Manual device clock sync failed',
-            metadata: { snapshot: { 'Target': 'time_sync', 'Message': result.message } },
+            details: syncResult?.message || (result.success ? 'Manual device clock sync completed' : 'Manual device clock sync failed'),
+            metadata: syncResult ? {
+                snapshot: {
+                    'Target': 'time_sync',
+                    'Sync Status': syncResult.status,
+                    'Total Devices': String(syncResult.totalDevices),
+                    'Successful Devices': String(syncResult.successfulDevices)
+                }
+            } : { snapshot: { 'Target': 'time_sync', 'Message': result.message } },
             correlationId: req.correlationId
         });
 
         if (result.success) {
-            res.json({ success: true, message: result.message });
+            res.json({ success: true, message: result.message, data: syncResult });
         } else {
-            res.status(500).json({ success: false, message: result.message });
+            res.status(200).json({ success: false, message: result.message, data: syncResult });
         }
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';

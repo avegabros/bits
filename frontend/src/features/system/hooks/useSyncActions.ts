@@ -17,7 +17,8 @@ export interface SyncResultData {
     totalDevices: number;
     successfulDevices: number;
     failedDevices: FailedDevice[];
-    newLogs: number;
+    newLogs?: number;
+    type?: 'data' | 'time';
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ export function useSyncActions({ onStatusRefresh }: UseSyncActionsOptions) {
 
             if (data?.status === 'SUCCESS' || data?.status === 'PARTIAL' || data?.status === 'FAILED') {
                 // Open rich modal for all device-level sync results (success or failure)
-                setSyncResult(data);
+                setSyncResult({ ...data, type: 'data' });
                 setShowResultModal(true);
             } else if (data?.status === 'NO_DEVICES') {
                 toast({
@@ -128,15 +129,28 @@ export function useSyncActions({ onStatusRefresh }: UseSyncActionsOptions) {
     const handleManualTimeSync = async () => {
         setSyncingTime(true);
         try {
-            const res = await apiPost<{ success: boolean; message: string }>(
+            const res = await apiPost<{ success: boolean; message: string; data?: SyncResultData }>(
                 '/api/system/time-sync-now',
                 {}
             );
-            toast({
-                title: res.success ? 'Time Sync Complete ✅' : 'Time Sync Issue',
-                description: res.message,
-                variant: res.success ? 'default' : 'destructive',
-            });
+            
+            const data: SyncResultData | undefined = res.data;
+
+            if (data?.status === 'SUCCESS' || data?.status === 'PARTIAL' || data?.status === 'FAILED') {
+                setSyncResult({ ...data, type: 'time' });
+                setShowResultModal(true);
+            } else if (data?.status === 'NO_DEVICES') {
+                toast({
+                    title: 'No Devices',
+                    description: 'There are no active devices configured to sync.',
+                });
+            } else {
+                toast({
+                    title: res.success ? 'Time Sync Complete ✅' : 'Time Sync Issue',
+                    description: res.message,
+                    variant: res.success ? 'default' : 'destructive',
+                });
+            }
         } catch (error: unknown) {
             toast({
                 title: 'Time Sync Failed',

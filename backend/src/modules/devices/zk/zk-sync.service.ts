@@ -366,22 +366,42 @@ export const syncZkData = async (): Promise<SyncZkDataResult> => {
     // NOTE: No top-level releaseDeviceLock() here — each device releases its own lock
 };
 
-export const syncAllDeviceClocks = async (): Promise<void> => {
+export interface SyncZkTimeResult {
+    success: boolean;
+    status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NO_DEVICES';
+    message: string;
+    totalDevices: number;
+    successfulDevices: number;
+    failedDevices: Array<{ id: number; name: string; error: string }>;
+}
+
+export const syncAllDeviceClocks = async (): Promise<SyncZkTimeResult> => {
     const activeDevices = await prisma.device.findMany({
         where: { isActive: true, syncEnabled: true }
     });
 
     if (activeDevices.length === 0) {
         console.log('[ClockSync] No active devices found.');
-        return;
+        return {
+            success: true,
+            status: 'NO_DEVICES',
+            message: 'No devices configured',
+            totalDevices: 0,
+            successfulDevices: 0,
+            failedDevices: []
+        };
     }
 
     console.log(`[ClockSync] Syncing time on ${activeDevices.length} device(s)...`);
+
+    let successfulDevices = 0;
+    const failedDevices: Array<{ id: number; name: string; error: string }> = [];
 
     for (const device of activeDevices) {
         // Use non-blocking lock — skip this device if already busy with attendance sync or enrollment
         if (!tryAcquireDeviceLock(device.id)) {
             console.warn(`[ClockSync] Skipping "${device.name}" — device busy.`);
+            failedDevices.push({ id: device.id, name: device.name, error: 'Device is busy with another task' });
             continue;
         }
         try {
@@ -391,17 +411,33 @@ export const syncAllDeviceClocks = async (): Promise<void> => {
                 const nowUTC = new Date();
                 await zk.setTime(nowUTC);
                 console.log(`[ClockSync] ✓ "${device.name}" (${device.ip}) — time set to PHT`);
+                successfulDevices++;
             } finally {
                 await zk.disconnect();
             }
         } catch (err: unknown) {
             console.warn(`[ClockSync] ✗ "${device.name}" (${device.ip}) — failed: ${zkErrMsg(err)}`);
+            failedDevices.push({ id: device.id, name: device.name, error: zkErrMsg(err) });
         } finally {
             releaseDeviceLock(device.id);
         }
     }
 
     console.log('[ClockSync] Done.');
+
+    let status: 'SUCCESS' | 'PARTIAL' | 'FAILED' = 'SUCCESS';
+    if (failedDevices.length > 0) {
+        status = successfulDevices > 0 ? 'PARTIAL' : 'FAILED';
+    }
+
+    return {
+        success: status !== 'FAILED',
+        status,
+        message: `Synced time on ${successfulDevices}/${activeDevices.length} active devices.`,
+        totalDevices: activeDevices.length,
+        successfulDevices,
+        failedDevices
+    };
 };
 
 export const clearAllDeviceLogBuffers = async (): Promise<{
