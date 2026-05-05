@@ -7,7 +7,7 @@ import {
     deleteHoliday,
 } from './holiday.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
+import { adminOrHR } from '../../shared/middleware/role.middleware';
 
 const router = express.Router();
 
@@ -102,7 +102,7 @@ router.get('/:id', getHolidayById);
  *       409:
  *         description: Duplicate date
  */
-router.post('/', adminManagerOrHR, createHoliday);
+router.post('/', adminOrHR, createHoliday);
 
 /**
  * @swagger
@@ -143,7 +143,7 @@ router.post('/', adminManagerOrHR, createHoliday);
  *       409:
  *         description: Duplicate date
  */
-router.put('/:id', adminManagerOrHR, updateHoliday);
+router.put('/:id', adminOrHR, updateHoliday);
 
 /**
  * @swagger
@@ -165,6 +165,6 @@ router.put('/:id', adminManagerOrHR, updateHoliday);
  *       404:
  *         description: Holiday not found
  */
-router.delete('/:id', adminManagerOrHR, deleteHoliday);
+router.delete('/:id', adminOrHR, deleteHoliday);
 
 export default router;

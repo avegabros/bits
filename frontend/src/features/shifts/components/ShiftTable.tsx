@@ -15,12 +15,13 @@ interface ShiftTableProps {
   onToggle: (s: Shift) => void
   onEdit: (s: Shift) => void
   onDelete: (s: Shift) => void
+  isReadOnly?: boolean
 }
 
 export function ShiftTable({
   paginatedShifts, loading,
   sortKey, sortOrder, handleSort,
-  onToggle, onEdit, onDelete,
+  onToggle, onEdit, onDelete, isReadOnly,
 }: ShiftTableProps) {
   return (
     <>
@@ -40,7 +41,7 @@ export function ShiftTable({
               <th className="px-6 py-5">Grace / Break</th>
               <th className="px-6 py-5">Employees</th>
               <SortableHeader label="Status" sortKey="isActive" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort} className="px-6 py-5 text-center" />
-              <th className="px-6 py-5">Actions</th>
+              {!isReadOnly && <th className="px-6 py-5">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -110,20 +111,22 @@ export function ShiftTable({
                     {s.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
-                      className={`p-2.5 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
-                      {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                    </button>
-                    <button onClick={() => onEdit(s)} title="Edit" className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => onDelete(s)} title="Delete" className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
+                {!isReadOnly && (
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
+                        className={`p-2.5 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
+                        {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                      </button>
+                      <button onClick={() => onEdit(s)} title="Edit" className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
+                        <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => onDelete(s)} title="Delete" className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             )) : (
               <tr><td colSpan={7} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">No shifts found</td></tr>
@@ -198,18 +201,20 @@ export function ShiftTable({
                       <span className="font-bold">{s._count.Employee}</span>
                       <span className="text-slate-400">assigned</span>
                     </div>
-                    <div className="flex items-center gap-0.5">
-                      <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
-                        className={`p-2 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
-                        {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                      </button>
-                      <button onClick={() => onEdit(s)} title="Edit" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => onDelete(s)} title="Delete" className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    {!isReadOnly && (
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
+                          className={`p-2 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
+                          {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                        </button>
+                        <button onClick={() => onEdit(s)} title="Edit" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
+                          <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => onDelete(s)} title="Delete" className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
