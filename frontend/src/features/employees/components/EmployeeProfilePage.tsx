@@ -18,7 +18,7 @@ import { employeesApi } from '@/lib/api'
 
 interface EmployeeProfilePageProps {
   employeeId: number
-  role: 'admin' | 'hr'
+  role: 'admin' | 'hr' | 'manager'
 }
 
 // ── Info Row helper ──────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
   const [editForm, setEditForm] = useState<Partial<Employee>>({})
   const [isSaving, setIsSaving] = useState(false)
 
-  const basePath = role === 'hr' ? '/hr/employees' : '/employees'
+  const basePath = role === 'hr' ? '/hr/employees' : role === 'manager' ? '/manager/employees' : '/employees'
 
   // ── Loading state ────────────────────────────────────────────────────────
   if (loading) {
@@ -144,6 +144,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
             <ProfilePictureUpload
               currentUrl={employee.profilePicture || null}
               initials={initials}
+              readonly={role === 'manager'}
               onUpload={async (file) => {
                 const res = await employeesApi.uploadProfilePicture(employee.id, file)
                 if (res.success) {
@@ -175,13 +176,15 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
                 )}
               </div>
             </div>
-            <button
-              onClick={handleEdit}
-              className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
-            >
-              <Edit2 className="w-4 h-4" />
-              Edit Profile
-            </button>
+            {role !== 'manager' && (
+              <button
+                onClick={handleEdit}
+                className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit Profile
+              </button>
+            )}
           </div>
         </div>
       </div>

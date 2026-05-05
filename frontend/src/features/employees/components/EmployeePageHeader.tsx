@@ -5,7 +5,7 @@ import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeAddModal } from './EmployeeAddModal';
 
 interface EmployeePageHeaderProps {
-  role: 'admin' | 'hr';
+  role: 'admin' | 'hr' | 'manager';
   statusFilter: 'Active' | 'Inactive';
   isExporting: boolean;
   onExport: () => void;

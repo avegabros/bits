@@ -8,9 +8,10 @@ interface ProfilePictureUploadProps {
   initials?: string
   onUpload: (file: File) => Promise<void>
   onDelete: () => Promise<void>
+  readonly?: boolean
 }
 
-export function ProfilePictureUpload({ currentUrl, initials, onUpload, onDelete }: ProfilePictureUploadProps) {
+export function ProfilePictureUpload({ currentUrl, initials, onUpload, onDelete, readonly = false }: ProfilePictureUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -46,7 +47,7 @@ export function ProfilePictureUpload({ currentUrl, initials, onUpload, onDelete 
   }
 
   const triggerFileInput = () => {
-    if (isUploading) return
+    if (isUploading || readonly) return
     fileInputRef.current?.click()
   }
 
@@ -79,7 +80,7 @@ export function ProfilePictureUpload({ currentUrl, initials, onUpload, onDelete 
         />
         
         {/* Hover overlay for changing picture */}
-        {!previewUrl && (
+        {!previewUrl && !readonly && (
           <div 
             onClick={triggerFileInput}
             className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
@@ -103,57 +104,59 @@ export function ProfilePictureUpload({ currentUrl, initials, onUpload, onDelete 
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-2 justify-center">
-        {previewUrl ? (
-          <>
-            <button 
-              onClick={confirmUpload}
-              disabled={isUploading}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {isUploading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1"></span>
-              ) : (
-                <Check className="w-4 h-4" />
-              )}
-              Save
-            </button>
-            <button 
-              onClick={cancelUpload}
-              disabled={isUploading}
-              className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            <button 
-              onClick={triggerFileInput}
-              disabled={isUploading}
-              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm disabled:opacity-50"
-            >
-              Upload Photo
-            </button>
-            
-            {currentUrl && (
+      {!readonly && (
+        <div className="flex flex-wrap gap-2 justify-center">
+          {previewUrl ? (
+            <>
               <button 
-                onClick={handleDelete}
+                onClick={confirmUpload}
                 disabled={isUploading}
-                className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 text-sm font-medium rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
                 {isUploading ? (
-                  <span className="w-4 h-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin mr-1"></span>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1"></span>
                 ) : (
-                  <Trash2 className="w-4 h-4" />
+                  <Check className="w-4 h-4" />
                 )}
-                Remove
+                Save
               </button>
-            )}
-          </>
-        )}
-      </div>
+              <button 
+                onClick={cancelUpload}
+                disabled={isUploading}
+                className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                onClick={triggerFileInput}
+                disabled={isUploading}
+                className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm disabled:opacity-50"
+              >
+                Upload Photo
+              </button>
+              
+              {currentUrl && (
+                <button 
+                  onClick={handleDelete}
+                  disabled={isUploading}
+                  className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 text-sm font-medium rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <span className="w-4 h-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin mr-1"></span>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Remove
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

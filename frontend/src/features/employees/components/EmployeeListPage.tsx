@@ -13,7 +13,7 @@ import { CompanyTabs } from '@/features/attendance/components/CompanyTabs';
 import { useEmployeeList } from '../hooks/useEmployeeList';
 
 interface EmployeeListPageProps {
-  role: 'admin' | 'hr';
+  role: 'admin' | 'hr' | 'manager';
   statusFilter?: 'Active' | 'Inactive';
 }
 

@@ -25,7 +25,7 @@ interface EmployeeTableProps {
   enrollStatus: Record<number, 'idle' | 'loading' | 'success' | 'error'>
   dragScrollRef: React.RefObject<HTMLDivElement | null>
   pageSize?: number
-  role?: 'admin' | 'hr'
+  role?: 'admin' | 'hr' | 'manager'
   // Inactive-only actions
   onRestore?: (employee: Employee) => void
   onPermanentDelete?: (employee: Employee) => void
@@ -41,7 +41,7 @@ export function EmployeeTable({
   role = 'admin',
 }: EmployeeTableProps) {
   const isInactiveMode = !!(onRestore || onPermanentDelete)
-  const basePath = role === 'hr' ? '/hr/employees' : '/employees'
+  const basePath = role === 'hr' ? '/hr/employees' : role === 'manager' ? '/manager/employees' : '/employees'
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -126,20 +126,24 @@ export function EmployeeTable({
                     <div className="flex items-center justify-end gap-0.5">
                       {isInactiveMode ? (
                         <>
-                          <button
-                            onClick={() => onRestore?.(employee)}
-                            title="Restore to Active"
-                            className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all active:scale-90"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onPermanentDelete?.(employee)}
-                            title="Delete Permanently"
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90"
-                          >
-                            <UserX className="w-4 h-4" />
-                          </button>
+                          {role !== 'manager' && (
+                            <>
+                              <button
+                                onClick={() => onRestore?.(employee)}
+                                title="Restore to Active"
+                                className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all active:scale-90"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => onPermanentDelete?.(employee)}
+                                title="Delete Permanently"
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90"
+                              >
+                                <UserX className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </>
                       ) : (
                         <>
@@ -150,29 +154,33 @@ export function EmployeeTable({
                           >
                             <Eye className="w-4 h-4" />
                           </Link>
-                          <button onClick={() => onEdit(employee)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Edit employee">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          {(() => {
-                            const status = enrollStatus[employee.id] || 'idle'
-                            if (status === 'loading') {
-                              return (<button disabled className="p-2 rounded-lg bg-blue-50 text-blue-400 cursor-wait" title="Enrolling..."><Fingerprint className="w-4 h-4 animate-pulse" /></button>)
-                            }
-                            return (
-                              <button onClick={() => { onFingerprintOpen(employee.id, `${employee.firstName} ${employee.lastName}`) }}
-                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-all active:scale-90" title="Manage Fingerprints">
-                                <Fingerprint className="w-4 h-4" />
+                          {role !== 'manager' && (
+                            <>
+                              <button onClick={() => onEdit(employee)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Edit employee">
+                                <Edit2 className="w-4 h-4" />
                               </button>
-                            )
-                          })()}
-                          <button onClick={() => { onCardEnrollOpen(employee.id, `${employee.firstName} ${employee.lastName}`, employee.cardNumber || null) }}
-                            className={`p-2 rounded-lg transition-all active:scale-90 ${employee.cardNumber ? 'text-blue-500 hover:text-blue-700 hover:bg-blue-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
-                            title={employee.cardNumber ? `Badge #${employee.cardNumber}` : 'Enroll RFID Badge'}>
-                            <CreditCard className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => onResetPassword(employee)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Reset Password">
-                            <Key className="w-4 h-4" />
-                          </button>
+                              {(() => {
+                                const status = enrollStatus[employee.id] || 'idle'
+                                if (status === 'loading') {
+                                  return (<button disabled className="p-2 rounded-lg bg-blue-50 text-blue-400 cursor-wait" title="Enrolling..."><Fingerprint className="w-4 h-4 animate-pulse" /></button>)
+                                }
+                                return (
+                                  <button onClick={() => { onFingerprintOpen(employee.id, `${employee.firstName} ${employee.lastName}`) }}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-all active:scale-90" title="Manage Fingerprints">
+                                    <Fingerprint className="w-4 h-4" />
+                                  </button>
+                                )
+                              })()}
+                              <button onClick={() => { onCardEnrollOpen(employee.id, `${employee.firstName} ${employee.lastName}`, employee.cardNumber || null) }}
+                                className={`p-2 rounded-lg transition-all active:scale-90 ${employee.cardNumber ? 'text-blue-500 hover:text-blue-700 hover:bg-blue-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+                                title={employee.cardNumber ? `Badge #${employee.cardNumber}` : 'Enroll RFID Badge'}>
+                                <CreditCard className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => onResetPassword(employee)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Reset Password">
+                                <Key className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
