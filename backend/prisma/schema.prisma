@@ -92,11 +92,28 @@ model AttendanceLog {
 }
 
 model Department {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime
-  Employee  Employee[]
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Employee          Employee[]
+  ManagerDepartment ManagerDepartment[]
+}
+
+model ManagerDepartment {
+  id           Int        @id @default(autoincrement())
+  managerId    Int
+  departmentId Int
+  assignedAt   DateTime   @default(now())
+  assignedById Int?
+
+  manager      Employee   @relation("ManagerDepartments", fields: [managerId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignedBy   Employee?  @relation("ManagerDeptAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([managerId, departmentId])
+  @@index([managerId])
+  @@index([departmentId])
 }
 
 model Company {
@@ -193,6 +210,8 @@ model Employee {
   Branch                        Branch?                         @relation(fields: [branchId], references: [id])
   Company                       Company?                        @relation(fields: [companyId], references: [id])
   Department                    Department?                     @relation(fields: [departmentId], references: [id])
+  ManagerDepartments            ManagerDepartment[]             @relation("ManagerDepartments")
+  ManagerDeptAssignments        ManagerDepartment[]             @relation("ManagerDeptAssignedBy")
   Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]

@@ -5,6 +5,7 @@ import {
     getMyProfile,
     changePassword,
     streamMyAttendance,
+    getMyDepartments,
 } from './me.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 
@@ -74,5 +75,16 @@ router.get('/profile', getMyProfile);
  *       - bearerAuth: []
  */
 router.put('/password', changePassword);
+
+/**
+ * @swagger
+ * /api/me/departments:
+ *   get:
+ *     summary: Get my assigned departments (Managers only)
+ *     tags: [Me]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/departments', getMyDepartments);
 
 export default router;

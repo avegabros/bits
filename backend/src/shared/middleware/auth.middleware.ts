@@ -16,6 +16,7 @@ declare global {
                 firstName: string;
                 lastName: string;
                 name: string;
+                departmentIds?: number[];
             };
             correlationId: string;
         }

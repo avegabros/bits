@@ -4,6 +4,42 @@ import bcrypt from 'bcryptjs';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
 import { calculateAttendanceMetrics, formatToPhilippineTime } from '../attendance/attendance.service';
 
+// Get logged-in manager's assigned departments
+export const getMyDepartments = async (req: Request, res: Response): Promise<void> => {
+    try {
+        if (!req.user?.employeeId) {
+            res.status(401).json({ success: false, message: 'Not authenticated' });
+            return;
+        }
+
+        const employeeId = req.user.employeeId;
+
+        // Verify the user is a MANAGER
+        const employee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            select: { role: true }
+        });
+
+        if (!employee || employee.role !== 'MANAGER') {
+            res.status(403).json({ success: false, message: 'Only managers have assigned departments' });
+            return;
+        }
+
+        const assignments = await prisma.managerDepartment.findMany({
+            where: { managerId: employeeId },
+            include: { department: { select: { id: true, name: true } } }
+        });
+
+        res.status(200).json({
+            success: true,
+            departments: assignments.map(a => a.department)
+        });
+    } catch (error: unknown) {
+        console.error('getMyDepartments error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch departments', error: error instanceof Error ? error.message : String(error) });
+    }
+};
+
 // Get logged-in employee's own attendance records
 export const getMyAttendance = async (req: Request, res: Response): Promise<void> => {
     try {

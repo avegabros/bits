@@ -20,6 +20,7 @@ export interface AdjustmentTableProps {
     sortKeyStr: string | null
     sortOrder: 'asc' | 'desc' | null
     statusFilter: string
+    role: 'admin' | 'hr' | 'manager'
     isAdmin: boolean
     currentUserId: number | null
     actionLoading: boolean
@@ -27,6 +28,7 @@ export interface AdjustmentTableProps {
     onApprove: (id: number) => void
     onReject: (id: number) => void
     onCancel: (id: number) => void
+    onReopen?: (id: number) => void
 }
 
 export function AdjustmentTable({
@@ -35,6 +37,7 @@ export function AdjustmentTable({
     sortKeyStr,
     sortOrder,
     statusFilter,
+    role,
     isAdmin,
     currentUserId,
     actionLoading,
@@ -42,6 +45,7 @@ export function AdjustmentTable({
     onApprove,
     onReject,
     onCancel,
+    onReopen,
 }: AdjustmentTableProps) {
     return (
         <table className="w-full border-collapse">
@@ -184,7 +188,12 @@ export function AdjustmentTable({
                                             {adj.reviewedBy ? `${adj.reviewedBy.firstName} ${adj.reviewedBy.lastName}` : ''}
                                         </span>
                                         {adj.reviewedAt && <span className="text-[11px] text-[#9E9E9E]">{formatTimestamp(adj.reviewedAt)}</span>}
-
+                                        {role === 'admin' && adj.status !== 'pending' && onReopen && (
+                                            <button onClick={() => onReopen(adj.id)} disabled={actionLoading}
+                                                className="mt-[4px] h-[24px] px-[8px] bg-white border border-[#E0E0E0] text-[#1565C0] rounded-[4px] text-[10px] font-bold uppercase tracking-[0.5px] hover:bg-[#E3F2FD] hover:border-[#BBDEFB] transition-all active:scale-[0.95]">
+                                                Reopen
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </td>

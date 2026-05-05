@@ -52,13 +52,16 @@ export const managerOrAdmin = authorize(['MANAGER', 'ADMIN']);
 
 /**
  * Convenience middleware for ADMIN, MANAGER, and HR routes
- * Replaces the old adminOrHR for routes where all three management roles need access
  */
 export const adminManagerOrHR = authorize(['ADMIN', 'MANAGER', 'HR']);
 
 /**
- * @deprecated Use adminManagerOrHR instead for new routes.
- * Kept for backward compatibility — equivalent to authorize(['ADMIN', 'HR'])
- * Does NOT include MANAGER. Use adminManagerOrHR if Manager should have access.
+ * Convenience middleware for MANAGER-only routes
+ */
+export const managerOnly = authorize(['MANAGER']);
+
+/**
+ * Convenience middleware for ADMIN and HR routes
+ * Does NOT include MANAGER.
  */
 export const adminOrHR = authorize(['ADMIN', 'HR']);

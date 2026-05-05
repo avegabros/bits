@@ -13,14 +13,19 @@ import {
     reviewAdjustment,
     deleteAttendance,
     cancelAdjustment,
+    reopenAdjustment,
 } from './attendance.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminManagerOrHR, managerOrAdmin } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR, managerOrAdmin, adminOrHR } from '../../shared/middleware/role.middleware';
+import { departmentScope } from '../../shared/middleware/departmentScope.middleware';
 
 const router = Router();
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
+
+// Apply department scoping for MANAGER roles
+router.use(departmentScope);
 
 // Apply role-based authorization to all routes (ADMIN, MANAGER, or HR)
 router.use(adminManagerOrHR);
@@ -44,7 +49,7 @@ router.use(adminManagerOrHR);
  *       200:
  *         description: Sync successful
  */
-router.post('/sync', syncAttendance);
+router.post('/sync', adminOrHR, syncAttendance);
 
 /**
  * @swagger
@@ -73,7 +78,7 @@ router.post('/sync', syncAttendance);
  *       200:
  *         description: Record added
  */
-router.post('/user', addUser);
+router.post('/user', adminOrHR, addUser);
 
 /**
  * @swagger
@@ -87,7 +92,7 @@ router.post('/user', addUser);
  *       200:
  *         description: Record created or submitted for approval
  */
-router.post('/manual', createManualAttendance);
+router.post('/manual', adminOrHR, createManualAttendance);
 
 /**
  * @swagger
@@ -316,7 +321,7 @@ router.put('/adjustments/:id/review', managerOrAdmin, reviewAdjustment);
  *       404:
  *         description: Not found
  */
-router.put('/:id', updateAttendance);
+router.put('/:id', adminOrHR, updateAttendance);
 
 /**
  * @swagger
@@ -347,7 +352,7 @@ router.put('/:id', updateAttendance);
  *       200:
  *         description: Record deleted or deletion request submitted
  */
-router.delete('/:id', deleteAttendance);
+router.delete('/:id', adminOrHR, deleteAttendance);
 
 /**
  * @swagger
@@ -374,5 +379,31 @@ router.delete('/:id', deleteAttendance);
  *         description: Adjustment not found
  */
 router.put('/adjustments/:id/cancel', cancelAdjustment);
+
+/**
+ * @swagger
+ * /api/attendance/adjustments/{id}/reopen:
+ *   put:
+ *     summary: Reopen a finalized attendance adjustment (Admin only)
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Adjustment reopened
+ *       400:
+ *         description: Adjustment is already pending
+ *       403:
+ *         description: Admin only
+ *       404:
+ *         description: Adjustment not found
+ */
+router.put('/adjustments/:id/reopen', adminOrHR, reopenAdjustment);
 
 export default router;

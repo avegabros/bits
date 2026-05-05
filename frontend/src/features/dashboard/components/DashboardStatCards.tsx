@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, UserCheck, Timer, UserX } from 'lucide-react';
 
 export interface DashboardStatCardsProps {
-    role: 'admin' | 'hr';
+    role: 'admin' | 'hr' | 'manager';
     totalEmployees: number;
     totalPresent: number;
     totalLate: number;

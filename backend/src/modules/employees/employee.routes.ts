@@ -23,7 +23,8 @@ import {
     exportTemplate
 } from './index';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR, adminOrHR } from '../../shared/middleware/role.middleware';
+import { departmentScope } from '../../shared/middleware/departmentScope.middleware';
 import { validate } from '../../shared/middleware/validation.middleware';
 import { createEmployeeValidator, employeeQueryValidator, enrollFingerprintValidator, enrollCardValidator } from './employee.validator';
 import { uploadAvatar, handleMulterError } from '../profile-picture/profilePicture.validator';
@@ -33,6 +34,9 @@ const router = Router();
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
+
+// Apply department scoping for MANAGER roles
+router.use(departmentScope);
 
 // Apply role-based authorization to all routes (ADMIN, MANAGER, or HR)
 router.use(adminManagerOrHR);
@@ -113,7 +117,7 @@ router.get('/', validate(employeeQueryValidator), getAllEmployees);
  *       201:
  *         description: Employee created successfully
  */
-router.post('/', validate(createEmployeeValidator), createEmployee);
+router.post('/', adminOrHR, validate(createEmployeeValidator), createEmployee);
 
 /**
  * @swagger
@@ -221,7 +225,7 @@ router.get('/:id', getEmployeeById);
  *       200:
  *         description: Sync successful
  */
-router.post('/sync-to-device', syncEmployeesToDeviceController);
+router.post('/sync-to-device', adminOrHR, syncEmployeesToDeviceController);
 
 /**
  * @swagger
@@ -275,7 +279,7 @@ router.post('/bulk-validate', bulkValidateEmployees);
  *       200:
  *         description: Bulk import results
  */
-router.post('/bulk', bulkCreateEmployees);
+router.post('/bulk', adminOrHR, bulkCreateEmployees);
 
 
 /**
@@ -310,7 +314,7 @@ router.post('/bulk', bulkCreateEmployees);
  *       404:
  *         description: Employee not found
  */
-router.post('/:id/enroll-fingerprint', validate(enrollFingerprintValidator), enrollEmployeeFingerprintController);
+router.post('/:id/enroll-fingerprint', adminOrHR, validate(enrollFingerprintValidator), enrollEmployeeFingerprintController);
 
 /**
  * @swagger
@@ -355,7 +359,7 @@ router.get('/:id/fingerprint-status', getEmployeeFingerprintStatus);
  *       200:
  *         description: Fingerprint deleted globally
  */
-router.delete('/:id/fingerprint/:fingerIndex', deleteEmployeeFingerprint);
+router.delete('/:id/fingerprint/:fingerIndex', adminOrHR, deleteEmployeeFingerprint);
 
 /**
  * @swagger
@@ -377,7 +381,7 @@ router.delete('/:id/fingerprint/:fingerIndex', deleteEmployeeFingerprint);
  *       400:
  *         description: No fingerprints to sync
  */
-router.post('/:id/sync-fingerprints', syncEmployeeFingerprintsController);
+router.post('/:id/sync-fingerprints', adminOrHR, syncEmployeeFingerprintsController);
 
 /**
  * @swagger
@@ -413,7 +417,7 @@ router.post('/:id/sync-fingerprints', syncEmployeeFingerprintsController);
  *       409:
  *         description: Card number already assigned to another employee
  */
-router.post('/:id/enroll-card', validate(enrollCardValidator), enrollEmployeeCardController);
+router.post('/:id/enroll-card', adminOrHR, validate(enrollCardValidator), enrollEmployeeCardController);
 
 /**
  * @swagger
@@ -447,8 +451,8 @@ router.get('/:id/card-status', getEmployeeCardStatus);
  *       500:
  *         description: Server error
  */
-router.delete('/:id/card', deleteEmployeeCardController);
-router.delete('/:id/card/device/:deviceId', deleteEmployeeCardController);
+router.delete('/:id/card', adminOrHR, deleteEmployeeCardController);
+router.delete('/:id/card/device/:deviceId', adminOrHR, deleteEmployeeCardController);
 
 /**
  * @swagger
@@ -472,7 +476,7 @@ router.delete('/:id/card/device/:deviceId', deleteEmployeeCardController);
  *       404:
  *         description: Employee not found
  */
-router.delete('/:id/permanent', permanentDeleteEmployee);
+router.delete('/:id/permanent', adminOrHR, permanentDeleteEmployee);
 
 /**
  * @swagger
@@ -494,7 +498,7 @@ router.delete('/:id/permanent', permanentDeleteEmployee);
  *       404:
  *         description: Employee not found
  */
-router.delete('/:id', deleteEmployee);
+router.delete('/:id', adminOrHR, deleteEmployee);
 
 /**
  * @swagger
@@ -516,7 +520,7 @@ router.delete('/:id', deleteEmployee);
  *       404:
  *         description: Employee not found
  */
-router.patch('/:id/reactivate', reactivateEmployee);
+router.patch('/:id/reactivate', adminOrHR, reactivateEmployee);
 
 /**
  * @swagger
@@ -558,7 +562,7 @@ router.patch('/:id/reactivate', reactivateEmployee);
  *       404:
  *         description: Employee not found
  */
-router.put('/:id', updateEmployee);
+router.put('/:id', adminOrHR, updateEmployee);
 
 /**
  * @swagger
@@ -580,7 +584,7 @@ router.put('/:id', updateEmployee);
  *       404:
  *         description: Employee not found
  */
-router.post('/:id/reset-password', resetEmployeePassword);
+router.post('/:id/reset-password', adminOrHR, resetEmployeePassword);
 
 /**
  * @swagger
@@ -614,7 +618,7 @@ router.post('/:id/reset-password', resetEmployeePassword);
  *       404:
  *         description: Employee not found
  */
-router.post('/:id/profile-picture', uploadAvatar.single('file'), handleMulterError, uploadEmployeeProfilePicture);
+router.post('/:id/profile-picture', adminOrHR, uploadAvatar.single('file'), handleMulterError, uploadEmployeeProfilePicture);
 
 /**
  * @swagger
@@ -636,6 +640,6 @@ router.post('/:id/profile-picture', uploadAvatar.single('file'), handleMulterErr
  *       404:
  *         description: Employee not found
  */
-router.delete('/:id/profile-picture', deleteEmployeeProfilePicture);
+router.delete('/:id/profile-picture', adminOrHR, deleteEmployeeProfilePicture);
 
 export default router;

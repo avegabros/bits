@@ -8,7 +8,7 @@ import { useAdjustmentList } from '../hooks/useAdjustmentList'
 import { AdjustmentTable } from './AdjustmentTable'
 
 export interface AdjustmentListPageProps {
-    role: 'admin' | 'hr'
+    role: 'admin' | 'hr' | 'manager'
 }
 
 export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
@@ -27,9 +27,10 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
         rejectionReason, setRejectionReason,
         approvingId, setApprovingId,
         cancellingId, setCancellingId,
+        reopeningId, setReopeningId,
         actionLoading,
-        handleApprove, handleReject, handleCancel,
-        isAdmin, pendingCount, currentUserId,
+        handleApprove, handleReject, handleCancel, handleReopen,
+        role: hookRole, isAdmin, pendingCount, currentUserId,
         toasts, dismissToast,
     } = useAdjustmentList(role)
 
@@ -136,6 +137,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                         sortKeyStr={sortKeyStr}
                         sortOrder={sortOrder}
                         statusFilter={statusFilter}
+                        role={hookRole}
                         isAdmin={isAdmin}
                         currentUserId={currentUserId}
                         actionLoading={actionLoading}
@@ -143,6 +145,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                         onApprove={setApprovingId}
                         onReject={(id) => { setRejectingId(id); setRejectionReason('') }}
                         onCancel={setCancellingId}
+                        onReopen={setReopeningId}
                     />
                 </div>
                 <DataTablePagination
@@ -258,6 +261,31 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                                     className="flex-1 h-[44px] text-white rounded-[8px] text-[14px] font-bold disabled:opacity-50 transition-all active:scale-[0.98] bg-[#F57F17] hover:bg-[#F9A825] shadow-lg shadow-[#F57F17]/20 flex items-center justify-center gap-[8px]">
                                     {actionLoading && <Loader2 size={16} className="animate-spin" />}
                                     Confirm Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reopen Confirmation Modal */}
+            {reopeningId !== null && (
+                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[150] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[360px] overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-[32px] text-center space-y-[24px]">
+                            <div className="w-[64px] h-[64px] rounded-full bg-[#E3F2FD] flex items-center justify-center mx-auto">
+                                <AlertCircle className="w-[32px] h-[32px] text-[#1565C0]" />
+                            </div>
+                            <div className="space-y-[8px]">
+                                <h3 className="text-[20px] font-bold text-[#212121] tracking-tight">Reopen Request?</h3>
+                                <p className="text-[14px] text-[#757575]">This will move the adjustment back to pending for re-review.</p>
+                            </div>
+                            <div className="flex gap-[12px] pt-[8px]">
+                                <button onClick={() => setReopeningId(null)} className="flex-1 h-[44px] border border-[#E0E0E0] text-[#757575] rounded-[8px] text-[14px] font-bold hover:bg-[#F5F5F5] transition-all">Cancel</button>
+                                <button onClick={() => handleReopen(reopeningId)} disabled={actionLoading}
+                                    className="flex-1 h-[44px] text-white rounded-[8px] text-[14px] font-bold disabled:opacity-50 transition-all active:scale-[0.98] bg-[#1565C0] hover:bg-[#0D47A1] shadow-lg shadow-[#1565C0]/20 flex items-center justify-center gap-[8px]">
+                                    {actionLoading && <Loader2 size={16} className="animate-spin" />}
+                                    Reopen
                                 </button>
                             </div>
                         </div>
