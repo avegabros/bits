@@ -12,7 +12,7 @@ interface AttendanceDesktopTableProps {
   handleSort: (key: keyof AttendanceRecord) => void
   currentPage: number
   rowsPerPage: number
-  handleEditClick: (row: AttendanceRecord) => void
+  handleEditClick?: (row: AttendanceRecord) => void
   handleDeleteClick?: (row: AttendanceRecord) => void
 }
 
@@ -40,7 +40,9 @@ export function AttendanceDesktopTable({
           <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
           <SortableHeader label="UT"          sortKey="undertimeMinutes" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-red-500" />
           <SortableHeader label="Status"      sortKey="status"           currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <th className="px-2 py-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Actions</th>
+          {(handleEditClick || handleDeleteClick) && (
+            <th className="px-2 py-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Actions</th>
+          )}
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -52,7 +54,7 @@ export function AttendanceDesktopTable({
             </div>
           </td></tr>
         ) : sortedRecords.length === 0 ? (
-          <tr><td colSpan={10} className="px-6 py-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No attendance records found</td></tr>
+          <tr><td colSpan={(handleEditClick || handleDeleteClick) ? 10 : 9} className="px-6 py-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No attendance records found</td></tr>
         ) : (
           sortedRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map(row => (
             <tr key={row.id} className="hover:bg-primary/5 transition-colors duration-200 group cursor-default">
@@ -221,18 +223,22 @@ export function AttendanceDesktopTable({
                 </div>
               </td>
               {/* Actions */}
-              <td className="px-2 py-3 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <button onClick={() => handleEditClick(row)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
-                    <Edit2 size={16} />
-                  </button>
-                  {handleDeleteClick && typeof row.id === 'number' && (
-                    <button onClick={() => handleDeleteClick(row)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-600/10 rounded-lg transition-all" title="Delete Record">
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </td>
+              {(handleEditClick || handleDeleteClick) && (
+                <td className="px-2 py-3 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    {handleEditClick && (
+                      <button onClick={() => handleEditClick(row)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
+                        <Edit2 size={16} />
+                      </button>
+                    )}
+                    {handleDeleteClick && typeof row.id === 'number' && (
+                      <button onClick={() => handleDeleteClick(row)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-600/10 rounded-lg transition-all" title="Delete Record">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))
         )}

@@ -9,7 +9,7 @@ interface AttendanceMobileCardsProps {
   sortedRecords: AttendanceRecord[]
   currentPage: number
   rowsPerPage: number
-  handleEditClick: (row: AttendanceRecord) => void
+  handleEditClick?: (row: AttendanceRecord) => void
   handleDeleteClick?: (row: AttendanceRecord) => void
 }
 
@@ -91,9 +91,11 @@ export function AttendanceMobileCards({
                   Edited
                 </span>
               )}
-              <button onClick={() => handleEditClick(row)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
-                <Edit2 size={14} />
-              </button>
+              {handleEditClick && (
+                <button onClick={() => handleEditClick(row)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit Record">
+                  <Edit2 size={14} />
+                </button>
+              )}
               {handleDeleteClick && typeof row.id === 'number' && (
                 <button onClick={() => handleDeleteClick(row)} className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-600/10 rounded-lg transition-all" title="Delete Record">
                   <Trash2 size={14} />

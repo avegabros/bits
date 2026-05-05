@@ -15,7 +15,7 @@ interface AttendanceTableProps {
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>
   totalPages: number
   rowsPerPage: number;
-  handleEditClick: (row: AttendanceRecord) => void;
+  handleEditClick?: (row: AttendanceRecord) => void;
   handleDeleteClick?: (row: AttendanceRecord) => void;
   showStatsHeader?: boolean;
   stats?: {
