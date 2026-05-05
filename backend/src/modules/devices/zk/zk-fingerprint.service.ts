@@ -67,15 +67,32 @@ export const enrollEmployeeFingerprint = async (
     // 1. Load employee from DB
     const employee = await prisma.employee.findUnique({
         where: { id: employeeId },
-        select: { id: true, zkId: true, firstName: true, lastName: true, cardNumber: true },
+        select: { id: true, zkId: true, firstName: true, lastName: true, cardNumber: true, employmentStatus: true },
     });
 
     if (!employee) {
         return { success: false, message: `Employee ${employeeId} not found in database.` };
     }
 
-    if (!employee.zkId) {
-        return { success: false, message: `Employee ${employeeId} has no zkId assigned.` };
+    let currentZkId = employee.zkId;
+    if (!currentZkId) {
+        console.log(`[Enrollment] Assigning new zkId for STAGED employee ${employeeId}...`);
+        const { acquireRegistrationMutex } = require('./zk-lock.service');
+        const { findNextSafeZkId } = require('./zk-user.service');
+        const release = await acquireRegistrationMutex();
+        try {
+            currentZkId = await findNextSafeZkId();
+            await prisma.employee.update({
+                where: { id: employeeId },
+                data: { zkId: currentZkId }
+            });
+        } finally {
+            release();
+        }
+    }
+
+    if (!currentZkId) {
+        return { success: false, message: 'Failed to assign zkId for enrollment.' };
     }
 
     // 2. Resolve which device to use
@@ -107,8 +124,8 @@ export const enrollEmployeeFingerprint = async (
     }
 
     const fullName = `${employee.firstName} ${employee.lastName}`;
-    const visibleId = employee.zkId.toString();
-    const deviceUid = employee.zkId;
+    const visibleId = currentZkId.toString();
+    const deviceUid = currentZkId;
 
     // Acquire interactive device lock for priority handling.
     await acquireInteractiveDeviceLock(dbDevice.id);
@@ -754,6 +771,31 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
     if (!found) {	
         console.warn(`[BiometricSync] ⚠ Failed to detect template for ${employee.firstName} from ${dbDevice.name} after 60s. User may have aborted enrollment.`);	
         return;	
+    }	
+
+    if (employee.employmentStatus === 'STAGED') {
+        const { generateRandomPassword } = require('../../../shared/utils/password.utils');
+        const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
+        const bcrypt = require('bcrypt');
+
+        const newPassword = generateRandomPassword(10);
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        console.log(`[BiometricSync] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
+        await prisma.employee.update({
+            where: { id: employeeId },
+            data: { employmentStatus: 'ACTIVE', password: hashedPassword, updatedAt: new Date() }
+        });
+
+        if (employee.email) {
+            setImmediate(async () => {
+                try {
+                    await sendWelcomeEmail(employee.email, `${employee.firstName} ${employee.lastName}`, newPassword);
+                } catch (emailErr) {
+                    console.error(`[BiometricSync] Failed to send welcome email to ${employee.email}`, emailErr);
+                }
+            });
+        }
     }	
 	
 	

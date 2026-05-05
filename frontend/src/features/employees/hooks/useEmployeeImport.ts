@@ -224,10 +224,37 @@ export function useEmployeeImport({
         };
       });
 
-      setImportParsedRows(parsed);
+      let parsedRows = parsed;
+      const validRowsForCheck = parsed.filter(r => r.status === 'valid');
+      if (validRowsForCheck.length > 0) {
+        try {
+          const res = await fetch('/api/employees/bulk-validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employees: validRowsForCheck })
+          });
+          const data = await res.json();
+          if (data.success && data.errors && data.errors.length > 0) {
+            parsedRows = [...parsed];
+            data.errors.forEach((err: any) => {
+              const idx = parsedRows.findIndex(r => r._rowNumber === err.row);
+              if (idx !== -1) {
+                parsedRows[idx].status = 'invalid';
+                parsedRows[idx].reason = parsedRows[idx].reason 
+                  ? parsedRows[idx].reason + '; ' + err.reason 
+                  : err.reason;
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Validation API error', e);
+        }
+      }
+
+      setImportParsedRows(parsedRows);
       // ── Transition: select → preview (only on successful parse with ≥1 data row) ──
       setImportStep('preview');
-    } catch {
+    } catch (e) {
       setImportFileError('Failed to parse file.');
     }
   };
@@ -273,7 +300,18 @@ export function useEmployeeImport({
         setImportStep('results');
         onImportComplete();
       } else {
-        showToast('error', 'Import Failed', data.message || 'Server error.');
+        if (data.errors && data.errors.length > 0) {
+          const updatedRows = [...importParsedRows];
+          data.errors.forEach((err: any) => {
+            const idx = updatedRows.findIndex(r => r._rowNumber === err.row);
+            if (idx !== -1) {
+              updatedRows[idx].status = 'invalid';
+              updatedRows[idx].reason = err.reason || err.message;
+            }
+          });
+          setImportParsedRows(updatedRows);
+        }
+        showToast('error', 'Import Failed', data.message || 'Validation errors found.');
       }
     } catch {
       showToast('error', 'Import Failed', 'Could not reach the server.');

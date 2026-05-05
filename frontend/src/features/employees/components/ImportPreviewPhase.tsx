@@ -76,12 +76,14 @@ export function ImportPreviewPhase({
       </div>
 
       <Button
-        className="w-full bg-red-600 hover:bg-red-700 font-bold"
+        className="w-full bg-red-600 hover:bg-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={onSubmit}
-        disabled={isImporting || validCount === 0}
+        disabled={isImporting || validCount === 0 || invalidCount > 0}
       >
         {isImporting ? (
           <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
+        ) : invalidCount > 0 ? (
+          `Fix ${invalidCount} error${invalidCount !== 1 ? 's' : ''} to upload`
         ) : (
           `Upload & Import ${validCount} Row${validCount !== 1 ? 's' : ''}`
         )}

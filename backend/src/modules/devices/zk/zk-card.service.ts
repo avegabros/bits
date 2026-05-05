@@ -3,7 +3,8 @@ interface SyncResult { success: boolean; message?: string; error?: string; count
 import { prisma } from '../../../shared/lib/prisma';
 import { ZKDriver } from '../../../shared/lib/zk-driver';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
-import { acquireDeviceLock, releaseDeviceLock } from './zk-lock.service';
+import { acquireDeviceLock, releaseDeviceLock, acquireRegistrationMutex } from './zk-lock.service';
+import { findNextSafeZkId } from './zk-user.service';
 import { audit } from '../../../shared/lib/auditLogger';
 
 
@@ -17,15 +18,46 @@ export const enrollEmployeeCard = async (
     // 1. Load employee from DB
     const employee = await prisma.employee.findUnique({
         where: { id: employeeId },
-        select: { id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true },
+        select: { id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true, employmentStatus: true, email: true },
     });
 
     if (!employee) {
         return { success: false, message: `Employee ${employeeId} not found in database.` };
     }
 
-    if (!employee.zkId) {
-        return { success: false, message: `Employee ${employeeId} has no zkId assigned. Sync to device first.` };
+    let currentZkId = employee.zkId;
+    let employeeUpdates: any = { cardNumber, updatedAt: new Date() };
+
+    if (!currentZkId) {
+        console.log(`[CardEnroll] Assigning new zkId for STAGED employee ${employeeId}...`);
+        const release = await acquireRegistrationMutex();
+        try {
+            currentZkId = await findNextSafeZkId();
+            employeeUpdates.zkId = currentZkId;
+        } finally {
+            release();
+        }
+    }
+
+    if (employee.employmentStatus === 'STAGED') {
+        const { generateRandomPassword } = require('../../../shared/utils/password.utils');
+        const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
+        const bcrypt = require('bcrypt');
+
+        const newPassword = generateRandomPassword(10);
+        employeeUpdates.password = await bcrypt.hash(newPassword, 10);
+        employeeUpdates.employmentStatus = 'ACTIVE';
+        console.log(`[CardEnroll] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
+
+        if (employee.email) {
+            setImmediate(async () => {
+                try {
+                    await sendWelcomeEmail(employee.email, fullName, newPassword);
+                } catch (emailErr) {
+                    console.error(`[CardEnroll] Failed to send welcome email to ${employee.email}`, emailErr);
+                }
+            });
+        }
     }
 
     // 2. Validate card number uniqueness
@@ -50,7 +82,7 @@ export const enrollEmployeeCard = async (
     try {
         if (targetDeviceId) {
             await enqueueUpsertUser(targetDeviceId, {
-                zkId: employee.zkId,
+                zkId: currentZkId,
                 name: fullName,
                 role: deviceRole,
                 card: cardNumber
@@ -64,7 +96,7 @@ export const enrollEmployeeCard = async (
             });
         } else {
             await enqueueGlobalUpsertUser({
-                zkId: employee.zkId,
+                zkId: currentZkId,
                 name: fullName,
                 role: deviceRole,
                 card: cardNumber
@@ -84,7 +116,7 @@ export const enrollEmployeeCard = async (
         // 2. Persist to DB.
         await prisma.employee.update({
             where: { id: employeeId },
-            data: { cardNumber, updatedAt: new Date() },
+            data: employeeUpdates,
         });
 
         return {

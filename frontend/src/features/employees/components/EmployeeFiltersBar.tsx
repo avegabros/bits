@@ -13,6 +13,8 @@ interface FilterState {
   setSelectedBranch: (v: string) => void;
   selectedShift: string;
   setSelectedShift: (v: string) => void;
+  selectedStatus?: string;
+  setSelectedStatus?: (v: string) => void;
 }
 
 interface EmployeeFiltersBarProps {
@@ -56,6 +58,16 @@ export function EmployeeFiltersBar({ filters, departments, branches, shifts }: E
             {shifts.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {filters.selectedStatus !== undefined && filters.setSelectedStatus !== undefined && (
+          <Select value={filters.selectedStatus} onValueChange={filters.setSelectedStatus}>
+            <SelectTrigger className="w-full sm:w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="ACTIVE">Active</SelectItem>
+              <SelectItem value="STAGED">Staged</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
     </Card>
   );

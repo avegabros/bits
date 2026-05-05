@@ -76,7 +76,7 @@ export const authenticate = async (
             select: { employmentStatus: true },
         });
 
-        if (!freshUser || freshUser.employmentStatus === 'INACTIVE' || freshUser.employmentStatus === 'TERMINATED') {
+        if (!freshUser || freshUser.employmentStatus !== 'ACTIVE') {
             // Clear auth cookies so the browser stops sending them
             res.clearCookie('auth_token', cookieOptions);
             res.clearCookie('refresh_token', cookieOptions);

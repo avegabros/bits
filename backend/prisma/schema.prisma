@@ -359,6 +359,7 @@ model DeviceSyncTask {
 
 enum EmploymentStatus {
   ACTIVE
+  STAGED
   INACTIVE
   TERMINATED
 }

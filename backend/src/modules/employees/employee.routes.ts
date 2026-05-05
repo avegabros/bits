@@ -7,6 +7,7 @@ import {
     reactivateEmployee,
     createEmployee,
     bulkCreateEmployees,
+    bulkValidateEmployees,
     enrollEmployeeFingerprintController,
     enrollEmployeeCardController,
     deleteEmployeeCardController,
@@ -221,6 +222,33 @@ router.get('/:id', getEmployeeById);
  *         description: Sync successful
  */
 router.post('/sync-to-device', syncEmployeesToDeviceController);
+
+/**
+ * @swagger
+ * /api/employees/bulk-validate:
+ *   post:
+ *     summary: Validate bulk employees before import
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - employees
+ *             properties:
+ *               employees:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: Validation results
+ */
+router.post('/bulk-validate', bulkValidateEmployees);
 
 /**
  * @swagger

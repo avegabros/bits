@@ -45,12 +45,13 @@ function InfoRow({ icon: Icon, label, value, mono }: {
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     ACTIVE: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    STAGED: 'bg-blue-100 text-blue-700 border-blue-200',
     INACTIVE: 'bg-amber-100 text-amber-700 border-amber-200',
     TERMINATED: 'bg-rose-100 text-rose-700 border-rose-200',
   }
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${colors[status] || 'bg-slate-100 text-slate-500'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : status === 'INACTIVE' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : status === 'STAGED' ? 'bg-blue-500' : status === 'INACTIVE' ? 'bg-amber-500' : 'bg-rose-500'}`} />
       {status}
     </span>
   )
@@ -199,6 +200,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
             <InfoRow icon={Phone} label="Contact Number" value={employee.contactNumber ? formatPhoneNumber(employee.contactNumber) : null} />
             <InfoRow icon={User} label="Gender" value={employee.gender ? employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1).toLowerCase() : null} />
             <InfoRow icon={Calendar} label="Date of Birth" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null} />
+            <InfoRow icon={Calendar} label="Hire Date" value={employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null} />
           </div>
         </div>
 
@@ -213,7 +215,6 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
             <InfoRow icon={Hash} label="ZK ID (Biometric)" value={employee.zkId} mono />
             <InfoRow icon={Building2} label="Department" value={employee.Department?.name} />
             <InfoRow icon={MapPin} label="Branch" value={employee.Branch?.name} />
-            <InfoRow icon={Calendar} label="Hire Date" value={employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null} />
             <InfoRow icon={Shield} label="Role" value={employee.role} />
           </div>
         </div>

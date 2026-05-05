@@ -20,6 +20,7 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
   const [selectedDept, setSelectedDept] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedCompany, setSelectedCompany] = useState('All Companies');
 
   const fetchEmployees = useCallback(async () => {
@@ -29,7 +30,11 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
       if (res.status === 401) { window.location.href = '/login'; return; }
       const data = await res.json();
       if (data.success) {
-        setEmployees(data.employees.filter((e: Employee) => e.employmentStatus === statusFilter.toUpperCase() && e.role === 'USER'));
+        if (statusFilter.toUpperCase() === 'ACTIVE') {
+          setEmployees(data.employees.filter((e: Employee) => (e.employmentStatus === 'ACTIVE' || e.employmentStatus === 'STAGED') && e.role === 'USER'));
+        } else {
+          setEmployees(data.employees.filter((e: Employee) => e.employmentStatus === statusFilter.toUpperCase() && e.role === 'USER'));
+        }
       }
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -103,9 +108,10 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
       const matchesDept = selectedDept === 'all' || emp.Department?.name === selectedDept;
       const matchesBranch = selectedBranch === 'all' || emp.Branch?.name === selectedBranch;
       const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift;
-      return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift;
+      const matchesStatus = selectedStatus === 'all' || emp.employmentStatus === selectedStatus;
+      return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift && matchesStatus;
     });
-  }, [employees, searchTerm, selectedCompany, selectedDept, selectedBranch, selectedShift]);
+  }, [employees, searchTerm, selectedCompany, selectedDept, selectedBranch, selectedShift, selectedStatus]);
 
   const tableSort = useTableSort<Employee>({ initialData: filteredEmployees });
 
@@ -185,6 +191,8 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
       setSelectedShift,
       selectedCompany,
       setSelectedCompany,
+      selectedStatus,
+      setSelectedStatus,
     },
     tableSort,
     actions: {

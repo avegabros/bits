@@ -547,6 +547,46 @@ function normalizePhoneNumber(phone: string | null | undefined): string | null {
     return cleaned;
 }
 
+// POST /api/employees/bulk-validate
+export const bulkValidateEmployees = async (req: Request, res: Response) => {
+    try {
+        const { employees } = req.body;
+        if (!Array.isArray(employees)) return res.status(400).json({ success: false });
+
+        const errors: { row: number; reason: string }[] = [];
+        
+        const empNumsToVerify = employees.map(e => String(e.employeeNumber).trim()).filter(Boolean);
+        const emailsToVerify = employees.map(e => String(e.email).trim().toLowerCase()).filter(Boolean);
+
+        const [existingEmpNums, existingEmails] = await Promise.all([
+            prisma.employee.findMany({ where: { employeeNumber: { in: empNumsToVerify } }, select: { employeeNumber: true } }),
+            prisma.employee.findMany({ where: { email: { in: emailsToVerify } }, select: { email: true } })
+        ]);
+
+        const existingEmpNumSet = new Set(existingEmpNums.map(e => e.employeeNumber));
+        const existingEmailSet = new Set(existingEmails.map(e => (e.email || '').toLowerCase()));
+
+        for (let i = 0; i < employees.length; i++) {
+            const emp = employees[i];
+            const rowNum = emp._rowNumber ?? (i + 1);
+            const empNum = String(emp.employeeNumber || '').trim();
+            const email = String(emp.email || '').trim().toLowerCase();
+
+            if (empNum && existingEmpNumSet.has(empNum)) {
+                errors.push({ row: rowNum, reason: `Employee number '${empNum}' already exists in database` });
+            }
+            if (email && existingEmailSet.has(email)) {
+                errors.push({ row: rowNum, reason: `Email '${email}' already exists in database` });
+            }
+        }
+
+        return res.status(200).json({ success: true, errors });
+    } catch (err) {
+        console.error('[BULK_VALIDATE]', err);
+        return res.status(500).json({ success: false, message: 'Validation server error' });
+    }
+};
+
 // POST /api/employees/bulk - Bulk create employees from import
 export const bulkCreateEmployees = async (req: Request, res: Response) => {
     try {
@@ -566,92 +606,105 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
             });
         }
 
+        const errors: { row: number; employeeNumber: string; status: 'failed'; reason: string }[] = [];
+        
+        // ── Pre-fetch for Duplicate Validation ────────────────────────────────
+        const empNumsToVerify = employees.map(e => String(e.employeeNumber || '').trim()).filter(Boolean);
+        const emailsToVerify = employees.map(e => String(e.email || '').trim().toLowerCase()).filter(Boolean);
+
+        const [existingEmpNums, existingEmails] = await Promise.all([
+            prisma.employee.findMany({ where: { employeeNumber: { in: empNumsToVerify } }, select: { employeeNumber: true } }),
+            prisma.employee.findMany({ where: { email: { in: emailsToVerify } }, select: { email: true } })
+        ]);
+
+        const existingEmpNumSet = new Set(existingEmpNums.map(e => e.employeeNumber));
+        const existingEmailSet = new Set(existingEmails.map(e => (e.email || '').toLowerCase()));
+        
+        const inFileDataEmpNumSet = new Set<string>();
+        const inFileDataEmailSet = new Set<string>();
+
+        // ── PASS 1: Validation ────────────────────────────────────────────────
+        for (let i = 0; i < employees.length; i++) {
+            const emp = employees[i];
+            const rowNum = emp._rowNumber ?? (i + 1);
+            const empNum = (emp.employeeNumber || '').toString().trim();
+
+            if (!empNum || empNum.length < 2) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Employee ID must be at least 2 characters long.' });
+            }
+            if (!emp.firstName || !emp.lastName) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'First name and last name are required' });
+            }
+            if (!emp.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.email)) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid email is required' });
+            }
+            if (!emp.dateOfBirth || emp.dateOfBirth.toString().trim() === '' || isNaN(Date.parse(emp.dateOfBirth.toString()))) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid Date of Birth is required' });
+            }
+            if (!emp.hireDate || emp.hireDate.toString().trim() === '' || isNaN(Date.parse(emp.hireDate.toString()))) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid Hire Date is required' });
+            }
+
+            // Intra-file duplicates
+            if (empNum) {
+                if (inFileDataEmpNumSet.has(empNum)) {
+                    errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Duplicate employee number in file' });
+                }
+                inFileDataEmpNumSet.add(empNum);
+            }
+            const emailKey = (emp.email || '').toString().trim().toLowerCase();
+            if (emailKey) {
+                if (inFileDataEmailSet.has(emailKey)) {
+                    errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Duplicate email in file' });
+                }
+                inFileDataEmailSet.add(emailKey);
+            }
+
+            // DB duplicates
+            if (empNum && existingEmpNumSet.has(empNum)) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Employee number already in use' });
+            }
+            if (emailKey && existingEmailSet.has(emailKey)) {
+                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Email already in use' });
+            }
+        }
+
+        if (errors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed. No employees were imported. Please fix the errors and try again.',
+                errors
+            });
+        }
+
         const results: { row: number; employeeNumber: string; status: 'success' | 'failed'; reason?: string }[] = [];
 
+        // ── PASS 2: Insertion ──────────────────────────────────────────────────
         for (let i = 0; i < employees.length; i++) {
             const emp = employees[i];
             const rowNum = emp._rowNumber ?? (i + 1);
             const empNum = (emp.employeeNumber || '').toString().trim();
 
             try {
-                if (!empNum || empNum.length < 2) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Employee ID must be at least 2 characters long.' });
-                    continue;
-                }
-
-                if (!emp.firstName || !emp.lastName) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'First name and last name are required' });
-                    continue;
-                }
-
-                if (!emp.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.email)) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid email is required' });
-                    continue;
-                }
-
-                // ── Fix 1: Date of Birth is required ─────────────────────────
-                if (!emp.dateOfBirth || emp.dateOfBirth.toString().trim() === '') {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Date of Birth is required' });
-                    continue;
-                }
-                if (isNaN(Date.parse(emp.dateOfBirth.toString()))) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Date of Birth is not a valid date' });
-                    continue;
-                }
-
-                // ── Fix 2: Hire Date is required ─────────────────────────────
-                if (!emp.hireDate || emp.hireDate.toString().trim() === '') {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Hire Date is required' });
-                    continue;
-                }
-                if (isNaN(Date.parse(emp.hireDate.toString()))) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Hire Date is not a valid date' });
-                    continue;
-                }
-
-                // ── Fix 4: Resolve company name to companyId ─────────────────
                 let resolvedCompanyId: number | null = null;
                 if (emp.company) {
                     const matchedCompany = await prisma.company.findFirst({
                         where: { name: { equals: emp.company, mode: 'insensitive' } },
                         select: { id: true },
                     });
-                    if (!matchedCompany) {
-                        results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: `Company "${emp.company}" not found` });
-                        continue;
+                    if (matchedCompany) {
+                        resolvedCompanyId = matchedCompany.id;
                     }
-                    resolvedCompanyId = matchedCompany.id;
-                }
-
-                // ── Check DB for duplicates ──────────────────────────────────
-                const existingByNumber = await prisma.employee.findUnique({
-                    where: { employeeNumber: empNum },
-                    select: { id: true },
-                });
-                if (existingByNumber) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Employee number already in use' });
-                    continue;
-                }
-
-                const existingByEmail = await prisma.employee.findFirst({
-                    where: { email: emp.email.trim().toLowerCase() },
-                    select: { id: true },
-                });
-                if (existingByEmail) {
-                    results.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Email already in use' });
-                    continue;
                 }
 
                 // ── Acquire mutex, assign zkId, create employee ──────────────
                 const generatedPassword = generateRandomPassword(10);
                 const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
-                const release = await acquireRegistrationMutex();
+                // No longer acquiring registration mutex for zkId during import
                 let newEmployee;
 
                 try {
-                    const nextZkId = await findNextSafeZkId();
-
                     newEmployee = await prisma.employee.create({
                         data: {
                             employeeNumber: empNum,
@@ -680,8 +733,8 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             companyId: resolvedCompanyId,
                             contactNumber: normalizePhoneNumber(emp.contactNumber),
                             hireDate: new Date(emp.hireDate),
-                            employmentStatus: 'ACTIVE',
-                            zkId: nextZkId,
+                            employmentStatus: 'STAGED',
+                            zkId: null, // zkId assigned upon biometric enrollment
                             shiftId: emp.shiftId ? parseInt(emp.shiftId, 10) : null,
                             needsPasswordChange: true,
                             updatedAt: new Date(),
@@ -696,8 +749,8 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             role: true,
                         },
                     });
-                } finally {
-                    release();
+                } catch (dbErr) {
+                    console.error('[BULK] Database creation error:', dbErr);
                 }
 
                 if (!newEmployee) {
@@ -707,38 +760,20 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
 
                 results.push({ row: rowNum, employeeNumber: empNum, status: 'success' });
 
-                console.log(`[BULK] Created employee: ${newEmployee.firstName} ${newEmployee.lastName} (zkId: ${newEmployee.zkId})`);
+                console.log(`[BULK] Created employee: ${newEmployee.firstName} ${newEmployee.lastName} (Staged)`);
 
                 void audit({
                     action: 'CREATE',
                     entityType: 'Employee',
                     entityId: newEmployee.id,
                     performedBy: req.user?.employeeId,
-                    details: `Bulk import: created employee ${newEmployee.firstName} ${newEmployee.lastName}`,
+                    details: `Bulk import: created employee ${newEmployee.firstName} ${newEmployee.lastName} (Staged)`,
                     metadata: { email: emp.email, employeeNumber: empNum, source: 'bulk_import' },
                     correlationId: req.correlationId
                 });
 
-                // Fire-and-forget: email + device sync (same pattern as single create)
-                const capturedEmployee = newEmployee;
-                const capturedPassword = generatedPassword;
-                setImmediate(async () => {
-                    if (capturedEmployee.email) {
-                        try {
-                            await sendWelcomeEmail(capturedEmployee.email, `${capturedEmployee.firstName} ${capturedEmployee.lastName}`, capturedPassword);
-                        } catch (emailErr) {
-                            console.error(`[BULK] (background) Failed to send welcome email to ${capturedEmployee.email}:`, emailErr);
-                        }
-                    }
-                    if (capturedEmployee.zkId) {
-                        try {
-                            const displayName = `${capturedEmployee.firstName} ${capturedEmployee.lastName}`;
-                            await addUserToDevice(capturedEmployee.zkId!, displayName, capturedEmployee.role);
-                        } catch (syncErr: unknown) {
-                            console.error(`[BULK] (background) Device sync failed for zkId ${capturedEmployee.zkId}:`, syncErr instanceof Error ? syncErr.message : String(syncErr));
-                        }
-                    }
-                });
+                // NOTE: Immediate email + device sync bypassed for STAGED employees.
+                // It will be triggered upon biometric activation.
 
             } catch (rowError: unknown) {
                 console.error(`[BULK] Error processing row ${rowNum}:`, rowError instanceof Error ? rowError.message : String(rowError));

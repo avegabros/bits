@@ -22,7 +22,7 @@ export type Employee = {
   hireDate: string | null
   gender: string | null
   dateOfBirth: string | null
-  employmentStatus: 'ACTIVE' | 'INACTIVE' | 'TERMINATED'
+  employmentStatus: 'ACTIVE' | 'STAGED' | 'INACTIVE' | 'TERMINATED'
   profilePicture: string | null
   shiftId?: number | null
   Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string; workDays?: string; halfDays?: string; graceMinutes?: number; breakMinutes?: number; isNightShift?: boolean } | null
