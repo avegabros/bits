@@ -16,7 +16,7 @@ interface EmployeeTableProps {
   totalPages: number
   sortKey: string | null
   sortOrder: 'asc' | 'desc' | null
-  onSort: (key: keyof Employee) => void
+  onSort: (key: string) => void
   onPageChange: (page: number) => void
   onEdit: (employee: Employee) => void
   onResetPassword: (employee: Employee) => void
@@ -60,7 +60,7 @@ export function EmployeeTable({
               <SortableHeader label="Employee" sortKey="firstName" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-4 py-3" />
               <SortableHeader label="Employee ID" sortKey="employeeNumber" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-3 py-3 w-24" />
               <th className="px-4 py-3">Shift</th>
-              <SortableHeader label="Branch" sortKey="branch" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-4 py-3" />
+              <SortableHeader label="Branch" sortKey="Branch.name" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={onSort} className="px-4 py-3" />
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>

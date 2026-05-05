@@ -5,15 +5,16 @@ import { formatFullName, Employee } from '../utils/employee-types';
 
 interface UseEmployeeListOptions {
   statusFilter?: 'Active' | 'Inactive';
+  role?: 'admin' | 'hr' | 'manager';
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 const ROWS_PER_PAGE = 10;
 
-export function useEmployeeList({ statusFilter = 'Active' }: UseEmployeeListOptions = {}) {
+export function useEmployeeList({ statusFilter = 'Active', role = 'admin' }: UseEmployeeListOptions = {}) {
   const { employees, rawEmployees, departments, branches, filteredBranches, companies, companyNames, shifts, loading, refresh, filters, tableSort, actions } =
-    useEmployees({ statusFilter });
+    useEmployees({ statusFilter, role });
   const { toasts, showToast, dismissToast } = useToast();
 
   // ── Pagination ──────────────────────────────────────────────────────────────

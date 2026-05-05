@@ -18,7 +18,7 @@ interface EmployeeListPageProps {
 }
 
 export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeListPageProps) {
-  const list = useEmployeeList({ statusFilter });
+  const list = useEmployeeList({ statusFilter, role });
   const dragScrollRef = useHorizontalDragScroll();
 
   return (
@@ -55,7 +55,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
           companies={list.companyNames}
         />
 
-        <EmployeeFiltersBar filters={list.filters} departments={list.departments} branches={list.filteredBranches} shifts={list.shifts} />
+        <EmployeeFiltersBar role={role} filters={list.filters} departments={list.departments} branches={list.filteredBranches} shifts={list.shifts} />
 
         <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border">
           <EmployeeTable

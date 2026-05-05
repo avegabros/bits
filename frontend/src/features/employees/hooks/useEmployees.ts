@@ -6,9 +6,10 @@ import { formatFullName } from '../utils/employee-types';
 
 interface UseEmployeesProps {
   statusFilter?: string; // 'Active' | 'Inactive'
+  role?: 'admin' | 'hr' | 'manager';
 }
 
-export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}) {
+export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmployeesProps = {}) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -45,8 +46,9 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
 
   const fetchDependencies = useCallback(async () => {
     try {
+      const deptUrl = role === 'manager' ? '/api/me/departments' : '/api/departments';
       const [deptRes, branchRes, shiftRes, companyRes] = await Promise.all([
-        fetch('/api/departments'),
+        fetch(deptUrl, { credentials: 'include' }),
         fetch('/api/branches'),
         fetch('/api/shifts', { credentials: 'include' }),
         fetch('/api/companies'),
@@ -64,7 +66,7 @@ export function useEmployees({ statusFilter = 'ACTIVE' }: UseEmployeesProps = {}
     } catch (e) {
       console.error('Error fetching dependencies:', e);
     }
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     fetchEmployees();
