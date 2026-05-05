@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export function useLogin() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -80,11 +82,9 @@ export function useLogin() {
       }
 
       setRedirectPath(path)
-      // Visual feedback loading screen
+      // Show continuous loading screen during client-side transition
       setShowLoading(true)
-      setTimeout(() => {
-        window.location.href = path
-      }, 2400)
+      router.push(path)
     } catch (error: any) {
       setValidationErrors({
         ...validationErrors,

@@ -1,4 +1,5 @@
 import React from 'react'
+import { GlobalLoading } from '@/components/ui/GlobalLoading'
 
 interface AuthLayoutProps {
   children: React.ReactNode
@@ -13,49 +14,7 @@ export function AuthLayout({
 }: AuthLayoutProps) {
   // Fullscreen loading overlay
   if (showLoading) {
-    return (
-      <div className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-linear-to-br from-gray-900 via-gray-800 to-gray-900">
-        <div className="flex flex-col items-center gap-8 animate-fadeIn">
-          {/* wait.png image */}
-          <div className="relative">
-            <div className="absolute -inset-4 bg-red-600/20 rounded-full blur-2xl animate-pulse" />
-            <img
-              src="/images/wait.png"
-              alt="Loading"
-              className="relative w-48 h-auto drop-shadow-2xl"
-            />
-          </div>
-
-          {/* Loading text */}
-          <div className="text-center space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-wide">Wait...</h2>
-            <p className="text-sm text-gray-400">{loadingMessage}</p>
-          </div>
-
-          {/* Loading bar */}
-          <div className="w-48 h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full bg-red-600 rounded-full animate-loadingBar" />
-          </div>
-        </div>
-
-        <style jsx>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes loadingBar {
-            0% { width: 0%; }
-            100% { width: 100%; }
-          }
-          .animate-fadeIn {
-            animation: fadeIn 0.5s ease-out;
-          }
-          .animate-loadingBar {
-            animation: loadingBar 2.3s ease-in-out;
-          }
-        `}</style>
-      </div>
-    )
+    return <GlobalLoading message={loadingMessage} />
   }
 
   return (

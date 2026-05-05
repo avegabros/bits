@@ -8,6 +8,7 @@ import { SessionExpiredModal } from './shared/SessionExpiredModal'
 import { SessionExpiringWarning } from './shared/SessionExpiringWarning'
 import Sidebar from './manager-sidebar'
 import TopBar from './manager-topbar'
+import { GlobalLoading } from '@/components/ui/GlobalLoading'
 
 export function ManagerLayout({ children }: { children: React.ReactNode }) {
     const { isLoading, isAuthenticated } = useAuth('MANAGER')
@@ -18,11 +19,7 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
 
     // Show loading state while checking auth
     if (isLoading || !isAuthenticated) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <div className="text-gray-500">Loading...</div>
-            </div>
-        )
+        return <GlobalLoading message="Authenticating..." />
     }
 
     return (

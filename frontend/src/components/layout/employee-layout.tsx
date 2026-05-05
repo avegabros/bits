@@ -9,6 +9,7 @@ import { SessionExpiredModal } from './shared/SessionExpiredModal'
 import { SessionExpiringWarning } from './shared/SessionExpiringWarning'
 import { EmployeeSidebar } from './employee-sidebar'
 import { EmployeeTopbar } from './employee-topbar'
+import { GlobalLoading } from '@/components/ui/GlobalLoading'
 
 export function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const { employee, isLoading, isAuthenticated } = useAuth('USER')
@@ -29,11 +30,7 @@ export function EmployeeLayout({ children }: { children: React.ReactNode }) {
 
     // Show loading state while checking auth
     if (isLoading || !isAuthenticated) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <div className="text-gray-500">Loading...</div>
-            </div>
-        )
+        return <GlobalLoading message="Authenticating..." />
     }
 
     return (
