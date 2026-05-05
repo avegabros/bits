@@ -34,8 +34,6 @@ export interface ManagerDashboardState {
     holidayName: string | null;
     activityScrollRef: React.RefObject<HTMLDivElement | null>;
     myDepartments: { id: number; name: string }[];
-    departmentFilter: number | null | 'company';
-    setDepartmentFilter: (id: number | null | 'company') => void;
 }
 
 const phtStr = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -69,7 +67,6 @@ export function useManagerDashboardData() {
     const [totalHoliday, setTotalHoliday] = useState(0);
     const [holidayName, setHolidayName] = useState<string | null>(null);
     const [myDepartments, setMyDepartments] = useState<{ id: number; name: string }[]>([]);
-    const [departmentFilter, setDepartmentFilter] = useState<number | null | 'company'>(null);
 
     const load = useCallback(async () => {
         try {
@@ -78,12 +75,10 @@ export function useManagerDashboardData() {
             const weekStart = phtStr(weekDates[0].date);
             const weekEnd = phtStr(weekDates[6].date);
 
-            const scopeQuery = departmentFilter === 'company' ? '&scope=company' : '';
-
             const [eRes, aRes, wRes, hRes, dRes] = await Promise.all([
-                fetch(`/api/employees?limit=5000${scopeQuery}`, { credentials: 'include' }),
-                fetch(`/api/attendance?startDate=${todayStr}&endDate=${todayStr}&limit=5000${scopeQuery}`, { credentials: 'include' }),
-                fetch(`/api/attendance?startDate=${weekStart}&endDate=${weekEnd}&limit=5000${scopeQuery}`, { credentials: 'include' }),
+                fetch(`/api/employees?limit=5000`, { credentials: 'include' }),
+                fetch(`/api/attendance?startDate=${todayStr}&endDate=${todayStr}&limit=5000`, { credentials: 'include' }),
+                fetch(`/api/attendance?startDate=${weekStart}&endDate=${weekEnd}&limit=5000`, { credentials: 'include' }),
                 fetch(`/api/holidays?year=${new Date().getFullYear()}`, { credentials: 'include' }),
                 fetch(`/api/me/departments`, { credentials: 'include' }),
             ]);
@@ -107,21 +102,18 @@ export function useManagerDashboardData() {
             const allEmps: any[] = ed.success ? (ed.employees || ed.data || []) : [];
             const emps = allEmps.filter((e: any) => {
                 if (e.role !== 'USER' && e.role) return false;
-                if (departmentFilter && departmentFilter !== 'company' && e.departmentId !== departmentFilter) return false;
                 return true;
             });
             const atts: any[] = (ad.success ? (ad.data || []) : []).filter((a: any) => {
                 const emp = a.employee || a.Employee || {};
                 if (emp.role !== 'USER' && emp.role) return false;
                 if (a.status === 'pending') return false;
-                if (departmentFilter && departmentFilter !== 'company' && emp.departmentId !== departmentFilter && emp.Department?.id !== departmentFilter) return false;
                 return true;
             });
             const weekAtts: any[] = (wd.success ? (wd.data || []) : []).filter((a: any) => {
                 const emp = a.employee || a.Employee || {};
                 if (emp.role !== 'USER' && emp.role) return false;
                 if (a.status === 'pending') return false;
-                if (departmentFilter && departmentFilter !== 'company' && emp.departmentId !== departmentFilter && emp.Department?.id !== departmentFilter) return false;
                 return true;
             });
 
@@ -215,7 +207,7 @@ export function useManagerDashboardData() {
         } finally {
             setLoading(false);
         }
-    }, [router, departmentFilter]);
+    }, [router]);
 
     const handleStreamRecord = useCallback((payload: AttendanceStreamPayload) => {
         // Since we don't know if the incoming stream record belongs to the manager's department
@@ -254,8 +246,6 @@ export function useManagerDashboardData() {
         holidayName,
         activityScrollRef,
         myDepartments,
-        departmentFilter,
-        setDepartmentFilter,
     };
 
     return { state, loading, refresh: load };

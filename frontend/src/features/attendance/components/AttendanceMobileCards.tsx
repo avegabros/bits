@@ -77,10 +77,11 @@ export function AttendanceMobileCards({
                   : row.displayStatus === 'IN_PROGRESS'      ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
                   : row.displayStatus === 'late'             ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
                   : row.displayStatus === 'missing_checkout' ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
+                  : row.displayStatus === 'rest_day'         ? 'text-slate-400 bg-slate-400/10 border-slate-400/20'
                   : row.displayStatus === '—'                ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
                   : 'text-red-500 bg-red-500/10 border-red-500/20'
               }`}>
-                {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus}
+                {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'rest_day' ? 'Rest Day' : row.displayStatus}
               </span>
               {row.isEdited && (
                 <span 

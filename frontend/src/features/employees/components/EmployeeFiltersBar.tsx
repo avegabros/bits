@@ -22,9 +22,10 @@ interface EmployeeFiltersBarProps {
   departments: { id: number; name: string }[];
   branches: { id: number; name: string }[];
   shifts: { id: number; name: string }[];
+  role?: 'admin' | 'hr' | 'manager';
 }
 
-export function EmployeeFiltersBar({ filters, departments, branches, shifts }: EmployeeFiltersBarProps) {
+export function EmployeeFiltersBar({ filters, departments, branches, shifts, role = 'admin' }: EmployeeFiltersBarProps) {
   return (
     <Card className="bg-card border-border p-4">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -40,7 +41,7 @@ export function EmployeeFiltersBar({ filters, departments, branches, shifts }: E
         <Select value={filters.selectedDept} onValueChange={filters.setSelectedDept}>
           <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Department" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
+            <SelectItem value="all">{role === 'manager' ? 'All Assigned Departments' : 'All Departments'}</SelectItem>
             {departments.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
           </SelectContent>
         </Select>

@@ -13,13 +13,33 @@ import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email
 // GET /api/employees/export - Export employees to .xlsx
 export const exportEmployees = async (req: Request, res: Response) => {
     try {
-        const { department, branch } = req.query;
+        const { department, branch, company, shift, status, employmentStatus } = req.query;
 
         const where: Prisma.EmployeeWhereInput = {
-            employmentStatus: 'ACTIVE',
             role: 'USER',
         };
+
+        if (employmentStatus && employmentStatus !== 'all') {
+            const empStatus = (employmentStatus as string).toUpperCase();
+            if (empStatus === 'ACTIVE') {
+                 where.employmentStatus = { in: ['ACTIVE', 'STAGED'] };
+            } else {
+                 where.employmentStatus = empStatus;
+            }
+        } else {
+            where.employmentStatus = 'ACTIVE'; // fallback
+        }
+
+        if (status && status !== 'all') {
+            // overriding the employmentStatus array if specific status is selected
+            where.employmentStatus = status as string;
+        }
+
         // Filter by relation name (look up ID first so we can filter by FK)
+        if (company && company !== 'All Companies') {
+            const comp = await prisma.company.findFirst({ where: { name: company as string }, select: { id: true } });
+            if (comp) where.companyId = comp.id;
+        }
         if (department && department !== 'all') {
             const dept = await prisma.department.findFirst({ where: { name: department as string }, select: { id: true } });
             if (dept) where.departmentId = dept.id;
@@ -27,6 +47,10 @@ export const exportEmployees = async (req: Request, res: Response) => {
         if (branch && branch !== 'all') {
             const br = await prisma.branch.findFirst({ where: { name: branch as string }, select: { id: true } });
             if (br) where.branchId = br.id;
+        }
+        if (shift && shift !== 'all') {
+            const sh = await prisma.shift.findFirst({ where: { name: shift as string }, select: { id: true } });
+            if (sh) where.shiftId = sh.id;
         }
 
         const employees = await prisma.employee.findMany({
@@ -41,6 +65,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 dateOfBirth: true,
                 email: true,
                 contactNumber: true,
+                Company: { select: { name: true } },
                 Department: { select: { name: true } },
                 Branch: { select: { name: true } },
                 hireDate: true,
@@ -63,6 +88,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
             { header: 'Date of Birth', key: 'dateOfBirth', width: 16 },
             { header: 'Email', key: 'email', width: 28 },
             { header: 'Contact Number', key: 'contactNumber', width: 18 },
+            { header: 'Company', key: 'company', width: 20 },
             { header: 'Department', key: 'department', width: 18 },
             { header: 'Branch', key: 'branch', width: 16 },
             { header: 'Hire Date', key: 'hireDate', width: 16 },
@@ -94,6 +120,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth).toISOString().split('T')[0] : '',
                 email: emp.email || '',
                 contactNumber: emp.contactNumber || '',
+                company: emp.Company?.name || '',
                 department: emp.Department?.name || '',
                 branch: emp.Branch?.name || '',
                 hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
@@ -114,7 +141,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
             details: `Exported ${employees.length} employee(s) to Excel`,
             metadata: {
                 count: employees.length,
-                filters: { department: department || 'all', branch: branch || 'all' },
+                filters: { company: company || 'all', department: department || 'all', branch: branch || 'all', shift: shift || 'all', status: status || 'all' },
                 filename,
             },
             correlationId: req.correlationId

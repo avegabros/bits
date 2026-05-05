@@ -6,6 +6,7 @@ interface AttendanceStatsProps {
     onTime: number;
     late: number;
     absent: number;
+    restDay?: number;
     incomplete: number;
     total: number;
     avgHours: string;
@@ -77,6 +78,15 @@ export function AttendanceStats({ stats, variant = 'generic' }: AttendanceStatsP
             <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Absent</p>
             <p className="text-xl font-black text-red-500">{stats.absent}</p>
           </div>
+          {stats.restDay !== undefined && stats.restDay > 0 && (
+            <>
+              <div className="w-px h-8 bg-slate-100" />
+              <div className="text-center">
+                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Rest Day</p>
+                <p className="text-xl font-black text-slate-400">{stats.restDay}</p>
+              </div>
+            </>
+          )}
           {stats.incomplete > 0 && (
             <>
               <div className="w-px h-8 bg-slate-100" />

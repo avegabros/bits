@@ -57,7 +57,7 @@ interface RawEmployee {
   Department?: { name: string }
   Branch?: { name: string }
   Company?: { id: number; name: string } | null
-  Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
+  Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string }
   profilePicture?: string | null
 }
 
@@ -96,7 +96,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [companiesList, setCompaniesList] = useState<{ id: number; name: string }[]>([])
   const [companyFilter, setCompanyFilter] = useState('All Companies')
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
-  const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
+  const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, restDay: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
 
   // ── Holiday State (used for CSV export only) ──────────────────────────────
   const [isHolidayDate, setIsHolidayDate] = useState(false)
@@ -138,6 +138,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     { value: 'present', label: 'On Time' },
     { value: 'late', label: 'Late' },
     { value: 'absent', label: 'Absent' },
+    { value: 'rest_day', label: 'Rest Day' },
     { value: 'incomplete', label: 'Missing Checkout' },
   ]
 
@@ -342,34 +343,59 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
         const isFutureDate = selectedDate > todayStr
 
+        // Helper: determine if the selected date is a working day for a given employee
+        const selectedDayName = new Date(selectedDate + 'T00:00:00Z')
+          .toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
+
+        const isWorkingDayForEmployee = (emp: RawEmployee): boolean => {
+          if (emp.Shift?.workDays) {
+            try {
+              const wDays = typeof emp.Shift.workDays === 'string'
+                ? JSON.parse(emp.Shift.workDays)
+                : emp.Shift.workDays
+              if (Array.isArray(wDays)) return wDays.includes(selectedDayName)
+            } catch { /* fallback to default */ }
+          }
+          // Default: Mon-Fri are working days
+          return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(selectedDayName)
+        }
+
         const absentRows: AttendanceRecord[] = (dateIsHoliday || isFutureDate)
           ? [] // On holidays or future dates, no one is injected as absent
           : allEmployees
             .filter((e: RawEmployee) => !presentIds.has(e.id))
-            .map((e: RawEmployee) => ({
-              id: `absent-${e.id}`,
-              employeeId: e.id,
-              employeeName: `${e.firstName} ${e.lastName}`,
-              profilePicture: e.profilePicture,
-              department: e.Department?.name || 'General',
-              branchName: e.Branch?.name || '—',
-              companyName: e.Company?.name ?? null,
-              date: selectedDate,
-              checkIn: '—', checkOut: '—', status: 'absent', displayStatus: 'absent',
-              lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
-              shiftCode: e.Shift?.shiftCode ?? null,
-              shiftStartTime: e.Shift?.startTime,
-              shiftEndTime: e.Shift?.endTime,
-              isNightShift: e.Shift?.isNightShift ?? false,
-              isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
-              isEarlyPunch: false, isMissingCheckout: false,
-            }))
+            .map((e: RawEmployee) => {
+              const isWorking = isWorkingDayForEmployee(e)
+              const rowStatus = isWorking ? 'absent' : 'rest_day'
+              return {
+                id: `absent-${e.id}`,
+                employeeId: e.id,
+                employeeName: `${e.firstName} ${e.lastName}`,
+                profilePicture: e.profilePicture,
+                department: e.Department?.name || 'General',
+                branchName: e.Branch?.name || '—',
+                companyName: e.Company?.name ?? null,
+                date: selectedDate,
+                checkIn: '—', checkOut: '—', status: rowStatus, displayStatus: rowStatus,
+                lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
+                shiftCode: e.Shift?.shiftCode ?? null,
+                shiftStartTime: e.Shift?.startTime,
+                shiftEndTime: e.Shift?.endTime,
+                isNightShift: e.Shift?.isNightShift ?? false,
+                isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
+                isEarlyPunch: false, isMissingCheckout: false,
+              }
+            })
 
         // All mapped records (including pending manual creations) go into the table so the PR badge
         // is visible — consistent with how UPDATE/DELETE adjustment records are displayed.
-        let full = (statusFilter === 'all' || statusFilter === 'absent')
+        let full = (statusFilter === 'all' || statusFilter === 'absent' || statusFilter === 'rest_day')
           ? [...mapped, ...absentRows]
           : [...mapped]
+
+        // When filtering by 'absent' or 'rest_day', exclude the other type
+        if (statusFilter === 'absent') full = full.filter(r => r.status !== 'rest_day')
+        if (statusFilter === 'rest_day') full = full.filter(r => r.status !== 'absent' && r.status !== 'present' && r.status !== 'late' && r.status !== 'incomplete')
 
         // Apply client-side filters
         if (debouncedSearch) full = full.filter(r => r.employeeName.toLowerCase().includes(debouncedSearch.toLowerCase()))
@@ -390,6 +416,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           onTime: statsRecords.filter(r => r.status === 'present').length,
           late: statsRecords.filter(r => r.status === 'late').length,
           absent: statsRecords.filter(r => r.status === 'absent').length,
+          restDay: statsRecords.filter(r => r.status === 'rest_day').length,
           incomplete: statsRecords.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout').length,
           total: statsRecords.length,
           avgHours: statsRecords.length > 0
@@ -647,7 +674,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     allRows.push(['#', 'Employee', 'Branch', 'Department', 'Shift', 'Check In', 'Check Out', 'Checkout Source', 'Hours Worked', 'Late By', 'Overtime', 'Undertime', 'Status'])
 
     sortedRecords.forEach((r, i) => {
-      const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : (isHolidayDate && r.status === 'absent') ? 'Holiday' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
+      const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : (isHolidayDate && r.status === 'absent') ? 'Holiday' : r.status === 'rest_day' ? 'Rest Day' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
       const checkoutSourceLabel = r.checkoutSource === 'device' ? '' : r.checkoutSource === 'manual' ? 'Manual' : r.checkoutSource === 'auto_closed' ? 'Auto-Closed' : r.displayStatus === 'missing_checkout' ? 'Missing' : ''
       allRows.push([
         i + 1, r.employeeName, r.branchName, r.department, r.shiftCode || 'No Shift',

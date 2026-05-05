@@ -22,6 +22,7 @@ interface AttendanceTableProps {
     onTime: number;
     late: number;
     absent: number;
+    restDay?: number;
     total: number;
   };
   dragScrollRef?: React.RefObject<HTMLDivElement | null>
@@ -66,6 +67,15 @@ export function AttendanceTable({
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Absent</p>
               <p className="text-xl font-black text-red-500">{stats.absent}</p>
             </div>
+            {stats.restDay !== undefined && stats.restDay > 0 && (
+              <>
+                <div className="w-px h-8 bg-border" />
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rest Day</p>
+                  <p className="text-xl font-black text-slate-400">{stats.restDay}</p>
+                </div>
+              </>
+            )}
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total</p>
