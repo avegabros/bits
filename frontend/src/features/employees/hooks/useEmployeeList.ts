@@ -206,8 +206,13 @@ export function useEmployeeList({ statusFilter = 'Active', role = 'admin' }: Use
     setIsExporting(true);
     try {
       const params = new URLSearchParams();
+      if (filters.selectedCompany && filters.selectedCompany !== 'All Companies') params.set('company', filters.selectedCompany);
       if (filters.selectedDept !== 'all') params.set('department', filters.selectedDept);
       if (filters.selectedBranch !== 'all') params.set('branch', filters.selectedBranch);
+      if (filters.selectedShift !== 'all') params.set('shift', filters.selectedShift);
+      if (filters.selectedStatus !== 'all') params.set('status', filters.selectedStatus);
+      if (statusFilter) params.set('employmentStatus', statusFilter);
+
       const res = await fetch(`/api/employees/export${params.toString() ? `?${params}` : ''}`);
       if (!res.ok) throw new Error('Export failed');
       const disposition = res.headers.get('Content-Disposition');
