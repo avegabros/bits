@@ -27,7 +27,7 @@ export function OverviewDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
-          Hello, {userName}! 👋
+          Hello, {userName}!
         </h1>
         <p className="text-slate-500 font-medium mt-1">
           {new Date().toLocaleDateString('en-PH', {
