@@ -154,7 +154,8 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 profilePicture: true,
                 shiftId: true,
                 Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
-                createdAt: true, EmployeeDeviceEnrollment: {
+                createdAt: true,
+                EmployeeDeviceEnrollment: {
                     select: {
                         enrolledAt: true,
                         device: {
@@ -165,6 +166,11 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                                 isActive: true,
                             },
                         },
+                    },
+                },
+                EmployeeFingerprintEnrollment: {
+                    select: {
+                        id: true,
                     },
                 },
             },

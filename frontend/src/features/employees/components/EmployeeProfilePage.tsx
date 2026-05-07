@@ -290,31 +290,6 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
               </div>
             </div>
 
-            {/* Fingerprints */}
-            <div className="py-3">
-              <div className="flex items-start gap-3">
-                <Fingerprint className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enrolled Fingerprints</p>
-                  {employee.EmployeeFingerprintEnrollment && employee.EmployeeFingerprintEnrollment.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {employee.EmployeeFingerprintEnrollment.map((fp) => (
-                        <span
-                          key={fp.id}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100"
-                          title={`Enrolled on ${fp.device.name} — ${new Date(fp.enrolledAt).toLocaleDateString()}`}
-                        >
-                          <BadgeCheck className="w-3 h-3" />
-                          {fp.fingerLabel}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-300 italic mt-1">No fingerprints enrolled</p>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
