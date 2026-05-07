@@ -9,6 +9,7 @@ export interface DeviceSyncStatus {
   enrolledAt?: string
   isActive: boolean
   syncEnabled: boolean
+  excluded: boolean
   pendingDeletion: boolean
 }
 
@@ -31,20 +32,19 @@ export interface FingerprintDashboardState {
   slots: FingerprintSlot[]
   allDevices: { id: number; name: string; isActive: boolean; syncEnabled: boolean }[]
   summary: FingerprintSummary
-  deletingKey: string | null
-  syncing: boolean
+  syncingDevice: number | null
   syncResult: { success: boolean; message: string } | null
   showDevicePicker: number | null
   selectedDeviceId: number | null
-  confirmDelete: number | null
+  confirmLastExclusion: { deviceId: number } | null
 }
 
 export interface FingerprintDashboardActions {
   setShowDevicePicker: (slot: number | null) => void
   setSelectedDeviceId: (id: number | null) => void
-  setConfirmDelete: (fingerIndex: number | null) => void
-  handleDelete: (fingerIndex: number) => Promise<void>
-  handleSync: () => Promise<void>
+  setConfirmLastExclusion: (val: { deviceId: number } | null) => void
+  handleDeviceSync: (deviceId: number) => Promise<void>
+  handleToggleExclusion: (deviceId: number, type: 'FINGERPRINT', exclude: boolean, force?: boolean) => Promise<void>
   startEnrollment: () => void
 }
 
@@ -60,12 +60,11 @@ export function useFingerprintDashboard(
   const [summary, setSummary] = useState<FingerprintSummary>({ totalEnrolled: 0, maxSlots: 3, canEnrollMore: true })
 
   // Action states
-  const [deletingKey, setDeletingKey] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
+  const [syncingDevice, setSyncingDevice] = useState<number | null>(null)
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null)
   const [showDevicePicker, setShowDevicePicker] = useState<number | null>(null)
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [confirmLastExclusion, setConfirmLastExclusion] = useState<{ deviceId: number } | null>(null)
 
   const fetchStatus = useCallback(async () => {
     if (!employeeId) return
@@ -90,38 +89,19 @@ export function useFingerprintDashboard(
       setShowDevicePicker(null)
       setSelectedDeviceId(null)
       setSyncResult(null)
+      setConfirmLastExclusion(null)
       fetchStatus()
     }
   }, [isOpen, fetchStatus])
 
-  const handleDelete = useCallback(async (fingerIndex: number) => {
-    setDeletingKey(`${fingerIndex}-global`)
-    setSyncResult(null)
-    try {
-      const res = await fetch(`/api/employees/${employeeId}/fingerprint/${fingerIndex}`, {
-        method: 'DELETE'
-      })
-      const data = await res.json()
-      if (data.success) {
-        setSyncResult({ success: true, message: 'Fingerprint successfully removed from all devices.' })
-        await fetchStatus()
-      } else {
-        setSyncResult({ success: false, message: data.message || 'Failed to delete fingerprint. Some devices may still hold the record.' })
-      }
-    } catch {
-      setSyncResult({ success: false, message: 'Network error while globally deleting fingerprint' })
-    } finally {
-      setDeletingKey(null)
-      setConfirmDelete(null)
-    }
-  }, [employeeId, fetchStatus])
-
-  const handleSync = useCallback(async () => {
-    setSyncing(true)
+  const handleDeviceSync = useCallback(async (deviceId: number) => {
+    setSyncingDevice(deviceId)
     setSyncResult(null)
     try {
       const res = await fetch(`/api/employees/${employeeId}/sync-fingerprints`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
       })
       const data = await res.json()
       setSyncResult({
@@ -134,9 +114,43 @@ export function useFingerprintDashboard(
     } catch {
       setSyncResult({ success: false, message: 'Network error during sync' })
     } finally {
-      setSyncing(false)
+      setSyncingDevice(null)
     }
   }, [employeeId, fetchStatus])
+
+  const handleToggleExclusion = useCallback(async (deviceId: number, type: 'FINGERPRINT', exclude: boolean, force = false) => {
+    if (exclude && !force) {
+      // Check if this is the last allowed device among all devices for enrolled fingers
+      const enrolledSlot = slots.find(s => s.enrolled);
+      if (enrolledSlot) {
+        const allowedDevices = enrolledSlot.devices.filter(d => !d.excluded && d.isActive && d.syncEnabled);
+        if (allowedDevices.length === 1 && allowedDevices[0].deviceId === deviceId) {
+          // This is the last allowed device! Need confirmation.
+          setConfirmLastExclusion({ deviceId });
+          return;
+        }
+      }
+    }
+
+    setConfirmLastExclusion(null)
+    setSyncResult(null)
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/device-exclusions/${deviceId}`, {
+        method: exclude ? 'POST' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setSyncResult({ success: true, message: data.message })
+        await fetchStatus()
+      } else {
+        setSyncResult({ success: false, message: data.message || 'Failed to update exclusion.' })
+      }
+    } catch {
+      setSyncResult({ success: false, message: 'Network error while updating exclusion' })
+    }
+  }, [employeeId, fetchStatus, slots])
 
   const startEnrollment = useCallback(() => {
     if (!selectedDeviceId || showDevicePicker === null) return
@@ -152,16 +166,16 @@ export function useFingerprintDashboard(
 
   const state: FingerprintDashboardState = {
     loading, slots, allDevices, summary,
-    deletingKey, syncing, syncResult,
-    showDevicePicker, selectedDeviceId, confirmDelete,
+    syncingDevice, syncResult,
+    showDevicePicker, selectedDeviceId, confirmLastExclusion,
   }
 
   const actions: FingerprintDashboardActions = {
     setShowDevicePicker,
     setSelectedDeviceId,
-    setConfirmDelete,
-    handleDelete,
-    handleSync,
+    setConfirmLastExclusion,
+    handleDeviceSync,
+    handleToggleExclusion,
     startEnrollment,
   }
 

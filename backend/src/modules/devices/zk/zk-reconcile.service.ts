@@ -34,6 +34,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
 
     // Dynamically import Queue methods to avoid circular dependencies
     const { enqueueUpsertUser, enqueueDeleteUser, enqueueFingerprintPull, processDeviceSyncQueue } = await import('../deviceSyncQueue.service');
+    const { getExcludedEmployeeIds } = await import('../biometric-exclusion.service');
 
     // 1. Load device config from DB
     const dbDevice = await prisma.device.findUnique({ where: { id: deviceId } });
@@ -114,6 +115,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
         } // end if (!pushOnly)
 
         // ── STEP C: Push DB-only employees to device ────────────────────────
+        const cardExclusions = await getExcludedEmployeeIds(deviceId, 'CARD');
         for (const emp of dbEmployees) {
             const zkId = emp.zkId!;
             const visibleId = zkId.toString();
@@ -128,7 +130,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
             const existsOnDevice = deviceByVisibleId.has(visibleId) || deviceByUid.has(zkId);
 
             const expectedCard = emp.EmployeeCardEnrollment.length > 0
-                ? (emp.cardNumber || 0) : 0;
+                ? (cardExclusions.has(emp.id) ? 0 : (emp.cardNumber || 0)) : 0;
 
             if (!existsOnDevice) {
                 // Employee in DB but genuinely not on device.
@@ -191,10 +193,18 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
             // Fire async fingerprint queueing for users that were newly pushed or found missing fingerprints
             if (report.needsEnrollment.length > 0) {
                 console.log(`[Reconcile] 🔄 Queuing fingerprint pulls for ${report.needsEnrollment.length} user(s)...`);
+                
+                const fpExclusions = await getExcludedEmployeeIds(deviceId, 'FINGERPRINT');
+
                 for (const { zkId } of report.needsEnrollment) {
                     try {
                         const emp = await prisma.employee.findUnique({ where: { zkId }, select: { id: true } });
                         if (!emp) continue;
+
+                        if (fpExclusions.has(emp.id)) {
+                            console.log(`[Reconcile] ⏩ Skipping fingerprint pull for zkId=${zkId} — excluded.`);
+                            continue;
+                        }
 
                         const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
                             where: { employeeId: emp.id },

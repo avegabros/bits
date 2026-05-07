@@ -78,6 +78,7 @@ export const enrollEmployeeCard = async (
     const fullName = `${employee.firstName} ${employee.lastName}`;
     const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
     const { enqueueGlobalUpsertUser, enqueueUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
+    const { getExcludedDeviceIds } = require('../biometric-exclusion.service');
 
     try {
         if (targetDeviceId) {
@@ -95,12 +96,17 @@ export const enrollEmployeeCard = async (
                 }
             });
         } else {
-            await enqueueGlobalUpsertUser({
-                zkId: currentZkId,
-                name: fullName,
-                role: deviceRole,
-                card: cardNumber
-            });
+            const devices = await prisma.device.findMany({ where: { syncEnabled: true }, select: { id: true } });
+            const cardExclusions = await getExcludedDeviceIds(employeeId, 'CARD');
+            for (const dev of devices) {
+                const effectiveCard = cardExclusions.has(dev.id) ? 0 : cardNumber;
+                await enqueueUpsertUser(dev.id, {
+                    zkId: currentZkId,
+                    name: fullName,
+                    role: deviceRole,
+                    card: effectiveCard
+                });
+            }
             // Inline execution for active devices.
             setImmediate(async () => {
                 const onlineDevices = await prisma.device.findMany({
@@ -168,12 +174,15 @@ export const deleteEmployeeCard = async (
                 }
             });
         } else {
-            await enqueueGlobalUpsertUser({
-                zkId: employee.zkId,
-                name: fullName,
-                role: deviceRole,
-                card: 0
-            });
+            const devices = await prisma.device.findMany({ where: { syncEnabled: true }, select: { id: true } });
+            for (const dev of devices) {
+                await enqueueUpsertUser(dev.id, {
+                    zkId: employee.zkId,
+                    name: fullName,
+                    role: deviceRole,
+                    card: 0
+                });
+            }
             // Try inline execution for all active
             setImmediate(async () => {
                 const onlineDevices = await prisma.device.findMany({

@@ -15,6 +15,7 @@ export interface CardDeviceSyncPanelProps {
   onManualSync: () => void
   onPushToDevice: (deviceId: number) => void
   onDeleteFromDevice: (deviceId: number) => void
+  onToggleExclusion: (deviceId: number, exclude: boolean) => void
 }
 
 export function CardDeviceSyncPanel({
@@ -25,6 +26,7 @@ export function CardDeviceSyncPanel({
   onManualSync,
   onPushToDevice,
   onDeleteFromDevice,
+  onToggleExclusion,
 }: CardDeviceSyncPanelProps) {
   return (
     <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
@@ -93,7 +95,11 @@ export function CardDeviceSyncPanel({
                       {device.deviceName}
                     </p>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {device.pendingDeletion ? (
+                        {device.excluded ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-wider border border-slate-200">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Excluded
+                          </span>
+                        ) : device.pendingDeletion ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[9px] font-bold uppercase tracking-wider border border-red-100">
                             <AlertTriangle className="w-2.5 h-2.5" /> Pending Delete
                           </span>
@@ -118,33 +124,48 @@ export function CardDeviceSyncPanel({
 
                 {/* Actions per device */}
                 {device.isActive && device.syncEnabled && (
-                  <div className="flex items-center">
-                    {device.enrolled && !device.pendingDeletion ? (
-                      <button
-                        onClick={() => onDeleteFromDevice(device.deviceId)}
-                        disabled={activeActions[`delete-${device.deviceId}`]}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
-                        title="Remove from this device"
-                      >
-                        {activeActions[`delete-${device.deviceId}`] ? 
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" /> : 
-                          <Trash2 className="w-3.5 h-3.5" />
-                        }
-                      </button>
-                    ) : !device.pendingDeletion ? (
-                      <button
-                        onClick={() => onPushToDevice(device.deviceId)}
-                        disabled={activeActions[`push-${device.deviceId}`]}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5 border border-transparent shadow-sm bg-white"
-                        title="Push to this device"
-                      >
-                        {activeActions[`push-${device.deviceId}`] ? 
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 
-                          <UploadCloud className="w-3.5 h-3.5" />
-                        }
-                        <span className="text-xs font-bold mr-1">Push</span>
-                      </button>
-                    ) : null}
+                  <div className="flex items-center gap-2">
+                    <label className="relative inline-flex items-center cursor-pointer mr-2">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={!device.excluded}
+                        onChange={(e) => onToggleExclusion(device.deviceId, !e.target.checked)}
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                      <span className="ml-2 text-xs font-medium text-slate-600 w-12">{device.excluded ? 'Excluded' : 'Allowed'}</span>
+                    </label>
+
+                    {!device.excluded && (
+                      <>
+                        {device.enrolled && !device.pendingDeletion ? (
+                          <button
+                            onClick={() => onDeleteFromDevice(device.deviceId)}
+                            disabled={activeActions[`delete-${device.deviceId}`]}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
+                            title="Remove from this device"
+                          >
+                            {activeActions[`delete-${device.deviceId}`] ? 
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" /> : 
+                              <Trash2 className="w-3.5 h-3.5" />
+                            }
+                          </button>
+                        ) : !device.pendingDeletion ? (
+                          <button
+                            onClick={() => onPushToDevice(device.deviceId)}
+                            disabled={activeActions[`push-${device.deviceId}`]}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5 border border-transparent shadow-sm bg-white"
+                            title="Push to this device"
+                          >
+                            {activeActions[`push-${device.deviceId}`] ? 
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 
+                              <UploadCloud className="w-3.5 h-3.5" />
+                            }
+                            <span className="text-xs font-bold mr-1">Push</span>
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

@@ -167,6 +167,7 @@ model Device {
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
+  DeviceBiometricExclusion      DeviceBiometricExclusion[]
 
   @@index([isActive])
   @@index([syncEnabled])
@@ -216,6 +217,7 @@ model Employee {
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
+  DeviceBiometricExclusion      DeviceBiometricExclusion[]
   RefreshToken                  RefreshToken[]
 
   @@index([departmentId])
@@ -261,6 +263,24 @@ model RefreshToken {
   @@index([employeeId])
   @@index([token])
   @@index([expiresAt])
+}
+
+model DeviceBiometricExclusion {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  deviceId   Int
+  type       String   // 'FINGERPRINT' | 'CARD'
+  excludedAt DateTime @default(now())
+  excludedBy Int?
+  reason     String?
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, deviceId, type])
+  @@index([employeeId])
+  @@index([deviceId])
+  @@index([type])
 }
 
 model EmployeeDeviceEnrollment {

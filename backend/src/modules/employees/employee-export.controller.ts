@@ -24,7 +24,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
             if (empStatus === 'ACTIVE') {
                  where.employmentStatus = { in: ['ACTIVE', 'STAGED'] };
             } else {
-                 where.employmentStatus = empStatus;
+                 where.employmentStatus = empStatus as import('@prisma/client').EmploymentStatus;
             }
         } else {
             where.employmentStatus = 'ACTIVE'; // fallback
@@ -32,7 +32,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
 
         if (status && status !== 'all') {
             // overriding the employmentStatus array if specific status is selected
-            where.employmentStatus = status as string;
+            where.employmentStatus = status as import('@prisma/client').EmploymentStatus;
         }
 
         // Filter by relation name (look up ID first so we can filter by FK)

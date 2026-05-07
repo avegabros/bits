@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import ExcelJS from 'exceljs';
 import { prisma } from '../../shared/lib/prisma';
-import { syncEmployeesToDevice, enrollEmployeeFingerprint, enrollEmployeeCard, deleteEmployeeCard, addUserToDevice, deleteUserFromDevice, findNextSafeZkId, acquireRegistrationMutex, deleteFingerprintGlobally, syncEmployeeFingerprints } from '../devices/zk';
+import { syncEmployeesToDevice, enrollEmployeeFingerprint, enrollEmployeeCard, deleteEmployeeCard, addUserToDevice, deleteUserFromDevice, findNextSafeZkId, acquireRegistrationMutex, deleteFingerprintGlobally, syncEmployeeFingerprints, deleteFingerprintFromDevice } from '../devices/zk';
 import { enqueueGlobalUpsertUser, enqueueGlobalDeleteUser, processDeviceSyncQueue } from '../devices/deviceSyncQueue.service';
+import { addExclusion, removeExclusion } from '../devices/biometric-exclusion.service';
 import { audit } from '../../shared/lib/auditLogger';
 import bcrypt from 'bcryptjs';
 import { generateRandomPassword } from '../../shared/utils/password.utils';
@@ -303,6 +304,12 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
             orderBy: { id: 'asc' },
         });
 
+        const exclusions = await prisma.deviceBiometricExclusion.findMany({
+            where: { employeeId, type: 'FINGERPRINT' },
+            select: { deviceId: true },
+        });
+        const fpExcludedIds = new Set(exclusions.map(e => e.deviceId));
+
         // Group enrollments by fingerIndex → collect device info per finger
         const fingerMap = new Map<number, {
             fingerIndex: number;
@@ -371,6 +378,7 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
                     isActive: device.isActive,
                     syncEnabled: device.syncEnabled,
                     pendingDeletion: enrolledDevice?.pendingDeletion ?? false,
+                    excluded: fpExcludedIds.has(device.id),
                 };
             });
 
@@ -456,12 +464,14 @@ export const deleteEmployeeFingerprint = async (req: Request, res: Response) => 
 export const syncEmployeeFingerprintsController = async (req: Request, res: Response) => {
     try {
         const employeeId = parseInt(req.params.id as string);
+        const { deviceId } = req.body;
+        const targetDeviceId = deviceId ? parseInt(deviceId as string) : undefined;
 
         if (isNaN(employeeId)) {
             return res.status(400).json({ success: false, message: 'Invalid employee ID' });
         }
 
-        const result = await syncEmployeeFingerprints(employeeId);
+        const result = await syncEmployeeFingerprints(employeeId, targetDeviceId);
 
         if (result.success) {
             const emp = await prisma.employee.findUnique({
@@ -527,6 +537,12 @@ export const getEmployeeCardStatus = async (req: Request, res: Response) => {
             orderBy: { id: 'asc' },
         });
 
+        const cardExclusions = await prisma.deviceBiometricExclusion.findMany({
+            where: { employeeId, type: 'CARD' },
+            select: { deviceId: true },
+        });
+        const cardExcludedIds = new Set(cardExclusions.map(e => e.deviceId));
+
         // Build devices result
         const devicesResult = activeDevices.map(device => {
             const enroll = enrollments.find(e => e.deviceId === device.id);
@@ -538,6 +554,7 @@ export const getEmployeeCardStatus = async (req: Request, res: Response) => {
                 isActive: device.isActive,
                 syncEnabled: device.syncEnabled,
                 pendingDeletion: false,
+                excluded: cardExcludedIds.has(device.id),
             };
         });
 
@@ -561,6 +578,77 @@ export const getEmployeeCardStatus = async (req: Request, res: Response) => {
     }
 };
 
+// DELETE /api/employees/:id/fingerprint/:fingerIndex/device/:deviceId
+export const deleteDeviceFingerprintController = async (req: Request, res: Response) => {
+    try {
+        const employeeId = parseInt(req.params.id as string);
+        const fingerIndex = parseInt(req.params.fingerIndex as string);
+        const deviceId = parseInt(req.params.deviceId as string);
 
+        if (isNaN(employeeId) || isNaN(fingerIndex) || isNaN(deviceId)) {
+            return res.status(400).json({ success: false, message: 'Invalid parameters' });
+        }
 
+        const result = await deleteFingerprintFromDevice(employeeId, fingerIndex, deviceId);
+
+        if (result.success) {
+            void audit({
+                action: 'DELETE',
+                entityType: 'Employee',
+                entityId: employeeId,
+                performedBy: req.user?.employeeId,
+                level: 'WARN',
+                details: `Deleted Finger ${fingerIndex + 1} from device ${deviceId}`,
+                metadata: { fingerIndex, deviceId },
+                correlationId: req.correlationId
+            });
+            return res.status(200).json(result);
+        } else {
+            return res.status(500).json(result);
+        }
+    } catch (error: unknown) {
+        console.error('[API] Delete device fingerprint error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete fingerprint from device' });
+    }
+};
+
+// POST /api/employees/:id/device-exclusions/:deviceId
+export const addExclusionController = async (req: Request, res: Response) => {
+    try {
+        const employeeId = parseInt(req.params.id as string);
+        const deviceId = parseInt(req.params.deviceId as string);
+        const { type, reason } = req.body;
+
+        if (isNaN(employeeId) || isNaN(deviceId) || !['FINGERPRINT', 'CARD'].includes(type)) {
+            return res.status(400).json({ success: false, message: 'Invalid parameters' });
+        }
+
+        await addExclusion(employeeId, deviceId, type as 'FINGERPRINT' | 'CARD', req.user?.employeeId, reason);
+        
+        return res.status(200).json({ success: true, message: `Excluded ${type} sync for device ${deviceId}` });
+    } catch (error: unknown) {
+        console.error('[API] Add exclusion error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to add exclusion' });
+    }
+};
+
+// DELETE /api/employees/:id/device-exclusions/:deviceId
+export const removeExclusionController = async (req: Request, res: Response) => {
+    try {
+        const employeeId = parseInt(req.params.id as string);
+        const deviceId = parseInt(req.params.deviceId as string);
+        const type = req.body.type || req.query.type;
+
+        if (isNaN(employeeId) || isNaN(deviceId) || !['FINGERPRINT', 'CARD'].includes(type)) {
+            return res.status(400).json({ success: false, message: 'Invalid parameters' });
+        }
+
+        await removeExclusion(employeeId, deviceId, type as 'FINGERPRINT' | 'CARD', req.user?.employeeId);
+        
+        return res.status(200).json({ success: true, message: `Removed ${type} sync exclusion for device ${deviceId}` });
+    } catch (error: unknown) {
+        console.error('[API] Remove exclusion error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to remove exclusion' });
+    }
+};
 
