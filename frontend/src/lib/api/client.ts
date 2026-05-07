@@ -4,6 +4,7 @@
 // Backend base URL is proxied by Next.js rewrites: /api/* → http://backend:3001/api/*
 
 import { activityBus } from '../auth/activityBus'
+import { tryRefreshToken } from '../auth/refreshLock'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type Role = 'ADMIN' | 'HR' | 'USER'
@@ -85,23 +86,11 @@ export class SessionExpiredError extends Error {
 }
 
 // ─── Refresh Lock ────────────────────────────────────────────────────────────
-// Prevents multiple simultaneous refresh calls when several API requests
-// all get 401 at the same time.
-let refreshPromise: Promise<boolean> | null = null
-
-async function tryRefreshToken(): Promise<boolean> {
-  if (refreshPromise) return refreshPromise
-
-  refreshPromise = fetch('/api/auth/refresh', {
-    method: 'POST',
-    credentials: 'include',
-  })
-    .then(res => res.ok)
-    .catch(() => false)
-    .finally(() => { refreshPromise = null })
-
-  return refreshPromise
-}
+// Uses the shared refreshLock singleton (imported above) to prevent multiple
+// simultaneous refresh calls when several API requests all get 401 at the
+// same time. The lock is shared with useTokenRefresh so proactive and
+// reactive refreshes can never collide on the backend's one-time-use
+// token rotation.
 
 // ─── Global Fetch Interceptor ────────────────────────────────────────────────
 // Many components and hooks (like useDashboardData) use raw fetch() instead of apiFetch.
