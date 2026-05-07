@@ -1,3 +1,6 @@
+export type { Department } from '@/lib/api'
+
+// Static list kept for dropdowns that don't need live API data
 export const DEPARTMENTS = [
   'ADMIN DEPARTMENT',
   'ACCOUNTING DEPARTMENT',

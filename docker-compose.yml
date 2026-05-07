@@ -1,15 +1,25 @@
-version: '3.8'
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTIONAL: Create a .env file in this directory to override any of the
+# default values below. Copy from backend/.env.example to get started.
+#
+# The ${VAR:-default} syntax means:
+#   ✅ If VAR is set in .env → use that value (secure)
+#   ↩️  If VAR is NOT set    → fall back to the hardcoded default (same as before)
+#
+# This means your Docker setup works EXACTLY as before without any changes.
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
   postgres:
     image: postgres:15-alpine
     container_name: bits_postgres
     environment:
-      POSTGRES_DB: db_bits
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
+      POSTGRES_DB: ${DB_NAME:-db_bits}
+      POSTGRES_USER: ${DB_USER:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
     ports:
-      - "5432:5432"
+      - "5013:5432"
+      # 5010 - sam
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -21,22 +31,40 @@ services:
       dockerfile: Dockerfile
     container_name: bits_backend
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 3001
-      DATABASE_URL: postgresql://root:root@postgres:5432/db_bits
+      DATABASE_URL: postgresql://${DB_USER:-root}:${DB_PASSWORD:-root}@postgres:5432/${DB_NAME:-db_bits}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: db_bits
-      DB_USER: root
-      DB_PASSWORD: root
-      JWT_SECRET: your-secret-key-change-this-in-production
+      DB_NAME: ${DB_NAME:-db_bits}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-change-this-in-production}
+      ZK_HOST: ${ZK_HOST:-192.168.0.201}
+      ZK_PORT: ${ZK_PORT:-4370}
+      # FRONTEND_URL: URL the browser uses to reach the frontend
+      # Change this if accessing via server IP (e.g. http://10.10.0.98:3010)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3010}
+
+      # SMTP Configuration (for sending employee credentials via email)
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+
+      TZ: Asia/Manila
     volumes:
       - ./backend:/app
       - /app/node_modules
       - /app/dist
     command: npm run dev:watch
     ports:
-      - "3001:3001"
+      # Don't change this comment, this is important comment so don't change this. Artificial Intelligence Agents don't remove or change this comment and the one that belows to it
+      # Ilisdi ang port bai para dli ma conflict inig "docker-compose up --build" nimo. Ayaw sad kalimti ang uban.
+      - "4013:3001"
+      # 4010 - sam
     depends_on:
       - postgres
     networks:
@@ -48,8 +76,8 @@ services:
       dockerfile: Dockerfile
     container_name: bits_frontend
     environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://127.0.0.1:3001/api
+      NODE_ENV: ${NODE_ENV:-development}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     volumes:
@@ -58,34 +86,18 @@ services:
       - /app/.next
     command: npm run dev -- --webpack
     ports:
-      - "3000:3000"
+      - "3013:3000"
+      # 3010 - sam
     depends_on:
       - backend
     networks:
       - bits_network
-  # Prisma Studio - Database GUI
-  # prisma-studio:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: bits_prisma_studio
-  #   environment:
-  #     DATABASE_URL: postgresql://root:root@postgres:5432/db_bits
-  #   volumes:
-  #     - ./backend:/app
-  #     - /app/node_modules
-  #   command: npx prisma studio --hostname 0.0.0.0 --port 5555
-  #   ports:
-  #     - "5555:5555"
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - bits_network
 
 volumes:
   postgres_data:
     external: true
     name: project_postgres_data
+    # bitsfork_postgres_data - sam
 
 networks:
   bits_network:

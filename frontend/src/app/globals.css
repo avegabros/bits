@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --brand: #E60000;
+  --brand-bright: #FE0908;
+  --brand-dark: #CC0000;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -37,9 +40,19 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Chart semantic colors — referenced by Recharts via var() */
+  --color-chart-success: #10b981;
+  --color-chart-warning: #f59e0b;
+  --color-chart-danger: #f43f5e;
+  --color-chart-grid: #f1f5f9;
+  --color-chart-axis-primary: #64748b;
+  --color-chart-axis-secondary: #94a3b8;
 }
 
 .dark {
+  --brand: #E60000;
+  --brand-bright: #FE0908;
+  --brand-dark: #CC0000;
   --background: oklch(0.96 0 0);
   --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);
@@ -75,8 +88,11 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-geist-sans, 'Geist'), 'Geist Fallback';
+  --font-mono: var(--font-geist-mono, 'Geist Mono'), 'Geist Mono Fallback';
+  --color-brand: var(--brand);
+  --color-brand-bright: var(--brand-bright);
+  --color-brand-dark: var(--brand-dark);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -116,10 +132,237 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
+  /* UI Consistency Fix - Apply pointer to all interactive elements globally */
+  button,
+  [role="button"],
+  [role="menuitem"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"] {
+    cursor: pointer !important;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled {
+    cursor: not-allowed !important;
+  }
+
+  /* Keyboard-accessible scroll containers — visible focus ring */
+  [data-scroll-container]:focus {
+    outline: 2px solid #E60000;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Respect prefers-reduced-motion for smooth scroll */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* Hide scrollbar but keep scrollable */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar by default, show on hover or focus */
+.scrollbar-hide-hover {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide-hover::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide-hover:hover,
+.scrollbar-hide-hover:focus-within {
+  -ms-overflow-style: auto;
+  scrollbar-width: thin;
+}
+.scrollbar-hide-hover:hover::-webkit-scrollbar,
+.scrollbar-hide-hover:focus-within::-webkit-scrollbar {
+  display: block;
+}
+
+/*
+ * Sidebar scrollbar — completely hidden by default, visible on sidebar hover.
+ * Pattern: .sidebar-root on <aside>, .scrollbar-sidebar on <nav>.
+ * Hovering anywhere on .sidebar-root reveals the scrollbar.
+ */
+.scrollbar-sidebar {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox: completely hidden */
+}
+
+/* Firefox: show thin scrollbar when hovering sidebar */
+.sidebar-root:hover .scrollbar-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* Webkit: scrollbar hidden by default (0 width) */
+.scrollbar-sidebar::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+/* Webkit: expand and show scrollbar on sidebar hover */
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-sidebar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 20px;
+}
+
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-root:hover .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.45);
+}
+
+.scrollbar-sidebar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Slim modern scrollbar — for DARK backgrounds (sidebar, dark panels) */
+.scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.scrollbar-slim::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Slim modern scrollbar — for LIGHT backgrounds (main content, tables) */
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
+}
+
+.scrollbar-light::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+}
+
+.scrollbar-light::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.35);
+  border-radius: 20px;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.6);
+}
+
+.scrollbar-light::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Keyboard-accessible horizontal table scroll container.
+ * - Shows a subtle scrollbar on hover/focus
+ * - Provides a focus ring so keyboard users know it is scrollable
+ * - Arrow keys work when the container is focused
+ */
+.scrollbar-table {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+  outline: none;
+}
+
+.scrollbar-table:hover,
+.scrollbar-table:focus {
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.scrollbar-table:focus-visible {
+  outline: 2px solid #E60000;
+  outline-offset: -2px;
+  border-radius: inherit;
+}
+
+.scrollbar-table::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.scrollbar-table::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-table::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 20px;
+  transition: background-color 0.2s ease;
+}
+
+.scrollbar-table:hover::-webkit-scrollbar-thumb,
+.scrollbar-table:focus::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+}
+
+.scrollbar-table::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.65);
+}
+
+.scrollbar-table::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }

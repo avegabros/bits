@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PRODUCTION SIMULATION - For use with Portainer
+# No bind mounts — code is baked into the Docker image
+# Use: docker compose -f docker-compose.prod.yml up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: bits_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-db_bits}
+      POSTGRES_USER: ${DB_USER:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "5013:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bits_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bits_backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-root}:${DB_PASSWORD:-root}@postgres:5432/${DB_NAME:-db_bits}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-db_bits}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-change-this-in-production}
+      ZK_HOST: ${ZK_HOST:-192.168.0.201}
+      ZK_PORT: ${ZK_PORT:-4370}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      TZ: Asia/Manila
+    # No bind mounts for code, but we MUST mount the uploads directory
+    # so that user avatars survive container restarts/rebuilds.
+    volumes:
+      - bits_uploads:/app/uploads
+    ports:
+      - "4013:3001"
+    depends_on:
+      - postgres
+    networks:
+      - bits_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bits_frontend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
+    # No bind mounts — code is baked into the image via Dockerfile
+    ports:
+      - "3013:3000"
+    depends_on:
+      - backend
+    networks:
+      - bits_network
+
+volumes:
+  postgres_data:
+    external: true
+    name: project_postgres_data
+  bits_uploads:
+    name: bits_uploads_data
+
+networks:
+  bits_network:
+    driver: bridge

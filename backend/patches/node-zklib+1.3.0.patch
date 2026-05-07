@@ -1,0 +1,20 @@
+diff --git a/node_modules/node-zklib/zklibtcp.js b/node_modules/node-zklib/zklibtcp.js
+index 194a9d8..00fd01f 100644
+--- a/node_modules/node-zklib/zklibtcp.js
++++ b/node_modules/node-zklib/zklibtcp.js
+@@ -62,6 +62,7 @@ class ZKLibTCP {
+         }
+       } catch (err) {
+         reject(err)
++        return
+       }
+     })
+   }
+@@ -229,6 +230,7 @@ class ZKLibTCP {
+ 
+       } catch (err) {
+         reject(err)
++        return
+       }
+ 
+       const header = decodeTCPHeader(reply.subarray(0, 16))

@@ -1,0 +1,32 @@
+# ── Secrets & Sensitive Files ──────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Keep .env.example files (they are safe templates — no real values)
+!.env.example
+
+# ── Node ───────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+
+# ── Logs ───────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── OS ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ────────────────────────────────────────────────
+.vscode/
+.idea/
+
+.agent/
+.thingsToDo/
+.prettierrc
+oldStructure/
+.kilo/

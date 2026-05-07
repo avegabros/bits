@@ -8,16 +8,24 @@ datasource db {
 }
 
 model Attendance {
-  id           Int       @id @default(autoincrement())
-  employeeId   Int
-  date         DateTime
-  checkInTime  DateTime
-  checkOutTime DateTime?
-  status       String    @default("present")
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id                   Int                    @id @default(autoincrement())
+  employeeId           Int
+  date                 DateTime
+  checkInTime          DateTime
+  checkOutTime         DateTime?
+  checkin_updated      DateTime?
+  checkout_updated     DateTime?
+  status               String                 @default("present")
+  notes                String?
+  checkInDeviceId      Int?
+  checkOutDeviceId     Int?
+  checkoutSource       String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  checkInDevice        Device?                @relation("AttCheckIn", fields: [checkInDeviceId], references: [id])
+  checkOutDevice       Device?                @relation("AttCheckOut", fields: [checkOutDeviceId], references: [id])
+  employee             Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  AttendanceAdjustment AttendanceAdjustment[]
 
   @@unique([employeeId, date])
   @@index([date])
@@ -25,84 +33,195 @@ model Attendance {
   @@index([status])
 }
 
+model AttendanceAdjustment {
+  id            Int @id @default(autoincrement())
+  attendanceId  Int?
+  submittedById Int
+
+  type String @default("UPDATE") // UPDATE, DELETE
+
+  // Snapshot of original values at time of request
+  originalCheckIn  DateTime?
+  originalCheckOut DateTime?
+
+  // Requested new values
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+
+  // Snapshot of employee info (survives attendance deletion)
+  employeeName   String?
+  employeeBranch String?
+
+  reason String // Required — why the adjustment is needed
+
+  // Approval workflow
+  status          String  @default("pending") // pending, approved, rejected
+  reviewedById    Int?
+  rejectionReason String?
+
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+
+  // Relations
+  attendance  Attendance? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  submittedBy Employee   @relation("AdjustmentSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy  Employee?  @relation("AdjustmentReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([attendanceId])
+  @@index([submittedById])
+  @@index([status])
+  @@index([submittedAt])
+}
+
 model AttendanceLog {
-  id         Int      @id @default(autoincrement())
-  timestamp  DateTime
-  status     Int
-  employeeId Int
-  deviceId   Int?
-  createdAt  DateTime @default(now())
-  Device     Device?  @relation(fields: [deviceId], references: [id])
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id          Int       @id @default(autoincrement())
+  timestamp   DateTime
+  status      Int
+  employeeId  Int
+  deviceId    Int?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  Device      Device?   @relation(fields: [deviceId], references: [id])
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([timestamp, employeeId])
   @@index([deviceId])
   @@index([employeeId])
   @@index([timestamp])
+  @@index([processedAt])
 }
 
 model Department {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime
-  Employee  Employee[]
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Employee          Employee[]
+  ManagerDepartment ManagerDepartment[]
+}
+
+model ManagerDepartment {
+  id           Int        @id @default(autoincrement())
+  managerId    Int
+  departmentId Int
+  assignedAt   DateTime   @default(now())
+  assignedById Int?
+
+  manager      Employee   @relation("ManagerDepartments", fields: [managerId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignedBy   Employee?  @relation("ManagerDeptAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([managerId, departmentId])
+  @@index([managerId])
+  @@index([departmentId])
+}
+
+model Company {
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  logo      String?
+  address   String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  branches  CompanyBranch[]
+  employees Employee[]
 }
 
 model Branch {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  createdAt DateTime        @default(now())
   updatedAt DateTime
   Employee  Employee[]
+  companies CompanyBranch[]
+}
+
+model CompanyBranch {
+  companyId Int
+  branchId  Int
+  company   Company @relation(fields: [companyId], references: [id])
+  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  @@id([companyId, branchId])
 }
 
 model Device {
-  id            Int             @id @default(autoincrement())
-  name          String
-  ip            String          @unique
-  port          Int             @default(4370)
-  location      String?
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime
-  AttendanceLog AttendanceLog[]
+  id                            Int                             @id @default(autoincrement())
+  name                          String                          @unique
+  ip                            String                          @unique
+  port                          Int                             @default(4370)
+  location                      String?
+  isActive                      Boolean                         @default(true)
+  syncEnabled                   Boolean                         @default(true)
+  lastSyncedAt                  DateTime?
+  lastSyncStatus                String?
+  lastSyncError                 String?
+  lastPolledAt                  DateTime?
+  lastReconciledAt              DateTime?
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime
+  AttendanceCheckIns            Attendance[]                    @relation("AttCheckIn")
+  AttendanceCheckOuts           Attendance[]                    @relation("AttCheckOut")
+  AttendanceLog                 AttendanceLog[]
+  DeviceSyncTasks               DeviceSyncTask[]
+  EmployeeCardEnrollment        EmployeeCardEnrollment[]
+  EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
+  EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
 
   @@index([isActive])
+  @@index([syncEnabled])
 }
 
 model Employee {
-  id               Int              @id @default(autoincrement())
-  zkId             Int?             @unique
-  firstName        String
-  lastName         String
-  role             Role             @default(USER)
-  email            String?          @unique
-  password         String?
-  employmentStatus EmploymentStatus @default(ACTIVE)
+  id                  Int              @id @default(autoincrement())
+  zkId                Int?             @unique
+  cardNumber          Int?             @unique // RFID badge card number (uint32 from device offset 35)
+  firstName           String
+  lastName            String
+  middleName          String?
+  suffix              String?
+  gender              String?
+  dateOfBirth         DateTime?
+  role                Role             @default(USER)
+  email               String?          @unique
+  password            String?
+  needsPasswordChange Boolean          @default(false)
+  employmentStatus    EmploymentStatus @default(ACTIVE)
+  profilePicture      String?          // Relative URL: "/api/uploads/avatars/{id}.webp"
 
   // Secondary Info
-  department     String?
   position       String?
-  branch         String?
-  contactNumber  String?
+  contactNumber  String?          @unique
   employeeNumber String?   @unique
   hireDate       DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime
 
-  // Relations (Unused for now)
-  departmentId  Int?
-  branchId      Int?
-  shiftId       Int?
-  Attendance    Attendance[]
-  AttendanceLog AttendanceLog[]
-  Department    Department?     @relation(fields: [departmentId], references: [id])
-  Branch        Branch?         @relation(fields: [branchId], references: [id])
-  Shift         Shift?          @relation(fields: [shiftId], references: [id])
+  // Relations
+  departmentId                  Int?
+  branchId                      Int?
+  companyId                     Int?
+  shiftId                       Int?
+  Attendance                    Attendance[]
+  AdjustmentsReviewed           AttendanceAdjustment[]          @relation("AdjustmentReviewedBy")
+  AdjustmentsSubmitted          AttendanceAdjustment[]          @relation("AdjustmentSubmittedBy")
+  AttendanceLog                 AttendanceLog[]
+  AuditLogs                     AuditLog[]
+  Branch                        Branch?                         @relation(fields: [branchId], references: [id])
+  Company                       Company?                        @relation(fields: [companyId], references: [id])
+  Department                    Department?                     @relation(fields: [departmentId], references: [id])
+  ManagerDepartments            ManagerDepartment[]             @relation("ManagerDepartments")
+  ManagerDeptAssignments        ManagerDepartment[]             @relation("ManagerDeptAssignedBy")
+  Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
+  EmployeeCardEnrollment        EmployeeCardEnrollment[]
+  EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
+  EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
+  RefreshToken                  RefreshToken[]
 
   @@index([departmentId])
   @@index([branchId])
+  @@index([companyId])
+  @@index([shiftId])
   @@index([email])
   @@index([employeeNumber])
   @@index([employmentStatus])
@@ -110,23 +229,168 @@ model Employee {
 }
 
 model Shift {
-  id        Int        @id @default(autoincrement())
-  name      String
-  startTime String
-  endTime   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime
-  Employee  Employee[]
+  id           Int        @id @default(autoincrement())
+  shiftCode    String     @unique
+  name         String     @unique
+  startTime    String
+  endTime      String
+  graceMinutes Int        @default(0)
+  breakMinutes Int        @default(60)
+  isNightShift Boolean    @default(false)
+  isActive     Boolean    @default(true)
+  description  String?
+  workDays     String     @default("[\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\"]")
+  halfDays     String     @default("[]")
+  halfDayHours Float?
+  breaks       String     @default("[]")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  Employee     Employee[]
+
+  @@index([isActive])
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  employeeId Int
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model EmployeeDeviceEnrollment {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  deviceId   Int
+  enrolledAt DateTime @default(now())
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, deviceId])
+  @@index([employeeId])
+  @@index([deviceId])
+}
+
+model EmployeeFingerprintEnrollment {
+  id          Int      @id @default(autoincrement())
+  employeeId  Int
+  deviceId    Int
+  fingerIndex Int
+  fingerLabel String
+  enrolledAt  DateTime @default(now())
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, deviceId, fingerIndex])
+  @@index([employeeId])
+  @@index([deviceId])
+}
+
+model EmployeeCardEnrollment {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  deviceId   Int
+  enrolledAt DateTime @default(now())
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, deviceId])
+  @@index([employeeId])
+  @@index([deviceId])
+}
+
+model AuditLog {
+  id            Int       @id @default(autoincrement())
+  timestamp     DateTime  @default(now())
+  level         String    @default("INFO")
+  action        String
+  entityType    String
+  entityId      Int?
+  performedBy   Int?
+  source        String    @default("system")
+  details       String?
+  metadata      Json?
+  category      String    @default("system")
+  correlationId String?
+  performer     Employee? @relation(fields: [performedBy], references: [id])
+
+  @@index([timestamp])
+  @@index([action])
+  @@index([entityType])
+  @@index([performedBy])
+  @@index([level])
+  @@index([category])
+  @@index([correlationId])
+}
+
+model Holiday {
+  id          Int         @id @default(autoincrement())
+  name        String
+  date        DateTime    @unique
+  description String?
+  type        HolidayType @default(REGULAR)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([date])
+}
+
+model SyncConfig {
+  id                           Int      @id @default(1)
+  globalSyncEnabled            Boolean  @default(true)
+  defaultIntervalSec           Int      @default(30)
+  highFreqIntervalSec          Int      @default(30)
+  lowFreqIntervalSec           Int      @default(600)
+  shiftAwareSyncEnabled        Boolean  @default(false)
+  shiftBufferMinutes           Int      @default(120)
+  autoTimeSyncEnabled          Boolean  @default(true)
+  timeSyncIntervalSec          Int      @default(3600)
+  globalMinCheckoutMinutes     Int      @default(120)
+  healthCheckEnabled           Boolean  @default(true)
+  healthCheckIntervalSec       Int      @default(60)
+  logBufferMaintenanceEnabled  Boolean  @default(true)
+  logBufferMaintenanceSchedule String   @default("weekly")
+  logBufferMaintenanceHour     Int      @default(3)
+  updatedAt                    DateTime @updatedAt
+}
+
+model DeviceSyncTask {
+  id         Int      @id @default(autoincrement())
+  deviceId   Int
+  actionType String
+  entityId   String
+  payload    Json
+  status     String   @default("PENDING")
+  retryCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, actionType, entityId])
+  @@index([deviceId, status])
+  @@index([createdAt])
 }
 
 enum EmploymentStatus {
   ACTIVE
+  STAGED
   INACTIVE
   TERMINATED
 }
 
 enum Role {
   USER
-  ADMIN
   HR
+  MANAGER
+  ADMIN
+}
+
+enum HolidayType {
+  REGULAR
+  SPECIAL
 }

@@ -1,0 +1,80 @@
+"use client";
+import React, { useState, Suspense } from 'react';
+import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Fingerprint,
+  History,
+  Users,
+  CalendarDays,
+  Clock,
+} from 'lucide-react';
+import { BaseSidebar, useSidebarCollapsed } from './shared/BaseSidebar';
+import { SidebarNavItem } from './shared/SidebarNavItem';
+
+function SidebarInner({ isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollapsed }: any) {
+  const pathname = usePathname();
+  const { collapsed, labelStyle } = useSidebarCollapsed(isCollapsed);
+
+  const isOnAdjust = pathname === '/manager/adjustments';
+  const isOnAttendance = pathname === '/manager/attendance';
+  const isOnDashboard = pathname === '/manager/dashboard';
+  const isOnEmployees = pathname.startsWith('/manager/employees');
+  const isOnHolidays = pathname === '/manager/holidays';
+  const isOnShifts = pathname === '/manager/shifts';
+
+  // All rendered <li> items in order for indicator measurement
+  const allItems = [
+    { href: '/manager/dashboard' },
+    { href: '/manager/employees', matchPrefix: '/manager/employees' },
+    { href: '/manager/attendance' },
+    { href: '/manager/adjustments' },
+    { href: '/manager/holidays' },
+    { href: '/manager/shifts' },
+  ];
+
+  const activeIndex = allItems.findIndex(item => 
+    item.matchPrefix ? pathname.startsWith(item.matchPrefix) : pathname === item.href
+  );
+
+  const onClose = () => setIsMobileOpen(false);
+
+  return (
+    <BaseSidebar
+      isOpen={isMobileOpen}
+      isCollapsed={isCollapsed}
+      onClose={onClose}
+      onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+      title="Manager Panel"
+      activeIndex={activeIndex}
+      indicatorDeps={[]}
+      expandedWidth="lg:w-64"
+    >
+      {/* Dashboard */}
+      <SidebarNavItem href="/manager/dashboard" label="Dashboard" icon={LayoutDashboard} active={isOnDashboard} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Employees */}
+      <SidebarNavItem href="/manager/employees" label="Employees" icon={Users} active={isOnEmployees} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Attendance */}
+      <SidebarNavItem href="/manager/attendance" label="Attendance" icon={Fingerprint} active={isOnAttendance} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Adjustment Logs */}
+      <SidebarNavItem href="/manager/adjustments" label="Adjustments" icon={History} active={isOnAdjust} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Holidays */}
+      <SidebarNavItem href="/manager/holidays" label="Holidays" icon={CalendarDays} active={isOnHolidays} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+
+      {/* Shifts */}
+      <SidebarNavItem href="/manager/shifts" label="Shifts" icon={Clock} active={isOnShifts} collapsed={collapsed} labelStyle={labelStyle} onClick={onClose} />
+    </BaseSidebar>
+  );
+}
+
+export default function Sidebar(props: any) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarInner {...props} />
+    </Suspense>
+  );
+}
