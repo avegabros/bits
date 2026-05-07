@@ -108,12 +108,12 @@ async function main() {
             firstName: 'Maria',
             lastName: 'Santos',
             role: 'HR' as const,
-            department: 'HUMAN RESOURCES',
+            department: null,
             position: 'HR Manager',
-            branch: 'NRA',
-            contactNumber: '09179876543',
-            employeeNumber: 'EMP002',
-            preferredZkId: null, // HR doesn't need a ZK ID
+            branch: null,
+            contactNumber: null,
+            employeeNumber: null,
+            preferredZkId: null, // Admin doesn't need a ZK ID
         },
     ]
 
