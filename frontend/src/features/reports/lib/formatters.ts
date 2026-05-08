@@ -34,6 +34,14 @@ export const formatDateShort = (d: string) => {
   ).padStart(2, '0')}/${date.getUTCFullYear()}`;
 };
 
+/** Convert total minutes to H:MM format — e.g. 179 → "2:59", 0 → "0:00" */
+export const formatTotalLate = (mins: number): string => {
+  const totalMins = Math.round(Math.abs(mins));
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+};
+
 export const formatShiftTime = (t: string) => {
   // "08:00" → "8:00 AM", "22:00" → "10:00 PM"
   const [h, m] = t.split(':').map(Number);
