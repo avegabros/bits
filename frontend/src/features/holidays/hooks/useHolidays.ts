@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+export interface HolidayBranchInfo {
+    branchId: number;
+    branch: { id: number; name: string };
+}
+
 export interface Holiday {
     id: number;
     name: string;
@@ -10,11 +15,13 @@ export interface Holiday {
     type: 'REGULAR' | 'SPECIAL';
     createdAt: string;
     updatedAt: string;
+    branches: HolidayBranchInfo[];
 }
 
 interface UseHolidaysOptions {
     year?: number;
     month?: number;
+    branchId?: number;
 }
 
 export function useHolidays(options?: UseHolidaysOptions) {
@@ -28,6 +35,7 @@ export function useHolidays(options?: UseHolidaysOptions) {
             const params = new URLSearchParams();
             if (options?.year) params.set('year', String(options.year));
             if (options?.month) params.set('month', String(options.month));
+            if (options?.branchId) params.set('branchId', String(options.branchId));
 
             const qs = params.toString();
             const res = await fetch(`/api/holidays${qs ? `?${qs}` : ''}`, { credentials: 'include' });
@@ -44,13 +52,13 @@ export function useHolidays(options?: UseHolidaysOptions) {
         } finally {
             setLoading(false);
         }
-    }, [options?.year, options?.month]);
+    }, [options?.year, options?.month, options?.branchId]);
 
     useEffect(() => {
         fetchHolidays();
     }, [fetchHolidays]);
 
-    const createHoliday = async (data: { name: string; date: string; description?: string; type: 'REGULAR' | 'SPECIAL' }) => {
+    const createHoliday = async (data: { name: string; date: string; description?: string; type: 'REGULAR' | 'SPECIAL'; branchIds?: number[] }) => {
         const res = await fetch('/api/holidays', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -63,7 +71,7 @@ export function useHolidays(options?: UseHolidaysOptions) {
         return result.holiday;
     };
 
-    const updateHoliday = async (id: number, data: { name?: string; date?: string; description?: string; type?: 'REGULAR' | 'SPECIAL' }) => {
+    const updateHoliday = async (id: number, data: { name?: string; date?: string; description?: string; type?: 'REGULAR' | 'SPECIAL'; branchIds?: number[] }) => {
         const res = await fetch(`/api/holidays/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -108,4 +116,15 @@ export function buildHolidayDateSet(holidays: Holiday[]): Map<string, Holiday> {
         map.set(dateStr, h);
     }
     return map;
+}
+
+/**
+ * Utility: check if a holiday applies to a given branchId.
+ * A holiday with no branch assignments is national (applies to all).
+ * A holiday with branch assignments only applies to those branches.
+ */
+export function holidayAppliesToBranch(holiday: Holiday, branchId: number | null | undefined): boolean {
+    if (!holiday.branches || holiday.branches.length === 0) return true; // National
+    if (!branchId) return true; // If employee has no branch, treat all holidays as applying
+    return holiday.branches.some(b => b.branchId === branchId);
 }

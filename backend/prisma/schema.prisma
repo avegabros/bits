@@ -134,6 +134,7 @@ model Branch {
   updatedAt DateTime
   Employee  Employee[]
   companies CompanyBranch[]
+  holidays  HolidayBranch[]
 }
 
 model CompanyBranch {
@@ -349,15 +350,26 @@ model AuditLog {
 }
 
 model Holiday {
-  id          Int         @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   name        String
-  date        DateTime    @unique
+  date        DateTime        @unique
   description String?
-  type        HolidayType @default(REGULAR)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  type        HolidayType     @default(REGULAR)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  branches    HolidayBranch[]
 
   @@index([date])
+}
+
+model HolidayBranch {
+  holidayId Int
+  branchId  Int
+  holiday   Holiday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([holidayId, branchId])
+  @@index([branchId])
 }
 
 model SyncConfig {
