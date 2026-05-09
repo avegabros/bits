@@ -3,7 +3,7 @@ import { Clock, Sun, Moon } from 'lucide-react'
 import { useEmployeeShift } from '../hooks/useEmployeeShift'
 
 export function ShiftDetailsDashboard() {
-  const { loading, shift } = useEmployeeShift()
+  const { loading, shift, shifts } = useEmployeeShift()
 
   if (loading) {
     return (

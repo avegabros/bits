@@ -66,6 +66,77 @@ interface AttendanceFilters {
  * Process unprocessed attendance logs into Attendance records
  * This implements the toggle logic: check-in → check-out
  */
+
+export async function resolveShiftForTimestamp(
+    employeeId: number,
+    timestamp: Date,
+    dateOnly: Date
+): Promise<{ shift: any | null; isNewCheckin: boolean }> {
+    const assignments = await prisma.employeeShift.findMany({
+        where: { employeeId },
+        include: { shift: true },
+        orderBy: { sortOrder: 'asc' }
+    });
+
+    if (assignments.length === 0) {
+        return { shift: null, isNewCheckin: true };
+    }
+
+    const records = await prisma.attendance.findMany({
+        where: { employeeId, date: dateOnly },
+        select: { shiftId: true, checkOutTime: true }
+    });
+
+    const recordMap = new Map(records.map(r => [r.shiftId, r]));
+    const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
+    const bufferMins = syncConfig?.shiftBufferMinutes ?? 120;
+    const bufferMs = bufferMins * 60 * 1000;
+
+    let bestMatch = null;
+    let isNewCheckin = true;
+    let minDistance = Infinity;
+
+    for (const { shift } of assignments) {
+        const [startH, startM] = shift.startTime.split(':').map(Number);
+        const [endH, endM] = shift.endTime.split(':').map(Number);
+
+        const shiftStart = new Date(dateOnly);
+        shiftStart.setUTCHours(startH - 8, startM, 0, 0);
+
+        const shiftEnd = new Date(dateOnly);
+        shiftEnd.setUTCHours(endH - 8, endM, 0, 0);
+
+        if (shiftEnd <= shiftStart) {
+            shiftEnd.setUTCDate(shiftEnd.getUTCDate() + 1);
+        }
+
+        const windowStart = new Date(shiftStart.getTime() - bufferMs);
+        const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
+
+        const record = recordMap.get(shift.id);
+        const needsCheckIn = !record;
+        const needsCheckOut = record && !record.checkOutTime;
+
+        if (timestamp >= windowStart && timestamp <= windowEnd) {
+            if (needsCheckIn || needsCheckOut) {
+                return { shift, isNewCheckin: needsCheckIn };
+            }
+        }
+
+        const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
+        const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+        const minDist = Math.min(distStart, distEnd);
+
+        if (minDist < minDistance) {
+            minDistance = minDist;
+            bestMatch = shift;
+            isNewCheckin = needsCheckIn;
+        }
+    }
+
+    return { shift: bestMatch, isNewCheckin };
+}
+
 export const processAttendanceLogs = async (): Promise<ProcessResult> => {
     try {
         // Only process logs from the last 2 days — records older than that are
@@ -96,19 +167,20 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             const dateOnly = toPHTDate(log.timestamp);
 
             // Check if attendance record exists for this employee on this date
-            const existingAttendance = await prisma.attendance.findUnique({
+            const { shift: resolvedShift, isNewCheckin } = await resolveShiftForTimestamp(log.employeeId, log.timestamp, dateOnly);
+
+            const existingAttendance = await prisma.attendance.findFirst({
                 where: {
-                    employeeId_date: {
-                        employeeId: log.employeeId,
-                        date: dateOnly
-                    }
+                    employeeId: log.employeeId,
+                    date: dateOnly,
+                    shiftId: resolvedShift?.id ?? null
                 }
             });
 
             if (!existingAttendance) {
                 // No record exists → This is a CHECK-IN
                 // Determine if late using centralized SHIFT-AWARE logic
-                const empShift = log.employee?.Shift ?? null;
+                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
                 const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
                 const isLate = calculatedStatus === 'late';
 
@@ -117,6 +189,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         data: {
                             employeeId: log.employeeId,
                             date: dateOnly,
+                            shiftId: resolvedShift?.id ?? null,
                             checkInTime: log.timestamp,
                             status: isLate ? 'late' : 'present',
                             checkInDeviceId: log.deviceId
@@ -194,7 +267,18 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 const diffHours = diffMs / (1000 * 60 * 60); //for every 1000 milliseconds, it will be 1 second
 
                 // RULE: User must be checked in for at least the configured minimum hours before checking out
-                if (diffHours < minCheckoutHours) {
+                const shiftDurationHours = resolvedShift 
+                    ? (() => {
+                        const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
+                        const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                        let duration = (eH + eM/60) - (sH + sM/60);
+                        if (duration < 0) duration += 24;
+                        return duration;
+                      })()
+                    : null;
+                const effectiveMinCheckout = shiftDurationHours ? Math.min(shiftDurationHours / 2, minCheckoutHours) : minCheckoutHours;
+
+                if (diffHours < effectiveMinCheckout) {
                     // Too soon to check out - ignore this log
                     // This prevents accidental double-scans from closing the attendance
                     await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
@@ -212,7 +296,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         };
 
                         if (existingAttendance.status === 'incomplete') {
-                            const empShift = log.employee?.Shift ?? null;
+                            const empShift = resolvedShift ?? log.employee?.Shift ?? null;
                             updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
 
                             if (existingAttendance.notes?.includes('No checkout recorded')) {
@@ -390,7 +474,7 @@ export const autoCloseIncompleteAttendance = async (): Promise<number> => {
                 checkoutSource: null,
                 status: { not: 'incomplete' }
             },
-            include: { employee: { include: { Shift: true } } }
+            include: { employee: { include: { Shift: true } }, shift: true }
         });
 
         if (incompleteRecords.length === 0) return 0;
@@ -398,7 +482,7 @@ export const autoCloseIncompleteAttendance = async (): Promise<number> => {
         let flaggedCount = 0;
 
         for (const record of incompleteRecords) {
-            const shift = record.employee?.Shift;
+            const shift = record.shift ?? record.employee?.Shift;
 
             if (shift?.isNightShift) {
                 const [endH, endM] = shift.endTime.split(':').map(Number);
@@ -468,7 +552,8 @@ export const autoCheckoutEmployees = async (): Promise<number> => {
             include: {
                 employee: {
                     include: { Shift: true }
-                }
+                },
+                shift: true
             }
         });
 
@@ -477,7 +562,7 @@ export const autoCheckoutEmployees = async (): Promise<number> => {
         let count = 0;
 
         for (const record of incompleteRecords) {
-            const shift = record.employee?.Shift ?? null;
+            const shift = record.shift ?? record.employee?.Shift ?? null;
 
             let checkoutHour: number = ATTENDANCE_LIMITS.AUTO_CHECKOUT_FALLBACK_HOUR;
             let checkoutMin: number = 0;
@@ -568,7 +653,7 @@ export const repairMissingCheckouts = async (): Promise<number> => {
                 checkoutSource: null,
                 status: { not: 'incomplete' }
             },
-            include: { employee: { include: { Shift: true } } }
+            include: { employee: { include: { Shift: true } }, shift: true }
         });
 
         if (records.length === 0) return 0;
@@ -576,7 +661,7 @@ export const repairMissingCheckouts = async (): Promise<number> => {
         let flaggedCount = 0;
 
         for (const record of records) {
-            const shift = record.employee?.Shift;
+            const shift = record.shift ?? record.employee?.Shift;
 
             if (shift?.isNightShift) {
                 const [endH, endM] = shift.endTime.split(':').map(Number);
@@ -686,6 +771,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             include: {
                 checkInDevice: { select: { name: true } },
                 checkOutDevice: { select: { name: true } },
+                shift: true,
                 employee: {
                     include: {
                         Department: {
@@ -708,7 +794,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
 
     // Enrich each record with shift-based calculations
     const data = records.map((record) => {
-        const shift = record.employee?.Shift ?? null;
+        const shift = record.shift ?? record.employee?.Shift ?? null;
         const finalStatus = record.status;
 
         const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift);

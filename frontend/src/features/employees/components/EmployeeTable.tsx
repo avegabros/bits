@@ -92,7 +92,17 @@ export function EmployeeTable({
                   </td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono">{employee.employeeNumber ?? '—'}</td>
                   <td className="px-4 py-2.5">
-                    {employee.Shift ? (
+                    {employee.EmployeeShift && employee.EmployeeShift.length > 0 ? (
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-slate-700 leading-tight">{employee.EmployeeShift[0].shift.name}</p>
+                          {employee.EmployeeShift.length > 1 && (
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{employee.EmployeeShift.length - 1}</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(employee.EmployeeShift[0].shift.startTime)} – {formatTime(employee.EmployeeShift[0].shift.endTime)}</p>
+                      </div>
+                    ) : employee.Shift ? (
                       <div>
                         <p className="text-xs font-bold text-slate-700 leading-tight">{employee.Shift.name}</p>
                         <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(employee.Shift.startTime)} – {formatTime(employee.Shift.endTime)}</p>

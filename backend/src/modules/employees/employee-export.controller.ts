@@ -24,7 +24,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
             if (empStatus === 'ACTIVE') {
                  where.employmentStatus = { in: ['ACTIVE', 'STAGED'] };
             } else {
-                 where.employmentStatus = empStatus;
+                 where.employmentStatus = empStatus as any;
             }
         } else {
             where.employmentStatus = 'ACTIVE'; // fallback
@@ -32,7 +32,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
 
         if (status && status !== 'all') {
             // overriding the employmentStatus array if specific status is selected
-            where.employmentStatus = status as string;
+            where.employmentStatus = status as any;
         }
 
         // Filter by relation name (look up ID first so we can filter by FK)
@@ -70,6 +70,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 Branch: { select: { name: true } },
                 hireDate: true,
                 Shift: { select: { shiftCode: true } },
+                EmployeeShift: { select: { shift: { select: { shiftCode: true } } }, orderBy: { sortOrder: 'asc' } },
                 employmentStatus: true,
             },
             orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -124,7 +125,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 department: emp.Department?.name || '',
                 branch: emp.Branch?.name || '',
                 hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
-                shiftCode: emp.Shift?.shiftCode || '',
+                shiftCode: emp.EmployeeShift?.length ? emp.EmployeeShift.map(es => es.shift.shiftCode).join(',') : (emp.Shift?.shiftCode || ''),
                 employmentStatus: emp.employmentStatus || '',
             });
         }
@@ -763,6 +764,13 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             employmentStatus: 'STAGED',
                             zkId: null, // zkId assigned upon biometric enrollment
                             shiftId: emp.shiftId ? parseInt(emp.shiftId, 10) : null,
+                            ...(emp.shiftId ? {
+                                                            } : {}),
+                            ...(emp.shiftId ? {
+                                EmployeeShift: {
+                                    create: { shiftId: parseInt(emp.shiftId, 10), sortOrder: 0, isPrimary: true }
+                                }
+                            } : {}),
                             needsPasswordChange: true,
                             updatedAt: new Date(),
                         },

@@ -64,7 +64,11 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
             sortKey={list.tableSort.sortKey as string} sortOrder={list.tableSort.sortOrder}
             onSort={list.tableSort.handleSort} onPageChange={list.setCurrentPage}
             pageSize={list.rowsPerPage}
-            onEdit={(emp) => { list.setEditingEmployee(emp); list.setEditForm({ ...emp }); }}
+            onEdit={(emp) => {
+              list.setEditingEmployee(emp);
+              const shiftIds = emp.EmployeeShift?.map((es: any) => es.shiftId) || [];
+              list.setEditForm({ ...emp, shiftIds } as any);
+            }}
             onResetPassword={list.setConfirmResetPassword}
             onFingerprintOpen={(id, name) => list.setFingerprintDashboardOpen({ open: true, employeeId: id, employeeName: name })}
             onCardEnrollOpen={(id, name, card) => list.setCardEnrollOpen({ open: true, employeeId: id, employeeName: name, currentCard: card ?? null })}

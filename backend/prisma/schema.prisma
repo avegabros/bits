@@ -11,6 +11,7 @@ model Attendance {
   id                   Int                    @id @default(autoincrement())
   employeeId           Int
   date                 DateTime
+  shiftId              Int?
   checkInTime          DateTime
   checkOutTime         DateTime?
   checkin_updated      DateTime?
@@ -25,12 +26,14 @@ model Attendance {
   checkInDevice        Device?                @relation("AttCheckIn", fields: [checkInDeviceId], references: [id])
   checkOutDevice       Device?                @relation("AttCheckOut", fields: [checkOutDeviceId], references: [id])
   employee             Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift                Shift?                 @relation("AttendanceShift", fields: [shiftId], references: [id])
   AttendanceAdjustment AttendanceAdjustment[]
 
-  @@unique([employeeId, date])
+  @@unique([employeeId, date, shiftId])
   @@index([date])
   @@index([employeeId])
   @@index([status])
+  @@index([shiftId])
 }
 
 model AttendanceAdjustment {
@@ -213,6 +216,7 @@ model Employee {
   ManagerDepartments            ManagerDepartment[]             @relation("ManagerDepartments")
   ManagerDeptAssignments        ManagerDepartment[]             @relation("ManagerDeptAssignedBy")
   Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
+  EmployeeShift                 EmployeeShift[]
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
@@ -246,8 +250,26 @@ model Shift {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   Employee     Employee[]
+  EmployeeShift EmployeeShift[]
+  Attendance    Attendance[]    @relation("AttendanceShift")
 
   @@index([isActive])
+}
+
+model EmployeeShift {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  shiftId    Int
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, shiftId])
+  @@index([employeeId])
+  @@index([shiftId])
 }
 
 model RefreshToken {
@@ -351,6 +373,7 @@ model SyncConfig {
   autoTimeSyncEnabled          Boolean  @default(true)
   timeSyncIntervalSec          Int      @default(3600)
   globalMinCheckoutMinutes     Int      @default(120)
+  minShiftGapMinutes           Int      @default(30)
   healthCheckEnabled           Boolean  @default(true)
   healthCheckIntervalSec       Int      @default(60)
   logBufferMaintenanceEnabled  Boolean  @default(true)

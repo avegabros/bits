@@ -42,6 +42,10 @@ const updateSyncConfigSchema = z.object({
         .min(SYNC_LIMITS.MIN_CHECKOUT_MIN, `Global Minimum Checkout must be at least ${SYNC_LIMITS.MIN_CHECKOUT_MIN} minutes`)
         .max(SYNC_LIMITS.MIN_CHECKOUT_MAX_MIN, `Global Minimum Checkout cannot exceed 12 hours (${SYNC_LIMITS.MIN_CHECKOUT_MAX_MIN} minutes)`)
         .optional(),
+    minShiftGapMinutes: z.number()
+        .min(SYNC_LIMITS.MIN_SHIFT_GAP_MIN, `Minimum Shift Gap must be at least ${SYNC_LIMITS.MIN_SHIFT_GAP_MIN} minutes`)
+        .max(SYNC_LIMITS.MIN_SHIFT_GAP_MAX_MIN, `Minimum Shift Gap cannot exceed ${SYNC_LIMITS.MIN_SHIFT_GAP_MAX_MIN} minutes`)
+        .optional(),
     logBufferMaintenanceEnabled: z.boolean().optional(),
     logBufferMaintenanceSchedule: z.enum(['daily', 'weekly', 'monthly']).optional(),
     logBufferMaintenanceHour: z.number().int().min(SYNC_LIMITS.MAINTENANCE_HOUR_MIN).max(SYNC_LIMITS.MAINTENANCE_HOUR_MAX, `Hour must be ${SYNC_LIMITS.MAINTENANCE_HOUR_MIN}-${SYNC_LIMITS.MAINTENANCE_HOUR_MAX}`).optional(),
@@ -92,6 +96,7 @@ export const getSyncConfig = async (req: Request, res: Response) => {
                 autoTimeSyncEnabled: true,
                 timeSyncIntervalSec: true,
                 globalMinCheckoutMinutes: true,
+                minShiftGapMinutes: true,
                 healthCheckEnabled: true,
                 healthCheckIntervalSec: true,
                 logBufferMaintenanceEnabled: true,
@@ -152,6 +157,7 @@ export const updateSyncConfig = async (req: Request, res: Response) => {
             { key: 'autoTimeSyncEnabled', label: 'Automated time sync' },
             { key: 'timeSyncIntervalSec', label: 'Time sync interval', suffix: 's' },
             { key: 'globalMinCheckoutMinutes', label: 'Global Minimum Checkout', suffix: ' mins'},
+            { key: 'minShiftGapMinutes', label: 'Minimum Shift Gap', suffix: ' mins'},
             { key: 'healthCheckEnabled', label: 'Health check' },
             { key: 'healthCheckIntervalSec', label: 'Health check interval', suffix: 's' },
             { key: 'logBufferMaintenanceEnabled', label: 'Log buffer maintenance' },

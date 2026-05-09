@@ -13,7 +13,10 @@ export interface CreateEmployeeRequest {
     employmentStatus?: $Enums.EmploymentStatus;
     departmentId?: number;
     branchId?: number;
+    companyId?: number;
     shiftId?: number;
+    shiftIds?: number[];
+    profilePicture?: Express.Multer.File;
     contactNumber?: string;
     employeeNumber?: string;
     hireDate?: string | Date;

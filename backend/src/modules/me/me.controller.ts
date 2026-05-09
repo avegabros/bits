@@ -71,7 +71,11 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
                 checkOutDevice: { select: { name: true } },
                 employee: {
                     include: {
-                        Shift: true
+                        Shift: true,
+                        EmployeeShift: {
+                            include: { shift: true },
+                            orderBy: { sortOrder: 'asc' }
+                        }
                     }
                 }
             },
@@ -109,7 +113,13 @@ export const getMyShift = async (req: Request, res: Response): Promise<void> => 
 
         const employee = await prisma.employee.findUnique({
             where: { id: req.user.employeeId },
-            include: { Shift: true },
+            include: { 
+                Shift: true,
+                EmployeeShift: {
+                    include: { shift: true },
+                    orderBy: { sortOrder: 'asc' }
+                }
+            },
         });
 
         if (!employee) {
@@ -117,7 +127,9 @@ export const getMyShift = async (req: Request, res: Response): Promise<void> => 
             return;
         }
 
-        res.status(200).json({ success: true, shift: employee.Shift });
+        const shifts = employee.EmployeeShift.length > 0 ? employee.EmployeeShift.map(es => es.shift) : employee.Shift ? [employee.Shift] : [];
+
+        res.status(200).json({ success: true, shift: shifts[0] || null, shifts });
     } catch (error: unknown) {
         console.error('getMyShift error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch shift details', error: error instanceof Error ? error.message : String(error) });

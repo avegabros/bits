@@ -6,6 +6,7 @@ import { ShieldCheck } from 'lucide-react';
 
 interface AttendanceRulesSectionProps {
     globalMinCheckoutMinutes: number;
+    minShiftGapMinutes: number;
     limits: Record<string, number> | null;
     onChange: (patch: Record<string, unknown>) => void;
 }
@@ -20,6 +21,7 @@ function formatMinutesHuman(mins: number): string {
 
 export function AttendanceRulesSection({
     globalMinCheckoutMinutes,
+    minShiftGapMinutes,
     limits,
     onChange,
 }: AttendanceRulesSectionProps) {
@@ -28,6 +30,12 @@ export function AttendanceRulesSection({
     const isMinError = globalMinCheckoutMinutes < minLimit;
     const isMaxError = globalMinCheckoutMinutes > maxLimit;
     const isError = isMinError || isMaxError;
+
+    const gapMinLimit = limits?.MIN_SHIFT_GAP_MIN ?? 15;
+    const gapMaxLimit = limits?.MIN_SHIFT_GAP_MAX_MIN ?? 240;
+    const isGapMinError = minShiftGapMinutes < gapMinLimit;
+    const isGapMaxError = minShiftGapMinutes > gapMaxLimit;
+    const isGapError = isGapMinError || isGapMaxError;
 
     return (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -75,6 +83,46 @@ export function AttendanceRulesSection({
                     {!isError && (
                         <p className="text-xs text-slate-500">
                             Currently: <strong className="text-slate-700 font-semibold">{formatMinutesHuman(globalMinCheckoutMinutes)}</strong> • Max: {formatMinutesHuman(maxLimit)}
+                        </p>
+                    )}
+                </div>
+
+                <div className="border-t border-slate-100 my-4" />
+
+                <p className="text-xs text-slate-500 leading-relaxed">
+                    Prevents cross-shift checkout issues. If an employee has multiple shifts, they must check out at least this many minutes before their next shift begins.
+                </p>
+
+                <div className="space-y-1.5 pb-2">
+                    <Label htmlFor="minShiftGapMinutes" className={`text-xs font-semibold ${isGapError ? 'text-red-600' : 'text-slate-600'}`}>
+                        Minimum Shift Gap
+                    </Label>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            id="minShiftGapMinutes"
+                            type="number"
+                            value={minShiftGapMinutes}
+                            onChange={(e) => {
+                                const raw = parseInt(e.target.value);
+                                onChange({ minShiftGapMinutes: isNaN(raw) ? 0 : raw });
+                            }}
+                            className={`w-20 text-center font-mono ${isGapError ? 'border-red-300 focus-visible:ring-red-200' : ''}`}
+                        />
+                        <span className="text-xs text-slate-400 font-semibold">minutes</span>
+                    </div>
+                    {isGapMinError && (
+                        <p className="text-xs text-red-500 font-semibold">
+                            Must be at least {gapMinLimit} minutes.
+                        </p>
+                    )}
+                    {isGapMaxError && (
+                        <p className="text-xs text-red-500 font-semibold">
+                            Cannot exceed {gapMaxLimit} minutes ({formatMinutesHuman(gapMaxLimit)}).
+                        </p>
+                    )}
+                    {!isGapError && (
+                        <p className="text-xs text-slate-500">
+                            Currently: <strong className="text-slate-700 font-semibold">{formatMinutesHuman(minShiftGapMinutes)}</strong> • Max: {formatMinutesHuman(gapMaxLimit)}
                         </p>
                     )}
                 </div>

@@ -51,6 +51,15 @@ export const getEmployeeById = async (req: Request, res: Response) => {
                 profilePicture: true,
                 shiftId: true,
                 Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+                EmployeeShift: {
+                    select: {
+                        id: true,
+                        sortOrder: true,
+                        isPrimary: true,
+                        shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
+                    },
+                    orderBy: { sortOrder: 'asc' }
+                },
                 createdAt: true,
                 updatedAt: true,
                 EmployeeDeviceEnrollment: {
@@ -154,6 +163,15 @@ export const getAllEmployees = async (req: Request, res: Response) => {
                 profilePicture: true,
                 shiftId: true,
                 Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+                EmployeeShift: {
+                    select: {
+                        id: true,
+                        sortOrder: true,
+                        isPrimary: true,
+                        shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
+                    },
+                    orderBy: { sortOrder: 'asc' }
+                },
                 createdAt: true, EmployeeDeviceEnrollment: {
                     select: {
                         enrolledAt: true,
@@ -361,6 +379,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             hireDate,
             employmentStatus,
             shiftId,
+            shiftIds,
             companyId
         } = req.body;
 
@@ -450,7 +469,29 @@ export const createEmployee = async (req: Request, res: Response) => {
         // same integer, and one of the prisma.employee.create() calls fails with a
         // P2002 unique constraint violation on Employee.zkId.
         const release = await acquireRegistrationMutex();
-        let newEmployee;
+        // Validate min gap
+        if (shiftIds && Array.isArray(shiftIds) && shiftIds.length > 1) {
+            const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
+            const minGap = syncConfig?.minShiftGapMinutes ?? 30;
+            const shifts = await prisma.shift.findMany({ where: { id: { in: shiftIds } } });
+            
+            const orderedShifts = shiftIds.map((id: number) => shifts.find((s: any) => s.id === id)).filter(Boolean);
+            for (let i = 0; i < orderedShifts.length - 1; i++) {
+                const current = orderedShifts[i];
+                const next = orderedShifts[i+1];
+                if (current && next) {
+                    const [cH, cM] = current.endTime.split(':').map(Number);
+                    const [nH, nM] = next.startTime.split(':').map(Number);
+                    let gap = (nH * 60 + nM) - (cH * 60 + cM);
+                    if (gap < 0 && current.isNightShift) gap += 24 * 60;
+                    if (gap < minGap && gap > -12*60) {
+                        return res.status(400).json({ success: false, message: `Minimum gap of ${minGap} minutes between shifts not met (${current.name} to ${next.name})` });
+                    }
+                }
+            }
+        }
+
+        let newEmployee: any;
         const generatedPassword = generateRandomPassword(10);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
@@ -502,10 +543,19 @@ export const createEmployee = async (req: Request, res: Response) => {
                     Company: { select: { id: true, name: true } },
                     contactNumber: true,
                     hireDate: true,
-                    employmentStatus: true,
-                    createdAt: true,
-                }
+                    employmentStatus: true, createdAt: true }
             });
+
+            if (shiftIds && Array.isArray(shiftIds) && shiftIds.length > 0) {
+                await prisma.employeeShift.createMany({
+                    data: shiftIds.map((sid: number, i: number) => ({
+                        employeeId: newEmployee.id,
+                        shiftId: sid,
+                        sortOrder: i,
+                        isPrimary: i === 0
+                    }))
+                });
+            }
         } finally {
             // Always release — even on error — to prevent deadlocking future registrations
             release();
