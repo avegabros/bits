@@ -69,6 +69,7 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
             include: {
                 checkInDevice: { select: { name: true } },
                 checkOutDevice: { select: { name: true } },
+                shift: { select: { name: true, shiftCode: true } },
                 employee: {
                     include: {
                         Shift: true,
@@ -90,6 +91,7 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
                 ...record,
                 checkInDeviceName: record.checkInDevice?.name || null,
                 checkOutDeviceName: record.checkOutDevice?.name || null,
+                shiftName: record.shift?.name || null,
                 checkInTimePH: formatToPhilippineTime(record.checkInTime),
                 checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null,
                 ...metrics,

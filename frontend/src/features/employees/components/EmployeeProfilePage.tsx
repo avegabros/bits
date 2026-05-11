@@ -15,6 +15,7 @@ import { EmployeeEditModal } from './EmployeeEditModal'
 import { useEmployees } from '../hooks/useEmployees'
 import { ProfilePictureUpload } from '@/features/employee-portal/components/ProfilePictureUpload'
 import { employeesApi } from '@/lib/api'
+import { toast } from 'react-hot-toast'
 
 interface EmployeeProfilePageProps {
   employeeId: number
@@ -101,7 +102,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
 
   const handleEdit = () => {
     setEditingEmployee(employee)
-    const shiftIds = employee.EmployeeShift?.map((es: any) => es.shiftId) || []
+    const shiftIds = employee.EmployeeShift?.map((es: any) => es.shift?.id).filter(Boolean) || []
     setEditForm({ ...employee, shiftIds } as any)
   }
 
@@ -116,11 +117,14 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
       })
       const data = await res.json()
       if (data.success) {
+        toast.success('Employee updated successfully')
         setEditingEmployee(null)
         refresh()
+      } else {
+        toast.error(data.message || 'Failed to update employee')
       }
-    } catch {
-      // handled silently
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setIsSaving(false)
     }

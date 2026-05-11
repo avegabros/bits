@@ -9,7 +9,7 @@ import {
     getNextEmployeeNumber,
 } from './shift.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = express.Router();
 
@@ -58,7 +58,7 @@ router.get('/:id', getShiftById);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/', adminOrHR, createShift);
+router.post('/', adminManagerOrHR, createShift);
 
 /**
  * @swagger
@@ -69,7 +69,7 @@ router.post('/', adminOrHR, createShift);
  *     security:
  *       - bearerAuth: []
  */
-router.put('/:id', adminOrHR, updateShift);
+router.put('/:id', adminManagerOrHR, updateShift);
 
 /**
  * @swagger
@@ -80,7 +80,7 @@ router.put('/:id', adminOrHR, updateShift);
  *     security:
  *       - bearerAuth: []
  */
-router.patch('/:id/toggle', adminOrHR, toggleShift);
+router.patch('/:id/toggle', adminManagerOrHR, toggleShift);
 
 /**
  * @swagger
@@ -91,6 +91,6 @@ router.patch('/:id/toggle', adminOrHR, toggleShift);
  *     security:
  *       - bearerAuth: []
  */
-router.delete('/:id', adminOrHR, deleteShift);
+router.delete('/:id', adminManagerOrHR, deleteShift);
 
 export default router;

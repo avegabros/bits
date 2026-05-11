@@ -669,6 +669,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             branchId,
             hireDate,
             shiftId,
+            shiftIds,
             companyId,
             employmentStatus
         } = req.body;
@@ -771,6 +772,31 @@ export const updateEmployee = async (req: Request, res: Response) => {
             updateData.employmentStatus = employmentStatus;
         }
 
+        // Validate multi-shift gap
+        if (shiftIds && Array.isArray(shiftIds) && shiftIds.length > 1) {
+            const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
+            const minGap = syncConfig?.minShiftGapMinutes ?? 30;
+            const shiftRecords = await prisma.shift.findMany({ where: { id: { in: shiftIds } } });
+
+            const orderedShifts = shiftIds.map((id: number) => shiftRecords.find((s: any) => s.id === id)).filter(Boolean);
+            for (let i = 0; i < orderedShifts.length - 1; i++) {
+                const current = orderedShifts[i];
+                const next = orderedShifts[i + 1];
+                if (current && next) {
+                    const [cH, cM] = current.endTime.split(':').map(Number);
+                    const [nH, nM] = next.startTime.split(':').map(Number);
+                    let gap = (nH * 60 + nM) - (cH * 60 + cM);
+                    if (gap < 0 && current.isNightShift) gap += 24 * 60;
+                    if (gap < minGap && gap > -12 * 60) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `Minimum gap of ${minGap} minutes between shifts not met (${current.name} to ${next.name})`
+                        });
+                    }
+                }
+            }
+        }
+
         updateData.updatedAt = new Date();
 
         // Update the employee
@@ -808,6 +834,32 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
         const trackedFields = Object.keys(updateData).filter(k => k !== 'updatedAt' && k !== 'password');
         const changes = buildChanges(existingEmployee as Record<string, unknown>, updateData, trackedFields);
+
+        // Update EmployeeShift records if shiftIds provided
+        if (shiftIds && Array.isArray(shiftIds)) {
+            // Delete existing shift assignments
+            await prisma.employeeShift.deleteMany({ where: { employeeId } });
+
+            // Create new assignments (if any)
+            if (shiftIds.length > 0) {
+                await prisma.employeeShift.createMany({
+                    data: shiftIds.map((sid: number, i: number) => ({
+                        employeeId,
+                        shiftId: sid,
+                        sortOrder: i,
+                        isPrimary: i === 0
+                    }))
+                });
+            }
+
+            // Also update legacy shiftId to the primary shift for backward compatibility
+            await prisma.employee.update({
+                where: { id: employeeId },
+                data: { shiftId: shiftIds[0] || null }
+            });
+
+            changes.push({ field: 'shiftIds', oldValue: undefined, newValue: shiftIds });
+        }
 
         void auditUpdate({
             entityType: 'Employee',

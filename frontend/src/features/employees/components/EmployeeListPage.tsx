@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from 'react-hot-toast';
 import ToastContainer from '@/components/ui/ToastContainer';
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 import { EmployeeTable } from './EmployeeTable';
@@ -32,15 +33,20 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
         onImportComplete={list.refresh}
         isAddOpen={list.isAddOpen} setIsAddOpen={list.setIsAddOpen}
         onRegisterEmployee={async (data) => {
-          const res = await list.actions.registerEmployee(data);
-          if (res.success) {
-            const name = `${res.employee?.firstName || ''} ${res.employee?.lastName || ''}`.trim();
-            if (res.deviceSync?.success === false) {
-              list.showToast('warning', 'Registered — Device Offline', `${name} was saved but couldn't sync to the device.`);
+          try {
+            const res = await list.actions.registerEmployee(data);
+            if (res.success) {
+              const name = `${res.employee?.firstName || ''} ${res.employee?.lastName || ''}`.trim();
+              if (res.deviceSync?.success === false) {
+                list.showToast('warning', 'Registered — Device Offline', `${name} was saved but couldn't sync to the device.`);
+              } else {
+                list.showToast('success', 'Employee Registered', `${name} has been saved.`);
+              }
+              return true;
             } else {
-              list.showToast('success', 'Employee Registered', `${name} has been saved.`);
+              toast.error(res.message || 'Registration Failed');
+              return false;
             }
-          } else {
             list.showToast('error', 'Registration Failed', res.message || 'Unknown error');
           }
           return res.success;
@@ -66,7 +72,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
             pageSize={list.rowsPerPage}
             onEdit={(emp) => {
               list.setEditingEmployee(emp);
-              const shiftIds = emp.EmployeeShift?.map((es: any) => es.shiftId) || [];
+              const shiftIds = emp.EmployeeShift?.map((es: any) => es.shift?.id).filter(Boolean) || [];
               list.setEditForm({ ...emp, shiftIds } as any);
             }}
             onResetPassword={list.setConfirmResetPassword}

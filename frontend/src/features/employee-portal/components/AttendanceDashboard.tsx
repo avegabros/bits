@@ -103,6 +103,7 @@ export function AttendanceDashboard() {
               <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-widest text-slate-500">
                 <tr>
                   <th className="px-6 py-4 font-black">Date</th>
+                  <th className="px-6 py-4 font-black">Shift</th>
                   <th className="px-6 py-4 font-black">Check In</th>
                   <th className="px-6 py-4 font-black">Check Out</th>
                   <th className="px-6 py-4 font-black">Total Time</th>
@@ -121,6 +122,15 @@ export function AttendanceDashboard() {
                       <div className="text-[10px] text-slate-400 font-mono">
                         {new Date(r.date || r.checkInTime).toLocaleDateString('en-US', { weekday: 'short' })}
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {r.shiftName ? (
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                          {r.shiftName}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkInTime)}</td>
                     <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkOutTime)}</td>
