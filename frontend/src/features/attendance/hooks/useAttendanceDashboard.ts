@@ -22,6 +22,8 @@ interface RawAttendanceLog {
     Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
     profilePicture?: string | null
   }
+  shift?: { id: number; name: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string } | null
+  shiftId?: number | null
   status: string
   checkInTime: string | null
   checkOutTime: string | null
@@ -87,6 +89,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [branchFilter, setBranchFilter] = useState('All Branches')
   const allDeptLabel = role === 'manager' ? 'All Assigned Departments' : 'All Departments'
   const [deptFilter, setDeptFilter] = useState(allDeptLabel)
+  const [shiftFilter, setShiftFilter] = useState('All Shifts')
 
   // ── Data State ────────────────────────────────────────────────────────────
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -271,7 +274,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           const lateMinutes: number = isPendingManualCreation ? 0 : (log.lateMinutes ?? 0)
           const overtimeMinutes: number = isPendingManualCreation ? 0 : (log.overtimeMinutes ?? 0)
           const undertimeMinutes: number = isPendingManualCreation ? 0 : (log.undertimeMinutes ?? 0)
-          const shiftCode: string | null = log.shiftCode ?? emp?.Shift?.shiftCode ?? null
+          const shiftCode: string | null = log.shift?.shiftCode ?? log.shiftCode ?? emp?.Shift?.shiftCode ?? null
+          const shiftId: number | null = log.shift?.id ?? log.shiftId ?? null
+          const shiftName: string | null = log.shift?.name ?? null
           const isAnomaly: boolean = isPendingManualCreation ? false : (log.isAnomaly ?? false)
           const isEarlyOut: boolean = isPendingManualCreation ? false : (log.isEarlyOut ?? false)
           const isShiftActive: boolean = isPendingManualCreation ? false : (log.isShiftActive ?? false)
@@ -297,10 +302,13 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
             checkIn: isPendingManualCreation ? '—' : (log.checkInTime ? checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
             checkOut: isPendingManualCreation ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
             status: computedStatus, 
-            displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes, shiftCode,
-            shiftStartTime: emp?.Shift?.startTime,
-            shiftEndTime: emp?.Shift?.endTime,
-            isNightShift: emp?.Shift?.isNightShift ?? false,
+            displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes,
+            shiftId,
+            shiftCode,
+            shiftName,
+            shiftStartTime: log.shift?.startTime ?? emp?.Shift?.startTime,
+            shiftEndTime: log.shift?.endTime ?? emp?.Shift?.endTime,
+            isNightShift: log.shift?.isNightShift ?? emp?.Shift?.isNightShift ?? false,
             isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
             notes: log.notes || null,
             isEarlyPunch: log.isEarlyPunch ?? false,
@@ -378,7 +386,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
                 date: selectedDate,
                 checkIn: '—', checkOut: '—', status: rowStatus, displayStatus: rowStatus,
                 lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
+                shiftId: null,
                 shiftCode: e.Shift?.shiftCode ?? null,
+                shiftName: e.Shift?.name ?? null,
                 shiftStartTime: e.Shift?.startTime,
                 shiftEndTime: e.Shift?.endTime,
                 isNightShift: e.Shift?.isNightShift ?? false,
@@ -398,13 +408,17 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         if (statusFilter === 'rest_day') full = full.filter(r => r.status !== 'absent' && r.status !== 'present' && r.status !== 'late' && r.status !== 'incomplete')
 
         // Apply client-side filters
-        if (debouncedSearch) full = full.filter(r => r.employeeName.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        if (debouncedSearch) {
+          const q = debouncedSearch.toLowerCase()
+          full = full.filter(r => r.employeeName.toLowerCase().includes(q) || (r.shiftCode ?? '').toLowerCase().includes(q) || (r.shiftName ?? '').toLowerCase().includes(q))
+        }
         // Company filter: use direct companyName — null-company employees excluded from specific tabs
         if (companyFilter !== 'All Companies') {
           full = full.filter(r => (r as any).companyName === companyFilter)
         }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
+        if (shiftFilter !== 'All Shifts') full = full.filter(r => (r.shiftName ?? r.shiftCode ?? 'No Shift') === shiftFilter)
 
         setRecords(full)
         setTotalPages(Math.max(1, Math.ceil(full.length / ROW_PER_PAGE)))

@@ -70,7 +70,8 @@ interface AttendanceFilters {
 export async function resolveShiftForTimestamp(
     employeeId: number,
     timestamp: Date,
-    dateOnly: Date
+    dateOnly: Date,
+    fallbackEmployeeShift?: any
 ): Promise<{ shift: any | null; isNewCheckin: boolean }> {
     const assignments = await prisma.employeeShift.findMany({
         where: { employeeId },
@@ -79,7 +80,15 @@ export async function resolveShiftForTimestamp(
     });
 
     if (assignments.length === 0) {
-        return { shift: null, isNewCheckin: true };
+        let legacyShift = fallbackEmployeeShift;
+        if (!legacyShift) {
+            const emp = await prisma.employee.findUnique({
+                where: { id: employeeId },
+                include: { Shift: true }
+            });
+            legacyShift = emp?.Shift;
+        }
+        return { shift: legacyShift ?? null, isNewCheckin: true };
     }
 
     const records = await prisma.attendance.findMany({
@@ -97,6 +106,13 @@ export async function resolveShiftForTimestamp(
     let minDistance = Infinity;
 
     for (const { shift } of assignments) {
+        const record = recordMap.get(shift.id);
+        const needsCheckIn = !record;
+        const needsCheckOut = record && !record.checkOutTime;
+        const isCompleted = record && record.checkOutTime;
+
+        if (isCompleted) continue; // Skip completed shifts for window matching
+
         const [startH, startM] = shift.startTime.split(':').map(Number);
         const [endH, endM] = shift.endTime.split(':').map(Number);
 
@@ -113,10 +129,6 @@ export async function resolveShiftForTimestamp(
         const windowStart = new Date(shiftStart.getTime() - bufferMs);
         const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
 
-        const record = recordMap.get(shift.id);
-        const needsCheckIn = !record;
-        const needsCheckOut = record && !record.checkOutTime;
-
         if (timestamp >= windowStart && timestamp <= windowEnd) {
             if (needsCheckIn || needsCheckOut) {
                 return { shift, isNewCheckin: needsCheckIn };
@@ -131,6 +143,34 @@ export async function resolveShiftForTimestamp(
             minDistance = minDist;
             bestMatch = shift;
             isNewCheckin = needsCheckIn;
+        }
+    }
+
+    // Fallback if no active shift matches (distance-based)
+    if (!bestMatch) {
+        for (const { shift } of assignments) {
+            const [startH, startM] = shift.startTime.split(':').map(Number);
+            const [endH, endM] = shift.endTime.split(':').map(Number);
+
+            const shiftStart = new Date(dateOnly);
+            shiftStart.setUTCHours(startH - 8, startM, 0, 0);
+
+            const shiftEnd = new Date(dateOnly);
+            shiftEnd.setUTCHours(endH - 8, endM, 0, 0);
+
+            if (shiftEnd <= shiftStart) {
+                shiftEnd.setUTCDate(shiftEnd.getUTCDate() + 1);
+            }
+
+            const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
+            const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+            const minDist = Math.min(distStart, distEnd);
+
+            if (minDist < minDistance) {
+                minDistance = minDist;
+                bestMatch = shift;
+                isNewCheckin = true;
+            }
         }
     }
 
@@ -167,7 +207,12 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             const dateOnly = toPHTDate(log.timestamp);
 
             // Check if attendance record exists for this employee on this date
-            const { shift: resolvedShift, isNewCheckin } = await resolveShiftForTimestamp(log.employeeId, log.timestamp, dateOnly);
+            const { shift: resolvedShift, isNewCheckin } = await resolveShiftForTimestamp(
+                log.employeeId, 
+                log.timestamp, 
+                dateOnly, 
+                log.employee?.Shift
+            );
 
             const existingAttendance = await prisma.attendance.findFirst({
                 where: {

@@ -7,6 +7,7 @@ export interface AttendanceFilters {
     departmentId?: number;
     departmentName?: string;
     managerDepartmentIds?: number[];
+    shiftId?: number;
 }
 
 export interface AttendanceQueryParams {
@@ -19,6 +20,7 @@ export interface AttendanceQueryParams {
     departmentName?: string;
     page?: string;
     limit?: string;
+    shiftId?: string;
 }
 
 export interface AddUserPayload {
