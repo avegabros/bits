@@ -9,6 +9,46 @@ interface Branch { id: number; name: string; address?: string; }
 interface Device { id: number; name: string; ip: string; port: number; location?: string; isActive: boolean; syncEnabled: boolean; }
 export interface DeviceWithStatus extends Device { online: boolean | null; }
 
+interface RawHoliday {
+    id: number;
+    date: string;
+    name: string;
+    branches?: { branchId: number }[];
+}
+
+interface RawEmployee {
+    id: number;
+    role: string;
+    employmentStatus: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    suffix?: string;
+    branchId?: number | null;
+    Department?: { name: string };
+    Branch?: { name: string };
+    Company?: { id: number; name: string } | null;
+    Shift?: { name?: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string };
+    profilePicture?: string | null;
+    hireDate?: string;
+}
+
+interface RawAttendance {
+    id: number;
+    employeeId: number;
+    employee?: RawEmployee;
+    Employee?: RawEmployee;
+    date: string;
+    status: string;
+    checkInTime: string | null;
+    checkOutTime: string | null;
+    totalHours?: number;
+    lateMinutes: number;
+    overtimeMinutes: number;
+    undertimeMinutes: number;
+    shiftType?: string;
+}
+
 export interface BranchData {
     name: string;
     percentage: number;
@@ -111,25 +151,38 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const hd = hRes.ok ? await hRes.json() : { success: false };
 
             // Build a holiday date set for O(1) lookup
-            const holidayList: { date: string; name: string }[] = hd.success ? (hd.holidays || []) : [];
+            const holidayList: { date: string; name: string; branches?: { branchId: number }[] }[] = hd.success ? (hd.holidays || []) : [];
             const holidayDateSet = new Set(holidayList.map(h => new Date(h.date).toISOString().split('T')[0]));
             const todayHoliday = holidayList.find(h => new Date(h.date).toISOString().split('T')[0] === todayStr);
             setHolidayName(todayHoliday?.name ?? null);
 
+            // Build a map of date -> holiday for branch-aware lookups
+            const holidayByDate = new Map<string, typeof holidayList[0]>();
+            for (const h of holidayList) {
+                holidayByDate.set(new Date(h.date).toISOString().split('T')[0], h);
+            }
+
+            // Helper: does a holiday apply to a given branchId?
+            const holidayApplies = (h: { branches?: { branchId: number }[] }, branchId?: number | null) => {
+                if (!h.branches || h.branches.length === 0) return true; // National
+                if (!branchId) return true; // No branch = treat as affected
+                return h.branches.some(b => b.branchId === branchId);
+            };
+
             const branchList: Branch[] = bd.success ? (bd.branches || bd.data || []) : [];
             const deviceList: Device[] = dd.success ? (dd.devices || dd.data || []) : [];
-            const allEmps: any[] = ed.success ? (ed.employees || ed.data || []) : [];
-            const emps = allEmps.filter((e: any) => e.role === 'USER' || !e.role);
-            const atts: any[] = (ad.success ? (ad.data || []) : []).filter((a: any) => {
-                const emp = a.employee || a.Employee || {};
+            const allEmps: RawEmployee[] = ed.success ? (ed.employees || ed.data || []) : [];
+            const emps = allEmps.filter((e: RawEmployee) => e.role === 'USER' || !e.role);
+            const atts: RawAttendance[] = (ad.success ? (ad.data || []) : []).filter((a: RawAttendance) => {
+                const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
                 return (emp.role === 'USER' || !emp.role) && a.status !== 'pending';
             });
-            const weekAtts: any[] = (wd.success ? (wd.data || []) : []).filter((a: any) => {
-                const emp = a.employee || a.Employee || {};
+            const weekAtts: RawAttendance[] = (wd.success ? (wd.data || []) : []).filter((a: RawAttendance) => {
+                const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
                 return (emp.role === 'USER' || !emp.role) && a.status !== 'pending';
             });
-
-            const activeEmps = emps.filter((e: any) => e.employmentStatus === 'ACTIVE');
+ 
+            const activeEmps = emps.filter((e: RawEmployee) => e.employmentStatus === 'ACTIVE');
             const activeCount = activeEmps.length;
             setTotalEmployees(activeCount);
 
@@ -147,11 +200,27 @@ export function useDashboardData(role: 'admin' | 'hr') {
                 const totalCheckedIn = onTime + late;
                 const isDateHoliday = holidayDateSet.has(dateStr);
                 // Only count employees whose hireDate is on or before this day
-                const eligibleCount = activeEmps.filter((e: any) => {
+                const eligibleCount = activeEmps.filter((e: RawEmployee) => {
                     if (!e.hireDate) return true; // no hireDate = always eligible
                     return phtStr(new Date(e.hireDate)) <= dateStr;
                 }).length;
-                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0);
+                // Branch-aware holiday check: only exempt employees whose branch matches
+                const dayHoliday = holidayByDate.get(dateStr);
+                let absent: number;
+                if (dayHoliday) {
+                    // Count employees NOT affected by the holiday as potentially absent
+                    const nonHolidayEmps = activeEmps.filter((e: RawEmployee) => {
+                        if (e.hireDate && phtStr(new Date(e.hireDate)) > dateStr) return false;
+                        return !holidayApplies(dayHoliday, e.branchId);
+                    });
+                    const nonHolidayCheckedIn = dayAtts.filter(a => {
+                        const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
+                        return !holidayApplies(dayHoliday, emp.branchId) && a.checkInTime;
+                    }).length;
+                    absent = dateStr <= todayPHTStr ? Math.max(0, nonHolidayEmps.length - nonHolidayCheckedIn) : 0;
+                } else {
+                    absent = dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0;
+                }
                 return { day, present: onTime, late, absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
@@ -163,7 +232,7 @@ export function useDashboardData(role: 'admin' | 'hr') {
 
             const devicesWithStatus: DeviceWithStatus[] = deviceList.map(dev => ({
                 ...dev,
-                syncEnabled: (dev as any).syncEnabled ?? true,
+                syncEnabled: dev.syncEnabled ?? true,
                 online: dev.isActive
             }));
             setDevices(devicesWithStatus);
@@ -190,14 +259,28 @@ export function useDashboardData(role: 'admin' | 'hr') {
             setTotalPresent(todayOnTime);
             setTotalLate(todayLate);
             // Only count employees whose hireDate is on or before today for absent/holiday calc
-            const todayEligible = activeEmps.filter((e: any) => {
+            const todayEligible = activeEmps.filter((e: RawEmployee) => {
                 if (!e.hireDate) return true;
                 return phtStr(new Date(e.hireDate)) <= todayPHTStr;
             }).length;
             const missingCount = Math.max(0, todayEligible - todayPresent);
             if (todayHoliday) {
-                setTotalAbsent(0);
-                setTotalHoliday(missingCount);
+                // Branch-aware: count how many employees are affected by today's holiday
+                const holidayAffected = activeEmps.filter((e: RawEmployee) => {
+                    if (e.hireDate && phtStr(new Date(e.hireDate)) > todayPHTStr) return false;
+                    return holidayApplies(todayHoliday, e.branchId);
+                });
+                const holidayAffectedPresent = atts.filter(a => {
+                    const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
+                    return holidayApplies(todayHoliday, emp.branchId) && a.checkInTime;
+                }).length;
+                const holidayMissing = Math.max(0, holidayAffected.length - holidayAffectedPresent);
+                // Non-holiday employees are absent normally
+                const nonHolidayEligible = todayEligible - holidayAffected.length;
+                const nonHolidayPresent = todayPresent - holidayAffectedPresent;
+                const nonHolidayAbsent = Math.max(0, nonHolidayEligible - nonHolidayPresent);
+                setTotalAbsent(nonHolidayAbsent);
+                setTotalHoliday(holidayMissing);
             } else {
                 setTotalAbsent(missingCount);
                 setTotalHoliday(0);
@@ -251,7 +334,7 @@ export function useDashboardData(role: 'admin' | 'hr') {
     const handleStreamRecord = useCallback((payload: AttendanceStreamPayload) => {
         const emp = payload.record.employee;
         const empName = emp
-            ? `${emp.firstName}${(emp as any).middleName ? ` ${(emp as any).middleName[0]}.` : ''} ${emp.lastName}${(emp as any).suffix ? ` ${(emp as any).suffix}` : ''}`.trim()
+            ? `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}`.trim()
             : 'Unknown';
         const isLate = payload.record.lateMinutes > 0;
         const isUndertime = payload.record.undertimeMinutes > 0;

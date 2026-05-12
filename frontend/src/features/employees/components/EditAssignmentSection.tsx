@@ -112,6 +112,18 @@ export function EditAssignmentSection({
         {formErrors.departmentId && <p className="text-[10px] text-red-500 font-bold ml-1">{formErrors.departmentId}</p>}
       </div>
 
+      {/* Position */}
+      <div className="space-y-1">
+        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Position</label>
+        <input
+          type="text"
+          placeholder="e.g. Software Engineer"
+          value={editForm.position ?? ''}
+          onChange={(e) => onFormChange({ ...editForm, position: e.target.value || null })}
+          className={`${inputBase} ${inputNormal}`}
+        />
+      </div>
+
       {/* Date Hired / Status */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">

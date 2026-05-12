@@ -2,10 +2,19 @@ import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { auditCreate, auditUpdate, auditDelete } from '../../shared/lib/auditHelpers';
 
-// GET /api/holidays — Fetch all holidays (with optional ?month= and ?year= filters)
+// Shared include for branch data on holiday queries
+const branchInclude = {
+    branches: {
+        include: {
+            branch: { select: { id: true, name: true } },
+        },
+    },
+};
+
+// GET /api/holidays — Fetch all holidays (with optional ?month=, ?year=, ?branchId= filters)
 export const getHolidays = async (req: Request, res: Response) => {
     try {
-        const { month, year } = req.query;
+        const { month, year, branchId } = req.query;
 
         const where: Record<string, unknown> = {};
 
@@ -34,9 +43,24 @@ export const getHolidays = async (req: Request, res: Response) => {
             where.date = { gte: startDate, lte: endDate };
         }
 
+        // When branchId is provided, return holidays that are either:
+        // 1. National (no branch assignments) OR
+        // 2. Assigned to the specified branch
+        if (branchId) {
+            const bid = parseInt(String(branchId));
+            if (isNaN(bid)) {
+                return res.status(400).json({ success: false, message: 'Invalid branchId parameter' });
+            }
+            where.OR = [
+                { branches: { none: {} } },           // National holidays
+                { branches: { some: { branchId: bid } } }, // Branch-specific
+            ];
+        }
+
         const holidays = await prisma.holiday.findMany({
             where,
             orderBy: { date: 'asc' },
+            include: branchInclude,
         });
 
         res.json({ success: true, holidays });
@@ -54,7 +78,10 @@ export const getHolidayById = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Invalid holiday ID' });
         }
 
-        const holiday = await prisma.holiday.findUnique({ where: { id } });
+        const holiday = await prisma.holiday.findUnique({
+            where: { id },
+            include: branchInclude,
+        });
         if (!holiday) {
             return res.status(404).json({ success: false, message: 'Holiday not found' });
         }
@@ -69,7 +96,7 @@ export const getHolidayById = async (req: Request, res: Response) => {
 // POST /api/holidays — Create a new holiday (ADMIN only)
 export const createHoliday = async (req: Request, res: Response) => {
     try {
-        const { name, date, description, type } = req.body;
+        const { name, date, description, type, branchIds } = req.body;
 
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Holiday name is required' });
@@ -94,26 +121,48 @@ export const createHoliday = async (req: Request, res: Response) => {
             });
         }
 
-        const holiday = await prisma.holiday.create({
-            data: {
-                name: name.trim(),
-                date: holidayDate,
-                description: description?.trim() || null,
-                type: type || 'REGULAR',
-            },
+        // Validate branchIds if provided
+        const validBranchIds: number[] = Array.isArray(branchIds)
+            ? branchIds.map((id: unknown) => parseInt(String(id))).filter((id: number) => !isNaN(id))
+            : [];
+
+        const holiday = await prisma.$transaction(async (tx) => {
+            const created = await tx.holiday.create({
+                data: {
+                    name: name.trim(),
+                    date: holidayDate,
+                    description: description?.trim() || null,
+                    type: type || 'REGULAR',
+                },
+            });
+
+            if (validBranchIds.length > 0) {
+                await tx.holidayBranch.createMany({
+                    data: validBranchIds.map((bid: number) => ({
+                        holidayId: created.id,
+                        branchId: bid,
+                    })),
+                });
+            }
+
+            return tx.holiday.findUnique({
+                where: { id: created.id },
+                include: branchInclude,
+            });
         });
 
         void auditCreate({
             entityType: 'Holiday',
-            entityId: holiday.id,
+            entityId: holiday!.id,
             performedBy: req.user?.employeeId,
             source: 'admin-panel',
-            details: `Created holiday "${holiday.name}" on ${holidayDate.toISOString().split('T')[0]}`,
+            details: `Created holiday "${holiday!.name}" on ${holidayDate.toISOString().split('T')[0]}`,
             correlationId: req.correlationId
         }, {
-            name: holiday.name,
+            name: holiday!.name,
             date: holidayDate.toISOString().split('T')[0],
-            type: holiday.type,
+            type: holiday!.type,
+            branchIds: validBranchIds,
         });
 
         res.status(201).json({ success: true, holiday });
@@ -131,12 +180,15 @@ export const updateHoliday = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Invalid holiday ID' });
         }
 
-        const existing = await prisma.holiday.findUnique({ where: { id } });
+        const existing = await prisma.holiday.findUnique({
+            where: { id },
+            include: branchInclude,
+        });
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Holiday not found' });
         }
 
-        const { name, date, description, type } = req.body;
+        const { name, date, description, type, branchIds } = req.body;
 
         if (type && !['REGULAR', 'SPECIAL'].includes(type)) {
             return res.status(400).json({ success: false, message: 'Holiday type must be REGULAR or SPECIAL' });
@@ -188,9 +240,49 @@ export const updateHoliday = async (req: Request, res: Response) => {
             updateData.type = type;
         }
 
-        const holiday = await prisma.holiday.update({
-            where: { id },
-            data: updateData,
+        // Handle branch assignment changes
+        const validBranchIds: number[] | undefined = branchIds !== undefined
+            ? (Array.isArray(branchIds)
+                ? branchIds.map((bid: unknown) => parseInt(String(bid))).filter((bid: number) => !isNaN(bid))
+                : [])
+            : undefined;
+
+        const oldBranchIds = existing.branches.map(b => b.branchId).sort();
+
+        if (validBranchIds !== undefined) {
+            const sortedNew = [...validBranchIds].sort();
+            if (JSON.stringify(oldBranchIds) !== JSON.stringify(sortedNew)) {
+                changes.push({
+                    field: 'branchIds',
+                    oldValue: JSON.stringify(oldBranchIds),
+                    newValue: JSON.stringify(sortedNew),
+                });
+            }
+        }
+
+        const holiday = await prisma.$transaction(async (tx) => {
+            await tx.holiday.update({
+                where: { id },
+                data: updateData,
+            });
+
+            // Replace branch assignments if branchIds was provided
+            if (validBranchIds !== undefined) {
+                await tx.holidayBranch.deleteMany({ where: { holidayId: id } });
+                if (validBranchIds.length > 0) {
+                    await tx.holidayBranch.createMany({
+                        data: validBranchIds.map((bid: number) => ({
+                            holidayId: id,
+                            branchId: bid,
+                        })),
+                    });
+                }
+            }
+
+            return tx.holiday.findUnique({
+                where: { id },
+                include: branchInclude,
+            });
         });
 
         if (changes.length > 0) {
@@ -199,7 +291,7 @@ export const updateHoliday = async (req: Request, res: Response) => {
                 entityId: id,
                 performedBy: req.user?.employeeId,
                 source: 'admin-panel',
-                details: `Updated holiday "${holiday.name}"`,
+                details: `Updated holiday "${holiday!.name}"`,
                 correlationId: req.correlationId
             }, changes);
         }
@@ -219,11 +311,15 @@ export const deleteHoliday = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Invalid holiday ID' });
         }
 
-        const existing = await prisma.holiday.findUnique({ where: { id } });
+        const existing = await prisma.holiday.findUnique({
+            where: { id },
+            include: branchInclude,
+        });
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Holiday not found' });
         }
 
+        // onDelete: Cascade on HolidayBranch handles cleanup
         await prisma.holiday.delete({ where: { id } });
 
         void auditDelete({
@@ -238,6 +334,7 @@ export const deleteHoliday = async (req: Request, res: Response) => {
             name: existing.name,
             date: existing.date.toISOString().split('T')[0],
             type: existing.type,
+            branchIds: existing.branches.map(b => b.branchId),
         });
 
         res.json({ success: true, message: `Holiday "${existing.name}" deleted` });

@@ -19,6 +19,14 @@ const nextConfig: NextConfig = {
     // and fails to resolve tailwindcss.
     root: process.cwd(),
   },
+  webpack: (config) => {
+    config.watchOptions = {
+      ignored: ['**/node_modules/**', '**/.next/**'],
+      poll: 1000,
+      aggregateTimeout: 300,
+    }
+    return config
+  },
   async rewrites() {
     return [
       {

@@ -56,6 +56,7 @@ interface RawEmployee {
   employmentStatus: string
   firstName: string
   lastName: string
+  branchId?: number | null
   Department?: { name: string }
   Branch?: { name: string }
   Company?: { id: number; name: string } | null
@@ -69,6 +70,13 @@ interface EditRequestBody {
   date?: string
   checkInTime?: string
   checkOutTime?: string
+}
+
+interface RawHoliday {
+  id: number
+  date: string
+  name: string
+  branches?: { branchId: number }[]
 }
 
 const ROW_PER_PAGE = 10
@@ -229,21 +237,31 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       const [year] = selectedDate.split('-')
       let dateIsHoliday = false
       let dateHolidayName: string | null = null
+      let matchedHoliday: RawHoliday | null = null
       try {
         const holidayRes = await fetch(`/api/holidays?year=${year}`, { credentials: 'include', signal })
         if (holidayRes.ok) {
           const holidayData = await holidayRes.json()
           if (holidayData.success && holidayData.holidays) {
-            const match = holidayData.holidays.find((h: { date: string; name: string }) =>
+            const match = holidayData.holidays.find((h: RawHoliday) =>
               new Date(h.date).toISOString().split('T')[0] === selectedDate
             )
             if (match) {
               dateIsHoliday = true
               dateHolidayName = match.name
+              matchedHoliday = match
             }
           }
         }
       } catch { /* ignore holiday fetch errors */ }
+
+      // Helper: does a holiday apply to a given employee's branchId?
+      const holidayAppliesTo = (holiday: RawHoliday, branchId?: number | null) => {
+        if (!holiday?.branches || holiday.branches.length === 0) return true // National
+        if (!branchId) return true // No branch = treat as affected
+        return holiday.branches.some(b => b.branchId === branchId)
+      }
+
       setIsHolidayDate(dateIsHoliday)
 
       const params = new URLSearchParams({
@@ -373,10 +391,15 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(selectedDayName)
         }
 
-        const absentRows: AttendanceRecord[] = (dateIsHoliday || isFutureDate)
-          ? [] // On holidays or future dates, no one is injected as absent
+        const absentRows: AttendanceRecord[] = isFutureDate
+          ? [] // On future dates, no one is injected as absent
           : allEmployees
-            .filter((e: RawEmployee) => !presentIds.has(e.id))
+            .filter((e: RawEmployee) => {
+              if (presentIds.has(e.id)) return false
+              // If today is a holiday, only inject absent for employees NOT affected by it
+              if (matchedHoliday && holidayAppliesTo(matchedHoliday, e.branchId)) return false
+              return true
+            })
             .map((e: RawEmployee) => {
               const isWorking = isWorkingDayForEmployee(e)
               const rowStatus = isWorking ? 'absent' : 'rest_day'

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, X, CalendarDays, Star, Flag } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, X, CalendarDays, Star, Flag, Globe, MapPin } from 'lucide-react';
 import { useHolidays, Holiday } from '../hooks/useHolidays';
 
 interface HolidayFormData {
@@ -9,9 +9,11 @@ interface HolidayFormData {
     date: string;
     description: string;
     type: 'REGULAR' | 'SPECIAL';
+    branchIds: number[];
+    isNational: boolean;
 }
 
-const emptyForm: HolidayFormData = { name: '', date: '', description: '', type: 'REGULAR' };
+const emptyForm: HolidayFormData = { name: '', date: '', description: '', type: 'REGULAR', branchIds: [], isNational: true };
 
 export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'manager' }) {
     const isAdmin = role === 'admin' || role === 'hr';
@@ -27,6 +29,21 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
     const [formError, setFormError] = useState('');
     const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<Holiday | null>(null);
+    const [branchesList, setBranchesList] = useState<{ id: number; name: string }[]>([]);
+
+    // Fetch branches on mount for the multi-select
+    useEffect(() => {
+        const run = async () => {
+            try {
+                const res = await fetch('/api/branches', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.branches) setBranchesList(data.branches.map((b: any) => ({ id: b.id, name: b.name })));
+                }
+            } catch { /* ignore */ }
+        };
+        run();
+    }, []);
 
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -76,7 +93,9 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
     };
     const openEdit = (h: Holiday) => {
         setEditingId(h.id);
-        setForm({ name: h.name, date: new Date(h.date).toISOString().split('T')[0], description: h.description || '', type: h.type });
+        const existingBranchIds = (h.branches || []).map(b => b.branchId);
+        const isNational = existingBranchIds.length === 0;
+        setForm({ name: h.name, date: new Date(h.date).toISOString().split('T')[0], description: h.description || '', type: h.type, branchIds: existingBranchIds, isNational });
         setFormError('');
         setModalOpen(true);
     };
@@ -87,10 +106,11 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
         setSaving(true);
         setFormError('');
         try {
+            const payload = { name: form.name, date: form.date, description: form.description, type: form.type, branchIds: form.isNational ? [] : form.branchIds };
             if (editingId) {
-                await updateHoliday(editingId, form);
+                await updateHoliday(editingId, payload);
             } else {
-                await createHoliday(form);
+                await createHoliday(payload);
             }
             setModalOpen(false);
             setSelectedHoliday(null);
@@ -189,12 +209,21 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                             {day.date.getDate()}
                                         </span>
                                         {holiday && (
-                                            <div className={`mt-1 px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight truncate ${holiday.type === 'REGULAR'
-                                                ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                                }`}>
-                                                {holiday.name}
-                                            </div>
+                                            <>
+                                                <div className={`mt-1 px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight truncate ${holiday.type === 'REGULAR'
+                                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                                    }`}>
+                                                    {holiday.name}
+                                                </div>
+                                                <div className="mt-0.5 flex items-center gap-0.5 text-[8px] font-bold text-muted-foreground/70">
+                                                    {(!holiday.branches || holiday.branches.length === 0) ? (
+                                                        <><Globe className="w-2.5 h-2.5" /> National</>
+                                                    ) : (
+                                                        <><MapPin className="w-2.5 h-2.5" /> {holiday.branches.length} branch{holiday.branches.length !== 1 ? 'es' : ''}</>
+                                                    )}
+                                                </div>
+                                            </>
                                         )}
                                         {isAdmin && !holiday && day.inMonth && (
                                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -242,6 +271,13 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                             {selectedHoliday.description && (
                                 <p className="text-xs text-muted-foreground leading-relaxed">{selectedHoliday.description}</p>
                             )}
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground">
+                                {(!selectedHoliday.branches || selectedHoliday.branches.length === 0) ? (
+                                    <><Globe className="w-3 h-3" /> All Branches (National)</>
+                                ) : (
+                                    <><MapPin className="w-3 h-3" /> {selectedHoliday.branches.map(b => b.branch.name).join(', ')}</>
+                                )}
+                            </div>
                             {isAdmin && (
                                 <div className="flex gap-2 pt-2 border-t border-border">
                                     <button onClick={() => openEdit(selectedHoliday)} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-secondary hover:bg-secondary/80 rounded-lg text-[10px] font-bold text-foreground transition-colors">
@@ -273,6 +309,9 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                             <p className="text-xs font-bold text-foreground truncate">{h.name}</p>
                                             <p className="text-[10px] text-muted-foreground font-medium">
                                                 {new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                                                <span className="ml-1.5 opacity-70">
+                                                    {(!h.branches || h.branches.length === 0) ? '· National' : `· ${h.branches.length} branch${h.branches.length !== 1 ? 'es' : ''}`}
+                                                </span>
                                             </p>
                                         </div>
                                     </button>
@@ -311,6 +350,47 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                     ))}
                                 </div>
                             </div>
+                            {/* Branch Scope */}
+                            {isAdmin && (
+                                <div>
+                                    <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Branch Scope</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setForm(f => ({ ...f, isNational: !f.isNational, branchIds: !f.isNational ? [] : f.branchIds }))}
+                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                                            form.isNational
+                                                ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/30'
+                                                : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80'
+                                        }`}
+                                    >
+                                        <Globe className="w-3.5 h-3.5" />
+                                        {form.isNational ? '🌐 All Branches (National)' : 'Specific Branches'}
+                                    </button>
+                                    {!form.isNational && (
+                                        <div className="mt-2 max-h-36 overflow-y-auto space-y-1 border border-border rounded-xl p-2 bg-secondary/30">
+                                            {branchesList.length === 0 ? (
+                                                <p className="text-[10px] text-muted-foreground text-center py-2">No branches available</p>
+                                            ) : branchesList.map(b => (
+                                                <label key={b.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary/50 cursor-pointer transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={form.branchIds.includes(b.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setForm(f => ({ ...f, branchIds: [...f.branchIds, b.id] }));
+                                                            } else {
+                                                                setForm(f => ({ ...f, branchIds: f.branchIds.filter(id => id !== b.id) }));
+                                                            }
+                                                        }}
+                                                        className="rounded border-border text-indigo-500 focus:ring-indigo-500/30"
+                                                    />
+                                                    <span className="text-xs text-foreground font-medium">{b.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Description (optional)</label>
                                 <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optional details..." className="w-full px-3 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 resize-none" />

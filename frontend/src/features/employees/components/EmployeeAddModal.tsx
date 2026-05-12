@@ -21,7 +21,7 @@ const SUFFIX_OPTIONS = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V'] as const;
 export function EmployeeAddModal({ departments, branches, companies, shifts, onSave, isOpen, setIsOpen }: EmployeeAddModalProps) {
   const [newEmployee, setNewEmployee] = useState({
     employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', shiftIds: [] as number[]
+    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', shiftIds: [] as number[]
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});;
@@ -63,7 +63,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
   const resetForm = () => {
     setNewEmployee({
       employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', shiftIds: []
+      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', shiftIds: []
     });
     setSelectedCompanyId('');
     setFormErrors({});
@@ -193,6 +193,8 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
           </div>
 
           <div><label className="text-slate-400 text-[10px] uppercase font-bold">Department *</label><select className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.departmentId ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.departmentId} onChange={e => { setNewEmployee(p => ({ ...p, departmentId: e.target.value })); setFormErrors(p => ({ ...p, departmentId: '' })) }}><option value="">Select Dept</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>{formErrors.departmentId && <p className="text-[11px] text-red-500">{formErrors.departmentId}</p>}</div>
+
+          <div><label className="text-slate-400 text-[10px] uppercase font-bold">Position</label><input placeholder="e.g. Software Engineer" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" value={newEmployee.position} onChange={e => setNewEmployee(p => ({ ...p, position: e.target.value }))} /></div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
