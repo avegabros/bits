@@ -2,6 +2,7 @@ import React from 'react'
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { AttendanceMobileCards } from './AttendanceMobileCards'
 import { AttendanceDesktopTable } from './AttendanceDesktopTable'
+import { ShiftTabs } from './ShiftTabs'
 import { AttendanceRecord } from '../types'
 
 interface AttendanceTableProps {
@@ -25,6 +26,9 @@ interface AttendanceTableProps {
     restDay?: number;
     total: number;
   };
+  shiftFilter?: string | null;
+  setShiftFilter?: (val: string) => void;
+  shifts?: string[];
   dragScrollRef?: React.RefObject<HTMLDivElement | null>
 }
 
@@ -43,10 +47,25 @@ export function AttendanceTable({
   handleDeleteClick,
   showStatsHeader,
   stats,
+  shiftFilter,
+  setShiftFilter,
+  shifts,
   dragScrollRef,
 }: AttendanceTableProps) {
+  // Disable actions if viewing "All Shifts" to force specific shift selection
+  const canEdit = shiftFilter !== 'All Shifts';
+  const effectiveEditClick = canEdit ? handleEditClick : undefined;
+  const effectiveDeleteClick = canEdit ? handleDeleteClick : undefined;
+
   return (
     <div className="bg-card rounded-2xl border border-border shadow-md overflow-hidden rounded-tl-none">
+      {shifts && shifts.length > 0 && setShiftFilter && (
+        <ShiftTabs 
+          activeShift={shiftFilter || 'All Shifts'} 
+          onShiftChange={setShiftFilter} 
+          shifts={shifts} 
+        />
+      )}
       {showStatsHeader && stats && (
         <div className="px-6 py-4 border-b border-border bg-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -92,8 +111,8 @@ export function AttendanceTable({
           sortedRecords={sortedRecords}
           currentPage={currentPage}
           rowsPerPage={rowsPerPage}
-          handleEditClick={handleEditClick}
-          handleDeleteClick={handleDeleteClick}
+          handleEditClick={effectiveEditClick}
+          handleDeleteClick={effectiveDeleteClick}
         />
       </div>
 
@@ -113,8 +132,8 @@ export function AttendanceTable({
           handleSort={handleSort}
           currentPage={currentPage}
           rowsPerPage={rowsPerPage}
-          handleEditClick={handleEditClick}
-          handleDeleteClick={handleDeleteClick}
+          handleEditClick={effectiveEditClick}
+          handleDeleteClick={effectiveDeleteClick}
         />
       </div>
 

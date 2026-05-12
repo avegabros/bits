@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AttendanceFiltersProps {
@@ -15,6 +15,10 @@ interface AttendanceFiltersProps {
   departments: string[];
   statuses: { value: string; label: string }[];
   hideBranchFilter?: boolean;
+  // Shift filter (optional — omit to hide the shift dropdown)
+  shiftFilter?: string;
+  setShiftFilter?: (val: string) => void;
+  shifts?: string[];
 }
 
 export function AttendanceFilters({
@@ -30,6 +34,9 @@ export function AttendanceFilters({
   departments,
   statuses,
   hideBranchFilter,
+  shiftFilter,
+  setShiftFilter,
+  shifts,
 }: AttendanceFiltersProps) {
   return (
     <div className="flex flex-col md:flex-row gap-2 bg-secondary/10 p-2 rounded-2xl border border-border shadow-sm w-full">
@@ -42,7 +49,7 @@ export function AttendanceFilters({
           className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20"
         />
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {!hideBranchFilter && (
           <Select value={branchFilter} onValueChange={setBranchFilter}>
             <SelectTrigger className="w-44 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
@@ -65,6 +72,7 @@ export function AttendanceFilters({
             ))}
           </SelectContent>
         </Select>
+        {/* Shift Filter Dropdown removed */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
             <SelectValue placeholder="Status" />

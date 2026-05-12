@@ -32,18 +32,24 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
         onImportComplete={list.refresh}
         isAddOpen={list.isAddOpen} setIsAddOpen={list.setIsAddOpen}
         onRegisterEmployee={async (data) => {
-          const res = await list.actions.registerEmployee(data);
-          if (res.success) {
-            const name = `${res.employee?.firstName || ''} ${res.employee?.lastName || ''}`.trim();
-            if (res.deviceSync?.success === false) {
-              list.showToast('warning', 'Registered — Device Offline', `${name} was saved but couldn't sync to the device.`);
+          try {
+            const res = await list.actions.registerEmployee(data);
+            if (res.success) {
+              const name = `${res.employee?.firstName || ''} ${res.employee?.lastName || ''}`.trim();
+              if (res.deviceSync?.success === false) {
+                list.showToast('warning', 'Registered — Device Offline', `${name} was saved but couldn't sync to the device.`);
+              } else {
+                list.showToast('success', 'Employee Registered', `${name} has been saved.`);
+              }
+              return true;
             } else {
-              list.showToast('success', 'Employee Registered', `${name} has been saved.`);
+              list.showToast('error', 'Registration Failed', res.message || 'Unknown error');
+              return false;
             }
-          } else {
-            list.showToast('error', 'Registration Failed', res.message || 'Unknown error');
+          } catch {
+            list.showToast('error', 'Registration Failed', 'An unexpected error occurred.');
+            return false;
           }
-          return res.success;
         }}
       />
 
@@ -64,7 +70,11 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
             sortKey={list.tableSort.sortKey as string} sortOrder={list.tableSort.sortOrder}
             onSort={list.tableSort.handleSort} onPageChange={list.setCurrentPage}
             pageSize={list.rowsPerPage}
-            onEdit={(emp) => { list.setEditingEmployee(emp); list.setEditForm({ ...emp }); }}
+            onEdit={(emp) => {
+              list.setEditingEmployee(emp);
+              const shiftIds = emp.EmployeeShift?.map(es => es.shift?.id).filter(Boolean) || [];
+              list.setEditForm({ ...emp, shiftIds } as any);
+            }}
             onResetPassword={list.setConfirmResetPassword}
             onFingerprintOpen={(id, name) => list.setFingerprintDashboardOpen({ open: true, employeeId: id, employeeName: name })}
             onCardEnrollOpen={(id, name, card) => list.setCardEnrollOpen({ open: true, employeeId: id, employeeName: name, currentCard: card ?? null })}

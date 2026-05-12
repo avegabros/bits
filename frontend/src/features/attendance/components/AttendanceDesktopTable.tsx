@@ -86,30 +86,74 @@ export function AttendanceDesktopTable({
               </td>
               {/* Shift */}
               <td className="px-2 py-3 text-center">
-                {row.shiftCode ? (
-                  <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode}</span>
+                {row.isMerged && row.subRecords ? (
+                  <div className="flex flex-col items-center gap-1">
+                    {row.subRecords.map((sr, idx) => {
+                      const isComplete = sr.checkIn !== '—' && sr.checkOut !== '—' && sr.checkoutSource !== 'auto_closed';
+                      const colorClass = isComplete
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                        : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+                      return (
+                        <div key={idx} className="flex flex-col items-center">
+                          <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`}>
+                            {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (row.shiftName || row.shiftCode) ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode ?? row.shiftName}</span>
+                  </div>
                 ) : (
                   <span className="text-[10px] text-muted-foreground italic font-medium">No Shift</span>
                 )}
               </td>
               {/* Clock In */}
               <td className="px-4 py-4 text-sm font-mono font-bold text-center">
-                <div className="flex flex-col items-center">
-                  <span className={`${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</span>
-                  {row.gracePeriodApplied && (
-                    <span className="text-[9px] text-slate-400 mt-0.5" title="Check-in was late but within allowed grace period">Grace Period</span>
-                  )}
-                  {row.checkIn !== '—' && (
-                    <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
-                      <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
-                      <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
-                    </div>
-                  )}
-                </div>
+                {row.isMerged && row.subRecords ? (
+                  <div className="flex flex-col items-center gap-2">
+                    {row.subRecords.map((sr, idx) => (
+                      <div key={idx} className="flex flex-col items-center h-[34px] justify-center">
+                        <span className={`${sr.status === 'late' ? 'text-yellow-500' : sr.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <span className={`${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</span>
+                    {row.gracePeriodApplied && (
+                      <span className="text-[9px] text-slate-400 mt-0.5" title="Check-in was late but within allowed grace period">Grace Period</span>
+                    )}
+                    {row.checkIn !== '—' && (
+                      <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
+                        <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                        <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </td>
               {/* Clock Out */}
               <td className="px-4 py-4 text-sm font-mono text-muted-foreground font-bold text-center">
-                {row.isEarlyPunch ? (
+                {row.isMerged && row.subRecords ? (
+                  <div className="flex flex-col items-center gap-2">
+                    {row.subRecords.map((sr, idx) => (
+                      <div key={idx} className="flex flex-col items-center h-[34px] justify-center">
+                        <span className="inline-flex items-center gap-1">
+                          {sr.isShiftActive ? (
+                            <span className="inline-flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                              <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>Active
+                            </span>
+                          ) : (
+                            <span>{sr.checkOut}</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : row.isEarlyPunch ? (
                   <div className="flex flex-col items-center">
                     {row.isShiftActive ? (
                       <span className="inline-flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
@@ -199,7 +243,8 @@ export function AttendanceDesktopTable({
               <td className="px-2 py-3 text-center">
                 <div className="flex flex-col items-center justify-center gap-1">
                   <span className={`font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${
-                    row.displayStatus === 'present'           ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
+                    row.isMerged                               ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
+                    : row.displayStatus === 'present'           ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
                     : row.displayStatus === 'IN_PROGRESS'      ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
                     : row.displayStatus === 'late'             ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
                     : row.displayStatus === 'missing_checkout' ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
@@ -210,7 +255,7 @@ export function AttendanceDesktopTable({
                     : row.displayStatus === '—'                ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
                     : 'text-red-500 bg-red-500/10 border-red-500/20'
                   }`}>
-                    {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'holiday' ? 'Holiday' : row.displayStatus === 'rest_day' ? 'Rest Day' : row.displayStatus}
+                    {row.isMerged ? 'Multiple Shifts' : row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'holiday' ? 'Holiday' : row.displayStatus === 'rest_day' ? 'Rest Day' : row.displayStatus}
                   </span>
                   {row.isEdited && (
                     <span

@@ -17,7 +17,9 @@ export interface AttendanceRecord {
   totalHours: number;
   overtimeMinutes: number;
   undertimeMinutes: number;
+  shiftId: number | null;
   shiftCode: string | null;
+  shiftName: string | null;
   shiftStartTime?: string;
   shiftEndTime?: string;
   isNightShift: boolean;
@@ -31,6 +33,8 @@ export interface AttendanceRecord {
   checkoutSource?: string | null;
   isEdited?: boolean;
   isPending?: boolean;
+  isMerged?: boolean;
+  subRecords?: AttendanceRecord[];
 }
 
 export interface AttendanceStats {

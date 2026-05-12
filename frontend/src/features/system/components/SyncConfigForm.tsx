@@ -59,6 +59,7 @@ export function SyncConfigForm() {
                         <div className="lg:col-span-2">
                             <AttendanceRulesSection
                                 globalMinCheckoutMinutes={config.globalMinCheckoutMinutes}
+                                minShiftGapMinutes={config.minShiftGapMinutes}
                                 limits={limits}
                                 onChange={handleChange}
                             />

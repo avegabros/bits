@@ -28,12 +28,10 @@ async function retroactiveAutoCheckout() {
             console.log(`--- ${dateStr} ---`);
 
             for (const empId of employeeIds) {
-                const record = await prisma.attendance.findUnique({
+                const record = await prisma.attendance.findFirst({
                     where: {
-                        employeeId_date: {
-                            employeeId: empId,
-                            date: date
-                        }
+                        employeeId: empId,
+                        date: date
                     },
                     include: {
                         employee: {
@@ -101,12 +99,10 @@ async function retroactiveAutoCheckout() {
             console.log(`--- ${dateStr} ---`);
 
             for (const empId of employeeIds) {
-                const record = await prisma.attendance.findUnique({
+                const record = await prisma.attendance.findFirst({
                     where: {
-                        employeeId_date: {
-                            employeeId: empId,
-                            date: date
-                        }
+                        employeeId: empId,
+                        date: date
                     },
                     include: {
                         employee: {

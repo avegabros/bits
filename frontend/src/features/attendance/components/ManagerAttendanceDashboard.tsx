@@ -18,9 +18,10 @@ function ManagerAttendanceContent() {
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
     companyFilter, setCompanyFilter,
+    shiftFilter, setShiftFilter,
     dateInputRef,
     records, loading, error, stats,
-    branches, companies, departments, statuses,
+    branches, companies, departments, statuses, shifts,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     exportToCSV,
@@ -116,6 +117,9 @@ function ManagerAttendanceContent() {
             branches={branches}
             departments={departments}
             statuses={statuses}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
           />
         </div>
 

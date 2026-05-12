@@ -1,16 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Plus, X as XIcon } from 'lucide-react';
+import { Loader2, Plus, X as XIcon, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { validateEmployeeForm, EmployeeFormInput } from '@/lib/employeeValidation';
-import { formatPhoneNumber } from '../utils/employee-types';
+import { formatPhoneNumber, ShiftOption } from '../utils/employee-types';
 import { useToast } from '@/hooks/useToast';
 
 interface EmployeeAddModalProps {
   departments: { id: number; name: string }[];
   branches: any[];
   companies: { id: number; name: string }[];
-  shifts: any[];
+  shifts: ShiftOption[];
   onSave: (employee: EmployeeFormInput) => Promise<boolean>;
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
@@ -21,7 +21,7 @@ const SUFFIX_OPTIONS = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V'] as const;
 export function EmployeeAddModal({ departments, branches, companies, shifts, onSave, isOpen, setIsOpen }: EmployeeAddModalProps) {
   const [newEmployee, setNewEmployee] = useState({
     employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: ''
+    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', shiftIds: [] as number[]
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});;
@@ -63,7 +63,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
   const resetForm = () => {
     setNewEmployee({
       employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: ''
+      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', shiftIds: []
     });
     setSelectedCompanyId('');
     setFormErrors({});
@@ -80,7 +80,8 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
       ...newEmployee,
       departmentId: newEmployee.departmentId ? parseInt(newEmployee.departmentId) : undefined,
       branchId: newEmployee.branchId ? parseInt(newEmployee.branchId) : undefined,
-      shiftId: newEmployee.shiftId ? parseInt(newEmployee.shiftId) : undefined
+      shiftId: newEmployee.shiftId ? parseInt(newEmployee.shiftId) : undefined,
+      shiftIds: newEmployee.shiftIds,
     };
 
     const { data, errors: validationErrors } = validateEmployeeForm(dataToValidate);
@@ -199,7 +200,62 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
               <input type="date" className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.hireDate ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.hireDate} onChange={e => { setNewEmployee(p => ({ ...p, hireDate: e.target.value })); setFormErrors(p => ({ ...p, hireDate: '' })) }} />
               {formErrors.hireDate && <p className="text-[11px] text-red-500 mt-1">{formErrors.hireDate}</p>}
             </div>
-            <div><label className="text-slate-400 text-[10px] uppercase font-bold">Work Shift</label><select className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" value={newEmployee.shiftId} onChange={e => setNewEmployee(p => ({ ...p, shiftId: e.target.value }))}><option value="">No shift assigned</option>{shifts.map(s => <option key={s.id} value={s.id}>[{s.shiftCode}] {s.name}</option>)}</select></div>
+            <div>
+              <label className="text-slate-400 text-[10px] uppercase font-bold">Work Shifts</label>
+              <div className="mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-2">
+                {newEmployee.shiftIds && newEmployee.shiftIds.length > 0 ? (
+                  newEmployee.shiftIds.map((sid: number, index: number) => {
+                    const shift = shifts.find(s => s.id === sid);
+                    if (!shift) return null;
+                    return (
+                      <div key={sid} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm group">
+                        <div className="flex flex-col gap-0.5">
+                          <button type="button" onClick={() => {
+                              if (index === 0) return;
+                              const newIds = [...newEmployee.shiftIds];
+                              [newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]];
+                              setNewEmployee(p => ({ ...p, shiftIds: newIds }));
+                          }} className="text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === 0}>
+                              <ArrowUp size={10} />
+                          </button>
+                          <button type="button" onClick={() => {
+                              if (index === newEmployee.shiftIds.length - 1) return;
+                              const newIds = [...newEmployee.shiftIds];
+                              [newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]];
+                              setNewEmployee(p => ({ ...p, shiftIds: newIds }));
+                          }} className="text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === newEmployee.shiftIds.length - 1}>
+                              <ArrowDown size={10} />
+                          </button>
+                        </div>
+                        <div className="flex-1 ml-1 text-xs text-slate-700">[{shift.shiftCode}]</div>
+                        <button type="button" onClick={() => {
+                          setNewEmployee(p => ({ ...p, shiftIds: p.shiftIds.filter((id: number) => id !== sid) }));
+                        }} className="text-slate-400 hover:text-red-500 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <XIcon size={12} />
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-2 text-[10px] text-slate-400">No shifts</div>
+                )}
+                <select
+                  value=""
+                  onChange={e => {
+                    const sid = parseInt(e.target.value);
+                    if (sid && !(newEmployee.shiftIds || []).includes(sid)) {
+                      setNewEmployee(p => ({ ...p, shiftIds: [...(p.shiftIds || []), sid] }));
+                    }
+                  }}
+                  className="w-full px-2 py-1.5 rounded border border-slate-200 text-xs outline-none bg-white"
+                >
+                  <option value="">+ Add Shift</option>
+                  {shifts.filter(s => !(newEmployee.shiftIds || []).includes(s.id)).map(s => (
+                    <option key={s.id} value={s.id}>[{s.shiftCode}] {s.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100">

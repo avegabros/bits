@@ -105,6 +105,13 @@ export function useSyncConfig() {
             errors.push(`Global Minimum Checkout cannot exceed 12 hours (${limits?.MIN_CHECKOUT_MAX_MIN ?? 720} minutes)`);
         }
 
+        if (config.minShiftGapMinutes < (limits?.MIN_SHIFT_GAP_MIN ?? 15)) {
+            errors.push(`Minimum Shift Gap must be at least ${limits?.MIN_SHIFT_GAP_MIN ?? 15} minutes`);
+        }
+        if (config.minShiftGapMinutes > (limits?.MIN_SHIFT_GAP_MAX_MIN ?? 240)) {
+            errors.push(`Minimum Shift Gap cannot exceed ${limits?.MIN_SHIFT_GAP_MAX_MIN ?? 240} minutes`);
+        }
+
         if (config.healthCheckIntervalSec < (limits?.HEALTH_CHECK_INTERVAL_MIN_SEC ?? 15)) {
             errors.push(`Health check interval must be at least ${limits?.HEALTH_CHECK_INTERVAL_MIN_SEC ?? 15}s`);
         }

@@ -18,13 +18,13 @@ function AdminAttendanceContent() {
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
     companyFilter, setCompanyFilter,
+    shiftFilter, setShiftFilter,
     dateInputRef,
     records, loading, error, stats,
-    branches, companies, departments, statuses,
+    branches, companies, departments, statuses, shifts,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     editingLog, setEditingLog,
-    showCancelModal, setShowCancelModal,
     actionLoading,
     editCheckIn, setEditCheckIn,
     editCheckOut, setEditCheckOut,
@@ -124,6 +124,9 @@ function AdminAttendanceContent() {
             branches={branches}
             departments={departments}
             statuses={statuses}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
           />
         </div>
 
@@ -149,6 +152,9 @@ function AdminAttendanceContent() {
               absent: stats.absent,
               total: stats.total,
             }}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
           />
         </div>
       </div>
@@ -163,8 +169,6 @@ function AdminAttendanceContent() {
         setEditCheckOut={setEditCheckOut}
         editReason={editReason}
         setEditReason={setEditReason}
-        showCancelModal={showCancelModal}
-        setShowCancelModal={setShowCancelModal}
         handleApplyChanges={handleApplyChanges}
         actionLoading={actionLoading}
       />

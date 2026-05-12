@@ -8,7 +8,8 @@ import {
     getTodayAttendance,
     getEmployeeAttendanceHistory,
     toPHTDate,
-    calculateAttendanceStatus
+    calculateAttendanceStatus,
+    resolveShiftForTimestamp
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -247,12 +248,14 @@ export const createManualAttendance = async (req: Request, res: Response) => {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
+        const { shift: resolvedShift } = await resolveShiftForTimestamp(Number(employeeId), effectiveCheckIn, recordDate);
+
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
         // so we only block future DATES for them. Day-shift employees keep strict validation.
-        const isNightShift = employee.Shift?.isNightShift ?? false;
+        const isNightShift = resolvedShift?.isNightShift ?? false;
         
-        console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${employee.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
         console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
@@ -276,7 +279,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                      checkOutTime: effectiveCheckOut,
                      status: 'pending',
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
-                     checkoutSource: null
+                     checkoutSource: null,
+                     shiftId: resolvedShift?.id ?? null
                  }
              });
 
@@ -320,7 +324,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             effectiveCheckIn,
             effectiveCheckOut,
             recordDate,
-            employee.Shift ?? null
+            resolvedShift ?? null
         );
 
         const adminRecord = await prisma.attendance.create({
@@ -333,7 +337,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                 checkout_updated: effectiveCheckOut ? new Date() : null,
                 status: calculatedStatus,
                 notes: `Manual Edit: ${String(reason).trim()}`,
-                checkoutSource: effectiveCheckOut ? 'manual' : null
+                checkoutSource: effectiveCheckOut ? 'manual' : null,
+                shiftId: resolvedShift?.id ?? null
             }
         });
 
@@ -422,12 +427,21 @@ export const updateAttendance = async (req: Request, res: Response) => {
             return;
         }
 
+        let resolvedShift: any = null;
+        if (existing.shiftId) {
+            resolvedShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
+        }
+        if (!resolvedShift) {
+            const { shift } = await resolveShiftForTimestamp(existing.employeeId, effectiveCheckIn, existing.date);
+            resolvedShift = shift;
+        }
+
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
         // so we only block future DATES for them. Day-shift employees keep strict validation.
-        const isNightShift = existing.employee?.Shift?.isNightShift ?? false;
+        const isNightShift = resolvedShift?.isNightShift ?? false;
         
-        console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${existing.employee?.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
         console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
@@ -531,12 +545,15 @@ export const updateAttendance = async (req: Request, res: Response) => {
         if (updateData.checkInTime || updateData.checkOutTime !== undefined) {
             const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
             const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
-            const shift = existing.employee?.Shift ?? null;
 
-            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, resolvedShift ?? null);
             if (newStatus !== existing.status) {
                 updateData.status = newStatus;
                 auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
+            }
+            if (resolvedShift?.id && existing.shiftId !== resolvedShift.id) {
+                updateData.shift = { connect: { id: resolvedShift.id } };
+                auditEntries.push({ field: 'shiftId', oldValue: existing.shiftId ? String(existing.shiftId) : null, newValue: String(resolvedShift.id) });
             }
         }
 

@@ -24,7 +24,7 @@ function getWeekDates(): { start: string, end: string } {
 export function useEmployeeDashboard() {
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
-  const [todayRecord, setTodayRecord] = useState<PortalAttendanceRecord | null>(null)
+  const [todayRecords, setTodayRecords] = useState<PortalAttendanceRecord[]>([])
   const [weeklyStats, setWeeklyStats] = useState({ present: 0, late: 0, totalHours: 0 })
 
   const loadData = useCallback(async () => {
@@ -38,8 +38,8 @@ export function useEmployeeDashboard() {
       // Fetch Today's Attendance
       const todayStr = phtStr(new Date())
       const attData = await employeeSelfApi.getAttendance(todayStr, todayStr)
-      if (attData.success && attData.data?.length > 0) {
-        setTodayRecord(attData.data[0] as unknown as PortalAttendanceRecord)
+      if (attData.success && attData.data) {
+        setTodayRecords((attData.data as unknown as PortalAttendanceRecord[]) || [])
       }
 
       // Fetch Weekly Attendance
@@ -88,14 +88,20 @@ export function useEmployeeDashboard() {
     const recDateStr = payload.record.date ? phtStr(new Date(payload.record.date)) : ''
     
     if (todayStr === recDateStr) {
-      setTodayRecord(prev => ({
-        id: payload.record.id,
-        date: payload.record.date,
-        checkInTime: payload.record.checkInTime,
-        checkOutTime: payload.record.checkOutTime,
-        status: payload.record.status,
-        notes: prev?.notes || null
-      } as PortalAttendanceRecord))
+      setTodayRecords(prev => {
+        const existingIndex = prev.findIndex(r => r.id === payload.record.id)
+        const updatedRecord = {
+          ...payload.record,
+          notes: existingIndex >= 0 ? prev[existingIndex].notes : null
+        } as PortalAttendanceRecord
+        
+        if (existingIndex >= 0) {
+          const newRecords = [...prev]
+          newRecords[existingIndex] = updatedRecord
+          return newRecords
+        }
+        return [updatedRecord, ...prev]
+      })
     }
   }, [])
 
@@ -111,5 +117,5 @@ export function useEmployeeDashboard() {
     return () => clearInterval(t)
   }, [loadData])
 
-  return { loading, userName, todayRecord, weeklyStats }
+  return { loading, userName, todayRecords, weeklyStats }
 }
