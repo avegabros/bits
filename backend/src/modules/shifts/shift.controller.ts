@@ -163,7 +163,7 @@ export const createShift = async (req: Request, res: Response) => {
                 startTime: startTime.trim(),
                 endTime: endTime.trim(),
                 graceMinutes: graceMinutes != null ? parseInt(graceMinutes) : 0,
-                breakMinutes: breakMinutes != null ? parseInt(breakMinutes) : 60,
+                breakMinutes: breakMinutes != null ? parseInt(breakMinutes) : 0,
                 isNightShift: isNightShift === true || isNightShift === 'true',
                 description: description?.trim() || null,
                 workDays: Array.isArray(workDays) ? JSON.stringify(workDays) : '["Mon","Tue","Wed","Thu","Fri"]',

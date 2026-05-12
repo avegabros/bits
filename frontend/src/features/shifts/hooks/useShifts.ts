@@ -121,11 +121,26 @@ export function useShifts() {
     try {
       const url = editingShift ? `/api/shifts/${editingShift.id}` : '/api/shifts'
       const method = editingShift ? 'PUT' : 'POST'
+      
+      const calculatedBreakMinutes = form.breaks.reduce((acc, b) => {
+        if (!b.start || !b.end) return acc
+        const [startH, startM] = b.start.split(':').map(Number)
+        const [endH, endM] = b.end.split(':').map(Number)
+        let diff = (endH * 60 + endM) - (startH * 60 + startM)
+        if (diff < 0) diff += 24 * 60
+        return acc + diff
+      }, 0)
+
+      const payload = {
+        ...form,
+        breakMinutes: calculatedBreakMinutes
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (!data.success) { setFormError(data.message || 'An error occurred'); return }

@@ -26,7 +26,7 @@ export const emptyForm = {
   startTime: '',
   endTime: '',
   graceMinutes: 0,
-  breakMinutes: 60,
+  breakMinutes: 0,
   isNightShift: false,
   description: '',
   workDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as string[],

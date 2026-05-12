@@ -23,7 +23,7 @@ export function calcDuration(start: string, end: string, isNight: boolean) {
 export function calcBreaksDuration(breaksJson: string, breakMinutes: number) {
   try {
     const arr = JSON.parse(breaksJson || '[]')
-    if (arr.length === 0) return breakMinutes
+    if (arr.length === 0) return 0 // Do not fallback to legacy breakMinutes, treat empty as 0
     return arr.reduce((acc: number, b: any) => {
       if (!b.start || !b.end) return acc
       const [sh, sm] = b.start.split(':').map(Number)
@@ -33,12 +33,12 @@ export function calcBreaksDuration(breaksJson: string, breakMinutes: number) {
       return acc + diff
     }, 0)
   } catch {
-    return breakMinutes
+    return 0
   }
 }
 
 export function calcFormBreaks(breaksArr: any[], fallback: number) {
-  if (!breaksArr || breaksArr.length === 0) return fallback
+  if (!breaksArr || breaksArr.length === 0) return 0 // Do not fallback to legacy breakMinutes
   return breaksArr.reduce((acc: number, b: any) => {
     if (!b.start || !b.end) return acc
     const [sh, sm] = b.start.split(':').map(Number)
