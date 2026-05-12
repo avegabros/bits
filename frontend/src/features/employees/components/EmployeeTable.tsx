@@ -6,6 +6,7 @@ import { Edit2, Fingerprint, CreditCard, Key, RotateCcw, UserX, Eye } from 'luci
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { Avatar } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { Employee, formatFullName, formatTime } from '../utils/employee-types'
 
 interface EmployeeTableProps {
@@ -67,7 +68,11 @@ export function EmployeeTable({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">Loading employees...</td></tr>
+              <>
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton.TableRow key={i} cols={8} />
+                ))}
+              </>
             ) : employees.length > 0 ? (
               employees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-red-50/50 transition-colors duration-200 group">

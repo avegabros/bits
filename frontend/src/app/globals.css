@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
@@ -88,7 +89,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans, 'Geist'), 'Geist Fallback';
+  --font-sans: 'Inter', var(--font-geist-sans, 'Geist'), 'Geist Fallback';
+  --font-poppins: 'Poppins', sans-serif;
   --font-mono: var(--font-geist-mono, 'Geist Mono'), 'Geist Mono Fallback';
   --color-brand: var(--brand);
   --color-brand-bright: var(--brand-bright);
@@ -366,3 +368,9 @@
   width: 0;
   height: 0;
 }
+
+/* Navigation shimmer — available globally, no styled-jsx needed */
+@keyframes loading-bar {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}

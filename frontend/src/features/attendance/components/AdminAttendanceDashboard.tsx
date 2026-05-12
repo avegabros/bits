@@ -217,9 +217,11 @@ function AdminAttendanceContent() {
   );
 }
 
+import TableLoading from '@/components/ui/TableLoading';
+
 export default function AdminAttendanceDashboard() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-medium">Loading attendance workspace...</div>}>
+    <Suspense fallback={<TableLoading />}>
       <AdminAttendanceContent />
     </Suspense>
   );

@@ -5,6 +5,7 @@ import { ReportRow } from '@/types/reports';
 import { formatHrsMins, formatShiftTime, formatLateHrs } from '@/features/reports/lib/formatters';
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 interface ReportTableProps {
   variant?: 'admin' | 'hr';
@@ -71,11 +72,11 @@ export const ReportTable: React.FC<ReportTableProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">
-                  Loading report data...
-                </td>
-              </tr>
+              <>
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton.TableRow key={i} cols={8} />
+                ))}
+              </>
             ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-20 text-center text-slate-400 font-bold uppercase text-xs tracking-widest">
