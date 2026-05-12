@@ -100,6 +100,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [companyFilter, setCompanyFilter] = useState('All Companies')
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
   const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, restDay: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
+  const [availableShifts, setAvailableShifts] = useState<string[]>(['All Shifts'])
 
   // ── Holiday State (used for CSV export only) ──────────────────────────────
   const [isHolidayDate, setIsHolidayDate] = useState(false)
@@ -164,7 +165,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   }, [searchQuery])
 
   // ⚠️ FILTER RESET: page resets to 1 on any filter or date change
-  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter])
+  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, shiftFilter])
 
   // Fetch branches — on mount only
   useEffect(() => {
@@ -253,7 +254,12 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       })
       if (statusFilter !== 'all') params.append('status', statusFilter)
 
-      const res = await fetch(`/api/attendance?${params}`, { credentials: 'include', signal })
+      const res = await fetch(`/api/attendance?${params}`, { 
+        credentials: 'include', 
+        signal,
+        cache: 'no-store',
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+      })
       if (res.status === 401) { window.location.href = '/login'; return }
 
       const data = await res.json()
@@ -418,7 +424,69 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
+
+        // Extract available shifts from the filtered (by department/branch/etc) list before applying shiftFilter
+        const uniqueShifts = new Set<string>()
+        const shiftStartTimes = new Map<string, string>()
+        
+        for (const r of full) {
+          const shiftKey = r.shiftName ?? r.shiftCode ?? 'No Shift'
+          uniqueShifts.add(shiftKey)
+          if (!shiftStartTimes.has(shiftKey) && r.shiftStartTime) {
+            shiftStartTimes.set(shiftKey, r.shiftStartTime)
+          }
+        }
+
+        const sortedShifts = Array.from(uniqueShifts).sort((a, b) => {
+          if (a === 'No Shift') return 1;
+          if (b === 'No Shift') return -1;
+          const timeA = shiftStartTimes.get(a) || '24:00';
+          const timeB = shiftStartTimes.get(b) || '24:00';
+          return timeA.localeCompare(timeB);
+        });
+        
+        setAvailableShifts(['All Shifts', ...sortedShifts])
+
         if (shiftFilter !== 'All Shifts') full = full.filter(r => (r.shiftName ?? r.shiftCode ?? 'No Shift') === shiftFilter)
+
+        // --- MERGE MULTIPLE SHIFTS FOR "ALL SHIFTS" VIEW ---
+        if (shiftFilter === 'All Shifts') {
+          const grouped = new Map<string, AttendanceRecord[]>()
+          for (const r of full) {
+            const key = `${r.employeeId}-${r.date}`
+            if (!grouped.has(key)) grouped.set(key, [])
+            grouped.get(key)!.push(r)
+          }
+
+          const mergedFull: AttendanceRecord[] = []
+          for (const group of grouped.values()) {
+            if (group.length === 1) {
+              mergedFull.push(group[0])
+            } else {
+              const sortedGroup = [...group].sort((a, b) => {
+                const timeA = a.shiftStartTime || '24:00';
+                const timeB = b.shiftStartTime || '24:00';
+                return timeA.localeCompare(timeB);
+              });
+              const primary = sortedGroup[0]
+              mergedFull.push({
+                ...primary,
+                id: `merged-${primary.employeeId}-${primary.date}`,
+                isMerged: true,
+                subRecords: sortedGroup,
+                status: 'Multiple',
+                displayStatus: 'Multiple',
+                shiftCode: sortedGroup.map(g => g.shiftCode).filter(Boolean).join(', '),
+                totalHours: group.reduce((sum, r) => sum + r.totalHours, 0),
+                lateMinutes: group.reduce((sum, r) => sum + r.lateMinutes, 0),
+                overtimeMinutes: group.reduce((sum, r) => sum + r.overtimeMinutes, 0),
+                undertimeMinutes: group.reduce((sum, r) => sum + r.undertimeMinutes, 0),
+              })
+            }
+          }
+          full = mergedFull
+        }
+        // ----------------------------------------------------
 
         setRecords(full)
         setTotalPages(Math.max(1, Math.ceil(full.length / ROW_PER_PAGE)))
@@ -452,7 +520,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         setLoading(false)
       }
     }
-  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, branchesList])
+  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, shiftFilter, branchesList])
 
   // SSE stream — teardown is managed internally by useAttendanceStream
   const handleStreamRecord = useCallback((payload: AttendanceStreamPayload) => {
@@ -475,58 +543,69 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     setEditReason('')
   }, [])
 
-  const handleApplyChanges = useCallback(async () => {
+  const handleApplyChanges = useCallback(async (multiEdits?: any[]) => {
     if (!editingLog) return
 
-    if (editingLog.isPending) {
-      showToast('warning', 'Pending Request Exists', 'This record already has a pending adjustment. Cancel it first or wait for admin review.')
-      return
-    }
+    const editsToProcess = editingLog.isMerged && multiEdits ? multiEdits : [{
+      id: editingLog.id,
+      checkIn: editCheckIn,
+      checkOut: editCheckOut,
+      reason: editReason,
+      isPending: editingLog.isPending,
+      isAbsent: String(editingLog.id).startsWith('absent-'),
+      employeeId: editingLog.employeeId,
+      date: editingLog.date,
+      isNightShift: editingLog.isNightShift,
+      shiftName: editingLog.shiftName,
+      shiftCode: editingLog.shiftCode
+    }]
 
     // ── Time Validation ──────────────────────────────────────────────────
     const MAX_SHIFT_HOURS = 16
 
-    // Determine the effective check-in and check-out for validation
-    const effectiveCheckIn = editCheckIn || null
-    const effectiveCheckOut = editCheckOut || null
-
-    // Can't clear check-in (check-in is always required)
-    if (!effectiveCheckIn) {
-      showToast('error', 'Invalid Time', 'Check-in time is required.')
-      return
-    }
-
-    // Can't set check-out without a check-in
-    if (effectiveCheckOut && !effectiveCheckIn) {
-      showToast('error', 'Invalid Time', 'Cannot set a check-out time without a check-in time.')
-      return
-    }
-
-    // Build full Date objects for comparison using the record's date
-    const checkInDate = new Date(`${editingLog.date}T${effectiveCheckIn}:00+08:00`)
-
-    if (effectiveCheckOut) {
-      let checkOutDate = new Date(`${editingLog.date}T${effectiveCheckOut}:00+08:00`)
-
-      // Overnight / night-shift handling: if the checkout time is earlier than
-      // the checkin time (e.g. in 22:00 → out 06:00), the checkout falls on the
-      // next calendar day.
-      if (checkOutDate <= checkInDate) {
-        checkOutDate = new Date(checkOutDate.getTime() + 24 * 60 * 60 * 1000)
-      }
-
-      // After the overnight adjustment the checkout MUST still be after checkin.
-      // (This guards against edge-cases like identical times after +1 day.)
-      if (checkOutDate <= checkInDate) {
-        showToast('error', 'Invalid Time', 'Check-out time must be later than check-in time.')
+    for (const edit of editsToProcess) {
+      if (edit.isPending) {
+        showToast('warning', 'Pending Request Exists', 'One or more records already have a pending adjustment. Cancel it first or wait for admin review.')
         return
       }
 
-      // Maximum shift hours validation
-      const diffHours = (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60)
-      if (diffHours > MAX_SHIFT_HOURS) {
-        showToast('error', 'Invalid Time', `Total work hours cannot exceed ${MAX_SHIFT_HOURS} hours. Currently: ${diffHours.toFixed(1)} hours.`)
+      if (!edit.reason?.trim()) {
+        showToast('error', 'Reason Required', `Please provide a reason for the ${edit.shiftName || edit.shiftCode || ''} adjustment.`)
         return
+      }
+
+      const effectiveCheckIn = edit.checkIn || null
+      const effectiveCheckOut = edit.checkOut || null
+
+      if (!effectiveCheckIn) {
+        showToast('error', 'Invalid Time', `Check-in time is required for ${edit.shiftName || edit.shiftCode || 'the shift'}.`)
+        return
+      }
+
+      if (effectiveCheckOut && !effectiveCheckIn) {
+        showToast('error', 'Invalid Time', 'Cannot set a check-out time without a check-in time.')
+        return
+      }
+
+      const checkInDate = new Date(`${edit.date}T${effectiveCheckIn}:00+08:00`)
+
+      if (effectiveCheckOut) {
+        let checkOutDate = new Date(`${edit.date}T${effectiveCheckOut}:00+08:00`)
+
+        if (checkOutDate <= checkInDate) {
+          checkOutDate = new Date(checkOutDate.getTime() + 24 * 60 * 60 * 1000)
+        }
+
+        if (checkOutDate <= checkInDate) {
+          showToast('error', 'Invalid Time', `Check-out time must be later than check-in time for ${edit.shiftName || edit.shiftCode || 'the shift'}.`)
+          return
+        }
+
+        const diffHours = (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60)
+        if (diffHours > MAX_SHIFT_HOURS) {
+          showToast('error', 'Invalid Time', `Total work hours cannot exceed ${MAX_SHIFT_HOURS} hours for ${edit.shiftName || edit.shiftCode || 'the shift'}.`)
+          return
+        }
       }
     }
 
@@ -548,68 +627,73 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       // Fallback to client clock if server time fetch fails
     }
 
-    // Check-in future validation (night-shift aware)
-    // Night-shift employees may need check-ins later today (e.g. 22:00 at 10 AM),
-    // so we only block future DATES for them. Day-shift employees keep strict validation.
-    if (editingLog.isNightShift) {
-      if (editingLog.date > serverTodayPHT) {
-        setActionLoading(false)
-        showToast('error', 'Invalid Date', 'Cannot set check-in for a future date.')
-        return
-      }
-    } else {
-      if (checkInDate > serverNow) {
-        setActionLoading(false)
-        showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
-        return
+    for (const edit of editsToProcess) {
+      const effectiveCheckIn = edit.checkIn || null
+      const checkInDate = new Date(`${edit.date}T${effectiveCheckIn}:00+08:00`)
+      if (edit.isNightShift) {
+        if (edit.date > serverTodayPHT) {
+          setActionLoading(false)
+          showToast('error', 'Invalid Date', 'Cannot set check-in for a future date.')
+          return
+        }
+      } else {
+        if (checkInDate > serverNow) {
+          setActionLoading(false)
+          showToast('error', 'Invalid Time', 'Check-in time cannot be in the future.')
+          return
+        }
       }
     }
 
     try {
-      const isAbsentRecord = String(editingLog.id).startsWith('absent-')
-      
-      const body: EditRequestBody & { roleContext?: string } = { 
-        reason: editReason,
-        roleContext: role
-      }
-
-      if (isAbsentRecord) {
-        body.employeeId = editingLog.employeeId
-        body.date = editingLog.date
-      }
-
-      if (editCheckIn) body.checkInTime = `${editingLog.date}T${editCheckIn}:00+08:00`
-      if (editCheckOut) {
-        // For overnight shifts the checkout falls on the next calendar day
-        let checkOutDateStr = editingLog.date
-        if (editCheckIn && editCheckOut < editCheckIn) {
-          const nextDay = new Date(`${editingLog.date}T00:00:00+08:00`)
-          nextDay.setDate(nextDay.getDate() + 1)
-          checkOutDateStr = nextDay.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+      const promises = editsToProcess.map(async (edit) => {
+        const body: any = { 
+          reason: edit.reason,
+          roleContext: role
         }
-        body.checkOutTime = `${checkOutDateStr}T${editCheckOut}:00+08:00`
-      }
 
-      const endpoint = isAbsentRecord ? '/api/attendance/manual' : `/api/attendance/${editingLog.id}`
-      const method = isAbsentRecord ? 'POST' : 'PUT'
+        if (edit.isAbsent) {
+          body.employeeId = edit.employeeId
+          body.date = edit.date
+        }
 
-      const res = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
+        if (edit.checkIn) body.checkInTime = `${edit.date}T${edit.checkIn}:00+08:00`
+        if (edit.checkOut) {
+          let checkOutDateStr = edit.date
+          if (edit.checkIn && edit.checkOut < edit.checkIn) {
+            const nextDay = new Date(`${edit.date}T00:00:00+08:00`)
+            nextDay.setDate(nextDay.getDate() + 1)
+            checkOutDateStr = nextDay.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+          }
+          body.checkOutTime = `${checkOutDateStr}T${edit.checkOut}:00+08:00`
+        } else {
+          body.checkOutTime = null
+        }
+
+        const endpoint = edit.isAbsent ? '/api/attendance/manual' : `/api/attendance/${edit.id}`
+        const method = edit.isAbsent ? 'POST' : 'PUT'
+
+        const res = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!data.success) {
+          throw new Error(data.message || `Failed to update ${edit.shiftName || edit.shiftCode || 'record'}`)
+        }
+        return data
       })
-      const data = await res.json()
-      if (data.success) {
-        showToast('success', role === 'admin' ? 'Record Updated' : 'Adjustment Submitted',
-          role === 'admin' ? 'Attendance record successfully updated!' : 'Adjustment submitted for admin approval!')
-        setEditingLog(null)
-        fetchRecords()
-      } else {
-        showToast('error', 'Update Failed', data.message || 'Update failed')
-      }
+
+      await Promise.all(promises)
+
+      showToast('success', role === 'admin' ? 'Records Updated' : 'Adjustments Submitted',
+        role === 'admin' ? 'Attendance records successfully updated!' : 'Adjustments submitted for admin approval!')
+      setEditingLog(null)
+      fetchRecords()
     } catch (e: unknown) {
-      showToast('error', 'Network Error', e instanceof Error ? e.message : 'Network error')
+      showToast('error', 'Update Failed', e instanceof Error ? e.message : 'Network error')
     } finally {
       setActionLoading(false)
     }
@@ -714,6 +798,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      cache: 'no-store',
       body: JSON.stringify({
         exportType: 'attendance',
         entityType: 'Attendance',
@@ -727,6 +812,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     }).catch(() => { })
   }, [selectedDate, branchFilter, deptFilter, records, sortedRecords, stats, statusFilter, role])
 
+  // ── Return ───────────────────────────────────────────────────────────────
+
   return {
     // Filter state
     selectedDate, setSelectedDate,
@@ -735,11 +822,12 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
     companyFilter, setCompanyFilter,
+    shiftFilter, setShiftFilter,
     // Refs
     dateInputRef, dragScrollRef,
     // Data
     records, loading, error, stats,
-    companies, branches, departments, statuses,
+    companies, branches, departments, statuses, shifts: availableShifts,
     // Sort
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     // Pagination

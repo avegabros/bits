@@ -14,9 +14,8 @@ interface AttendanceEditModalProps {
   setEditCheckOut: (val: string) => void;
   editReason: string;
   setEditReason: (val: string) => void;
-  showCancelModal: boolean;
   setShowCancelModal: (val: boolean) => void;
-  handleApplyChanges: () => void;
+  handleApplyChanges: (multiEdits?: any[]) => void;
   actionLoading: boolean;
 }
 
@@ -36,7 +35,37 @@ export function AttendanceEditModal({
   actionLoading,
 }: AttendanceEditModalProps) {
   const [mounted, setMounted] = useState(false);
+  const [multiEdits, setMultiEdits] = useState<any[]>([]);
+
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (editingLog?.isMerged && editingLog.subRecords) {
+      setMultiEdits(editingLog.subRecords.map(sr => ({
+        id: sr.id,
+        checkIn: toTimeInput(sr.checkIn),
+        checkOut: toTimeInput(sr.checkOut),
+        reason: '',
+        isPending: !!sr.isPending,
+        shiftName: sr.shiftName,
+        shiftCode: sr.shiftCode,
+        isAbsent: String(sr.id).startsWith('absent-'),
+        employeeId: sr.employeeId,
+        date: sr.date,
+        isNightShift: sr.isNightShift
+      })));
+    } else {
+      setMultiEdits([]);
+    }
+  }, [editingLog]);
+
+  const updateMultiEdit = (index: number, field: string, value: string) => {
+    setMultiEdits(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
 
   if (!editingLog || !mounted) return null;
 
@@ -75,10 +104,10 @@ export function AttendanceEditModal({
                 <span className="px-2 py-1 bg-white border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-sm">
                   {editingLog.branchName}
                 </span>
-                {editingLog.shiftCode && (
+                {(editingLog.shiftName || editingLog.shiftCode) && (
                   <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-sm flex items-center gap-1.5">
                     <Clock size={12} className="text-blue-500" />
-                    <span>{editingLog.shiftCode}</span>
+                    <span>{editingLog.shiftCode ?? editingLog.shiftName}</span>
                     {editingLog.shiftStartTime && editingLog.shiftEndTime && (
                       <span className="text-blue-600/70 font-semibold lowercase tracking-normal border-l border-blue-200 pl-1.5 ml-0.5">
                         {(() => {
@@ -133,31 +162,69 @@ export function AttendanceEditModal({
                 Status will be automatically determined based on the employee&apos;s assigned shift schedule and the recorded time-in / time-out.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-emerald-500" /> Clock In</label>
-                <input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
+            {editingLog.isMerged ? (
+              <div className="space-y-6">
+                {multiEdits.map((edit, idx) => (
+                  <div key={edit.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 relative">
+                    <div className="absolute -top-3 left-4 bg-blue-500 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-widest shadow-sm">
+                      {edit.shiftCode || edit.shiftName || `Shift ${idx + 1}`}
+                    </div>
+                    {edit.isPending && (
+                      <div className="bg-[#FFF8E1] border border-[#FFE082] p-2 rounded-lg flex gap-2 mb-3 mt-1">
+                        <AlertCircle size={14} className="text-[#F57F17] shrink-0 mt-0.5" />
+                        <span className="text-[9px] text-[#F57F17]/80 font-medium uppercase tracking-tight">Pending request exists</span>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-emerald-500" /> Clock In</label>
+                        <input type="time" value={edit.checkIn} onChange={(e) => updateMultiEdit(idx, 'checkIn', e.target.value)}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-red-500" /> Clock Out</label>
+                        <input type="time" value={edit.checkOut} onChange={(e) => updateMultiEdit(idx, 'checkOut', e.target.value)}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
+                      </div>
+                    </div>
+                    <div className="space-y-1 mt-3">
+                      <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reason <span className="text-red-500">*</span></label>
+                      <textarea value={edit.reason} onChange={(e) => updateMultiEdit(idx, 'reason', e.target.value)}
+                        placeholder="Reason for adjustment..."
+                        className={`w-full p-3 bg-white border rounded-xl h-12 text-xs outline-none focus:ring-2 focus:ring-red-500/20 resize-none ${!edit.reason.trim() ? 'border-red-300' : 'border-slate-200'}`} />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-red-500" /> Clock Out</label>
-                <input type="time" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-emerald-500" /> Clock In</label>
+                    <input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5"><Clock size={10} className="text-red-500" /> Clock Out</label>
+                    <input type="time" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20" />
+                  </div>
+                </div>
 
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reason for Adjustment <span className="text-red-500">*</span></label>
-              <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)}
-                placeholder="e.g., Biometric error, Official business..."
-                className={`w-full p-3 bg-slate-50 border rounded-xl h-16 text-xs outline-none focus:ring-2 focus:ring-red-500/20 resize-none ${!editReason.trim() ? 'border-red-300' : 'border-slate-200'}`} />
-              {!editReason.trim() && (
-                <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
-                  <AlertCircle size={10} />
-                  Reason is required. Please provide a reason before submitting.
-                </p>
-              )}
-            </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reason for Adjustment <span className="text-red-500">*</span></label>
+                  <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)}
+                    placeholder="e.g., Biometric error, Official business..."
+                    className={`w-full p-3 bg-slate-50 border rounded-xl h-16 text-xs outline-none focus:ring-2 focus:ring-red-500/20 resize-none ${!editReason.trim() ? 'border-red-300' : 'border-slate-200'}`} />
+                  {!editReason.trim() && (
+                    <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      Reason is required. Please provide a reason before submitting.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
 
             {role === 'hr' || role === 'manager' ? (
               <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex gap-3 shadow-sm">
@@ -180,9 +247,14 @@ export function AttendanceEditModal({
           </div>
           <div className="p-4 sm:p-5 bg-slate-50 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 shrink-0">
             <button onClick={() => {
-              const originalCheckIn = toTimeInput(editingLog.checkIn);
-              const originalCheckOut = toTimeInput(editingLog.checkOut);
-              const hasChanges = editCheckIn !== originalCheckIn || editCheckOut !== originalCheckOut || editReason.trim() !== '';
+              let hasChanges = false;
+              if (editingLog.isMerged) {
+                hasChanges = multiEdits.some(edit => edit.reason.trim() !== '' || edit.checkIn !== toTimeInput(editingLog.subRecords?.find(sr => sr.id === edit.id)?.checkIn || '') || edit.checkOut !== toTimeInput(editingLog.subRecords?.find(sr => sr.id === edit.id)?.checkOut || ''));
+              } else {
+                const originalCheckIn = toTimeInput(editingLog.checkIn);
+                const originalCheckOut = toTimeInput(editingLog.checkOut);
+                hasChanges = editCheckIn !== originalCheckIn || editCheckOut !== originalCheckOut || editReason.trim() !== '';
+              }
               
               if (hasChanges) {
                 setShowCancelModal(true);
@@ -191,12 +263,12 @@ export function AttendanceEditModal({
               }
             }} className="flex-1 px-4 py-3 sm:py-3.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
             <button
-              onClick={handleApplyChanges}
-              disabled={actionLoading || !editReason.trim() || editingLog.isPending}
+              onClick={() => handleApplyChanges(editingLog.isMerged ? multiEdits : undefined)}
+              disabled={actionLoading || (editingLog.isMerged ? multiEdits.some(e => !e.reason.trim()) : !editReason.trim()) || (editingLog.isMerged ? multiEdits.some(e => e.isPending) : editingLog.isPending)}
               className="flex-1 px-4 py-3 sm:py-3.5 bg-red-600 text-white rounded-xl text-sm font-black shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {actionLoading && <Loader2 size={15} className="animate-spin" />}
-              {String(editingLog.id).startsWith('absent-') ? 'Create Manual Record' : 'Apply Changes'}
+              {String(editingLog.id).startsWith('absent-') ? 'Create Manual Record' : editingLog.isMerged ? 'Apply All Changes' : 'Apply Changes'}
             </button>
           </div>
         </div>

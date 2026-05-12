@@ -93,14 +93,20 @@ export function EmployeeTable({
                   <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono">{employee.employeeNumber ?? '—'}</td>
                   <td className="px-4 py-2.5">
                     {employee.EmployeeShift && employee.EmployeeShift.length > 0 ? (
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-slate-700 leading-tight">{employee.EmployeeShift[0].shift.name}</p>
-                          {employee.EmployeeShift.length > 1 && (
-                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{employee.EmployeeShift.length - 1}</span>
-                          )}
-                        </div>
-                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(employee.EmployeeShift[0].shift.startTime)} – {formatTime(employee.EmployeeShift[0].shift.endTime)}</p>
+                      <div className="flex flex-col gap-1.5">
+                        {[...employee.EmployeeShift]
+                          .sort((a, b) => (a.shift.startTime || '24:00').localeCompare(b.shift.startTime || '24:00'))
+                          .map((es, idx) => (
+                          <div key={es.id || idx}>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-slate-700 leading-tight">{es.shift.name}</p>
+                              {es.isPrimary && (
+                                <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold">PRIMARY</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(es.shift.startTime)} – {formatTime(es.shift.endTime)}</p>
+                          </div>
+                        ))}
                       </div>
                     ) : employee.Shift ? (
                       <div>

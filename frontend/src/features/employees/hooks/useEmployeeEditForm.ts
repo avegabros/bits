@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Employee } from '../utils/employee-types'
 import { validateEmployeeForm } from '@/lib/employeeValidation'
-import { toast } from 'react-hot-toast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,13 +34,9 @@ export function useEmployeeEditForm({ editForm, onSave }: UseEmployeeEditFormOpt
     setFormErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  // ── Save gate ───────────────────────────────────────────────────────────────
-
   const handleSaveWrapper = () => {
     if (validateForm()) {
       onSave()
-    } else {
-      toast.error('Validation failed. Please check the highlighted fields.', { duration: 4000 })
     }
   }
 

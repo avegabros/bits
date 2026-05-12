@@ -106,17 +106,41 @@ export function AttendanceMobileCards({
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Clock In</p>
-              <p className={`font-mono font-black text-sm ${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</p>
-              {row.checkIn !== '—' && (
-                <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
-                  <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
-                  <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
+              {row.isMerged && row.subRecords ? (
+                <div className="flex flex-col gap-2">
+                  {row.subRecords.map((sr, idx) => (
+                    <div key={idx}>
+                      <p className={`font-mono font-black text-sm ${sr.status === 'late' ? 'text-yellow-500' : sr.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</p>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <>
+                  <p className={`font-mono font-black text-sm ${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</p>
+                  {row.checkIn !== '—' && (
+                    <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
+                      <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                      <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Clock Out</p>
-              {row.notes?.includes('Early punch detected') ? (
+              {row.isMerged && row.subRecords ? (
+                <div className="flex flex-col gap-2">
+                  {row.subRecords.map((sr, idx) => (
+                    <div key={idx}>
+                      {sr.isShiftActive ? (
+                        <span className="text-blue-500 font-bold text-[10px] uppercase tracking-wider">Active</span>
+                      ) : (
+                        <p className="font-mono text-muted-foreground font-black text-sm">{sr.checkOut}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : row.notes?.includes('Early punch detected') ? (
                 <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">Early punch flagged</span>
               ) : row.displayStatus === 'missing_checkout' ? (
                 <div className="flex flex-col gap-1">
@@ -156,10 +180,29 @@ export function AttendanceMobileCards({
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Shift</p>
-              {row.shiftCode
-                ? <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode}</span>
-                : <span className="text-[10px] text-muted-foreground italic font-medium">No shift</span>
-              }
+              {row.isMerged && row.subRecords ? (
+                <div className="flex flex-col gap-1">
+                  {row.subRecords.map((sr, idx) => {
+                    const isComplete = sr.checkIn !== '—' && sr.checkOut !== '—' && sr.checkoutSource !== 'auto_closed';
+                    const colorClass = isComplete
+                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                      : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+                    return (
+                      <div key={idx} className="flex flex-col">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`}>
+                          {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (row.shiftName || row.shiftCode) ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode ?? row.shiftName}</span>
+                </div>
+              ) : (
+                <span className="text-[10px] text-muted-foreground italic font-medium">No shift</span>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Reg Hrs</p>

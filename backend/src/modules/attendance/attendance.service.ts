@@ -116,14 +116,11 @@ export async function resolveShiftForTimestamp(
         const [startH, startM] = shift.startTime.split(':').map(Number);
         const [endH, endM] = shift.endTime.split(':').map(Number);
 
-        const shiftStart = new Date(dateOnly);
-        shiftStart.setUTCHours(startH - 8, startM, 0, 0);
-
-        const shiftEnd = new Date(dateOnly);
-        shiftEnd.setUTCHours(endH - 8, endM, 0, 0);
+        const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+        const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
 
         if (shiftEnd <= shiftStart) {
-            shiftEnd.setUTCDate(shiftEnd.getUTCDate() + 1);
+            shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
         }
 
         const windowStart = new Date(shiftStart.getTime() - bufferMs);
@@ -152,14 +149,11 @@ export async function resolveShiftForTimestamp(
             const [startH, startM] = shift.startTime.split(':').map(Number);
             const [endH, endM] = shift.endTime.split(':').map(Number);
 
-            const shiftStart = new Date(dateOnly);
-            shiftStart.setUTCHours(startH - 8, startM, 0, 0);
-
-            const shiftEnd = new Date(dateOnly);
-            shiftEnd.setUTCHours(endH - 8, endM, 0, 0);
+            const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+            const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
 
             if (shiftEnd <= shiftStart) {
-                shiftEnd.setUTCDate(shiftEnd.getUTCDate() + 1);
+                shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
             }
 
             const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());

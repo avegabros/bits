@@ -33,6 +33,8 @@ export interface AttendanceRecord {
   checkoutSource?: string | null;
   isEdited?: boolean;
   isPending?: boolean;
+  isMerged?: boolean;
+  subRecords?: AttendanceRecord[];
 }
 
 export interface AttendanceStats {

@@ -427,7 +427,14 @@ export const updateAttendance = async (req: Request, res: Response) => {
             return;
         }
 
-        const { shift: resolvedShift } = await resolveShiftForTimestamp(existing.employeeId, effectiveCheckIn, existing.date);
+        let resolvedShift: any = null;
+        if (existing.shiftId) {
+            resolvedShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
+        }
+        if (!resolvedShift) {
+            const { shift } = await resolveShiftForTimestamp(existing.employeeId, effectiveCheckIn, existing.date);
+            resolvedShift = shift;
+        }
 
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),

@@ -15,7 +15,8 @@ import { EmployeeEditModal } from './EmployeeEditModal'
 import { useEmployees } from '../hooks/useEmployees'
 import { ProfilePictureUpload } from '@/features/employee-portal/components/ProfilePictureUpload'
 import { employeesApi } from '@/lib/api'
-import { toast } from 'react-hot-toast'
+import { useToast } from '@/hooks/useToast'
+import ToastContainer from '@/components/ui/ToastContainer'
 
 interface EmployeeProfilePageProps {
   employeeId: number
@@ -60,6 +61,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePageProps) {
   const router = useRouter()
+  const { toasts, showToast, dismissToast } = useToast()
   const { employee, loading, error, refresh } = useEmployeeProfile(employeeId)
   const { departments, branches, shifts, companies } = useEmployees()
 
@@ -117,14 +119,14 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
       })
       const data = await res.json()
       if (data.success) {
-        toast.success('Employee updated successfully')
+        showToast('success', 'Employee updated successfully')
         setEditingEmployee(null)
         refresh()
       } else {
-        toast.error(data.message || 'Failed to update employee')
+        showToast('error', data.message || 'Failed to update employee')
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'An unexpected error occurred')
+      showToast('error', err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setIsSaving(false)
     }
@@ -374,6 +376,8 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
           onDuplicateBlur={() => {}}
         />
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

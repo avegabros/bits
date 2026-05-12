@@ -1,5 +1,4 @@
 import React from 'react';
-import { toast } from 'react-hot-toast';
 import ToastContainer from '@/components/ui/ToastContainer';
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 import { EmployeeTable } from './EmployeeTable';
@@ -44,12 +43,13 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
               }
               return true;
             } else {
-              toast.error(res.message || 'Registration Failed');
+              list.showToast('error', 'Registration Failed', res.message || 'Unknown error');
               return false;
             }
-            list.showToast('error', 'Registration Failed', res.message || 'Unknown error');
+          } catch {
+            list.showToast('error', 'Registration Failed', 'An unexpected error occurred.');
+            return false;
           }
-          return res.success;
         }}
       />
 
