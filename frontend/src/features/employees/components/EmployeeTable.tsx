@@ -99,7 +99,7 @@ export function EmployeeTable({
                           .map((es, idx) => (
                           <div key={es.id || idx}>
                             <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-bold text-slate-700 leading-tight">{es.shift.name}</p>
+                              <p className="text-xs font-bold text-slate-700 leading-tight" title={es.shift.name}>{es.shift.shiftCode || es.shift.name}</p>
                               {es.isPrimary && (
                                 <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold">PRIMARY</span>
                               )}
@@ -110,7 +110,7 @@ export function EmployeeTable({
                       </div>
                     ) : employee.Shift ? (
                       <div>
-                        <p className="text-xs font-bold text-slate-700 leading-tight">{employee.Shift.name}</p>
+                        <p className="text-xs font-bold text-slate-700 leading-tight" title={employee.Shift.name}>{employee.Shift.shiftCode || employee.Shift.name}</p>
                         <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(employee.Shift.startTime)} – {formatTime(employee.Shift.endTime)}</p>
                       </div>
                     ) : (<span className="text-[10px] text-slate-300 font-bold">Unassigned</span>)}
