@@ -15,7 +15,7 @@ export interface Shift {
   halfDays: string
   halfDayHours: number | null
   breaks: string
-  _count: { Employee: number }
+  _count: { EmployeeShift: number }
 }
 
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const

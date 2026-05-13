@@ -28,15 +28,15 @@ export function ShiftDeleteModal({ deleteTarget, deleteLoading, onCancel, onDele
             <p className="text-sm text-slate-500 mt-1">
               <span className="font-bold text-slate-700">{deleteTarget.name}</span> will be permanently removed.
             </p>
-            {(deleteTarget?._count?.Employee ?? 0) > 0 && (
+            {(deleteTarget?._count?.EmployeeShift ?? 0) > 0 && (
               <p className="text-xs text-amber-600 font-bold mt-2 bg-amber-50 rounded-xl p-2 flex items-center gap-1.5">
-                <AlertTriangle size={12} className="shrink-0" /> {(deleteTarget?._count?.Employee ?? 0)} employee(s) assigned — reassign them first.
+                <AlertTriangle size={12} className="shrink-0" /> {(deleteTarget?._count?.EmployeeShift ?? 0)} employee(s) assigned — reassign them first.
               </p>
             )}
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onCancel} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all">Cancel</button>
-            <button onClick={onDelete} disabled={deleteLoading || (deleteTarget?._count?.Employee ?? 0) > 0} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-red-200 active:scale-95">
+            <button onClick={onDelete} disabled={deleteLoading || (deleteTarget?._count?.EmployeeShift ?? 0) > 0} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-red-200 active:scale-95">
               {deleteLoading ? 'Deleting…' : 'Delete'}
             </button>
           </div>

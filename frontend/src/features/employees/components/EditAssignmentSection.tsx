@@ -24,6 +24,14 @@ export function EditAssignmentSection({
   editForm, formErrors, departments, branches, companies, shifts, onFormChange, onClearError,
 }: EditAssignmentSectionProps) {
 
+  /** Parse workDays JSON and return compact day abbreviations */
+  const parseDays = (workDays?: string): string[] => {
+    if (!workDays) return []
+    try { return JSON.parse(workDays) } catch { return [] }
+  }
+
+  const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
   // Derive initial company from editForm.companyId (direct) or fallback to branch inference
   const initialCompanyId = useMemo(() => {
     if (editForm.companyId) return String(editForm.companyId)
@@ -208,6 +216,18 @@ export function EditAssignmentSection({
                       {index === 0 && <span className="ml-2 px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] uppercase tracking-wider font-bold">Primary</span>}
                     </div>
                     <div className="text-[10px] text-slate-500">{formatTime(shift.startTime)} – {formatTime(shift.endTime)}</div>
+                    <div className="flex gap-0.5 mt-0.5">
+                      {ALL_DAYS.map(d => {
+                        const active = parseDays(shift.workDays).includes(d)
+                        return (
+                          <span key={d} className={`text-[7px] font-black px-1 py-px rounded ${
+                            active
+                              ? (d === 'Sat' || d === 'Sun') ? 'bg-red-100 text-red-500' : 'bg-slate-700 text-white'
+                              : 'bg-slate-100 text-slate-300'
+                          }`}>{d[0]}</span>
+                        )
+                      })}
+                    </div>
                   </div>
                   <button type="button" onClick={() => {
                     const newIds = currentShiftIds.filter(id => id !== sid)
@@ -236,11 +256,15 @@ export function EditAssignmentSection({
               className={`${inputBase} ${inputNormal} bg-white text-xs`}
             >
               <option value="">+ Add Shift</option>
-              {shifts.filter(s => !currentShiftIds.includes(s.id)).map(s => (
-                <option key={s.id} value={s.id}>
-                  [{s.shiftCode}] {s.name} ({formatTime(s.startTime)} – {formatTime(s.endTime)})
-                </option>
-              ))}
+              {shifts.filter(s => !currentShiftIds.includes(s.id)).map(s => {
+                const days = parseDays(s.workDays)
+                const dayLabel = days.length === 7 ? 'All days' : days.length === 0 ? 'No days' : days.join(', ')
+                return (
+                  <option key={s.id} value={s.id}>
+                    [{s.shiftCode}] {s.name} ({formatTime(s.startTime)} – {formatTime(s.endTime)}) · {dayLabel}
+                  </option>
+                )
+              })}
             </select>
           </div>
         </div>

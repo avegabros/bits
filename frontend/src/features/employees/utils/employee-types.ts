@@ -74,6 +74,7 @@ export type ShiftOption = {
   name: string
   startTime: string
   endTime: string
+  workDays?: string
 }
 
 export type ImportRow = {

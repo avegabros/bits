@@ -61,6 +61,7 @@ interface RawEmployee {
   Branch?: { name: string }
   Company?: { id: number; name: string } | null
   Shift?: { name?: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string }
+  EmployeeShift?: { shift: { id: number; name: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string } }[]
   profilePicture?: string | null
 }
 
@@ -370,7 +371,21 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         // Only brand-new unapproved creation placeholders (isPending + notes flag) are excluded.
         const isPendingManualCreation = (r: AttendanceRecord) =>
           r.isPending === true && (r.notes ?? '').includes('[Pending] Manual creation')
+
+        // Track which specific shifts have attendance records per employee.
+        // This ensures multi-shift employees only skip absent rows for shifts
+        // that already have records (not ALL shifts if they have ANY record).
+        const presentShiftsByEmployee = new Map<number, Set<number | null>>()
+        for (const r of mapped) {
+          if (isPendingManualCreation(r)) continue
+          if (!presentShiftsByEmployee.has(r.employeeId)) {
+            presentShiftsByEmployee.set(r.employeeId, new Set())
+          }
+          presentShiftsByEmployee.get(r.employeeId)!.add(r.shiftId)
+        }
+        // Also keep a simple "has any record" set for employees without multi-shift
         const presentIds = new Set(mapped.filter(r => !isPendingManualCreation(r)).map(r => r.employeeId))
+
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
         const isFutureDate = selectedDate > todayStr
 
@@ -378,12 +393,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         const selectedDayName = new Date(selectedDate + 'T00:00:00Z')
           .toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
 
-        const isWorkingDayForEmployee = (emp: RawEmployee): boolean => {
-          if (emp.Shift?.workDays) {
+        /** Check if a specific shift's workDays includes the selected day */
+        const isWorkDayForShift = (workDays?: string): boolean => {
+          if (workDays) {
             try {
-              const wDays = typeof emp.Shift.workDays === 'string'
-                ? JSON.parse(emp.Shift.workDays)
-                : emp.Shift.workDays
+              const wDays = typeof workDays === 'string' ? JSON.parse(workDays) : workDays
               if (Array.isArray(wDays)) return wDays.includes(selectedDayName)
             } catch { /* fallback to default */ }
           }
@@ -391,38 +405,65 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(selectedDayName)
         }
 
+        const isWorkingDayForEmployee = (emp: RawEmployee): boolean => {
+          // Check all assigned shifts via EmployeeShift junction table
+          if (emp.EmployeeShift && emp.EmployeeShift.length > 0) {
+            return emp.EmployeeShift.some(es => isWorkDayForShift(es.shift.workDays))
+          }
+          // Fallback to legacy primary shift
+          return isWorkDayForShift(emp.Shift?.workDays)
+        }
+
+        // Build absent/rest-day rows — one per assigned shift so employees
+        // appear in ALL their shift tabs, not just the primary.
         const absentRows: AttendanceRecord[] = isFutureDate
-          ? [] // On future dates, no one is injected as absent
+          ? []
           : allEmployees
             .filter((e: RawEmployee) => {
-              if (presentIds.has(e.id)) return false
-              // If today is a holiday, only inject absent for employees NOT affected by it
               if (matchedHoliday && holidayAppliesTo(matchedHoliday, e.branchId)) return false
               return true
             })
-            .map((e: RawEmployee) => {
-              const isWorking = isWorkingDayForEmployee(e)
-              const rowStatus = isWorking ? 'absent' : 'rest_day'
-              return {
-                id: `absent-${e.id}`,
-                employeeId: e.id,
-                employeeName: `${e.firstName} ${e.lastName}`,
-                profilePicture: e.profilePicture,
-                department: e.Department?.name || 'General',
-                branchName: e.Branch?.name || '—',
-                companyName: e.Company?.name ?? null,
-                date: selectedDate,
-                checkIn: '—', checkOut: '—', status: rowStatus, displayStatus: rowStatus,
-                lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
-                shiftId: null,
-                shiftCode: e.Shift?.shiftCode ?? null,
-                shiftName: e.Shift?.name ?? null,
-                shiftStartTime: e.Shift?.startTime,
-                shiftEndTime: e.Shift?.endTime,
-                isNightShift: e.Shift?.isNightShift ?? false,
-                isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
-                isEarlyPunch: false, isMissingCheckout: false,
-              }
+            .flatMap((e: RawEmployee) => {
+              const employeePresentShifts = presentShiftsByEmployee.get(e.id)
+
+              // Get all assigned shifts, falling back to legacy Shift
+              const shifts = (e.EmployeeShift && e.EmployeeShift.length > 0)
+                ? e.EmployeeShift.map(es => es.shift)
+                : (e.Shift ? [e.Shift] : [{ id: null as number | null, name: null as string | null, shiftCode: null as string | null, isNightShift: false, startTime: undefined as string | undefined, endTime: undefined as string | undefined, workDays: undefined as string | undefined }])
+
+              return shifts
+                .filter(shift => {
+                  // Skip this shift if the employee already has an attendance record for it
+                  const shiftId = (shift as any).id ?? null
+                  if (employeePresentShifts?.has(shiftId)) return false
+                  // For employees without EmployeeShift, skip entirely if they have any record
+                  if (!(e.EmployeeShift && e.EmployeeShift.length > 0) && presentIds.has(e.id)) return false
+                  return true
+                })
+                .map((shift, idx) => {
+                  const isWorking = isWorkDayForShift(shift.workDays)
+                  const rowStatus = isWorking ? 'absent' : 'rest_day'
+                  return {
+                    id: `absent-${e.id}${idx > 0 ? `-s${idx}` : ''}`,
+                    employeeId: e.id,
+                    employeeName: `${e.firstName} ${e.lastName}`,
+                    profilePicture: e.profilePicture,
+                    department: e.Department?.name || 'General',
+                    branchName: e.Branch?.name || '—',
+                    companyName: e.Company?.name ?? null,
+                    date: selectedDate,
+                    checkIn: '—', checkOut: '—', status: rowStatus, displayStatus: rowStatus,
+                    lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
+                    shiftId: null,
+                    shiftCode: shift.shiftCode ?? null,
+                    shiftName: shift.name ?? null,
+                    shiftStartTime: shift.startTime,
+                    shiftEndTime: shift.endTime,
+                    isNightShift: shift.isNightShift ?? false,
+                    isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
+                    isEarlyPunch: false, isMissingCheckout: false,
+                  }
+                })
             })
 
         // All mapped records (including pending manual creations) go into the table so the PR badge

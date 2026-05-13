@@ -101,51 +101,37 @@ export async function resolveShiftForTimestamp(
     const bufferMins = syncConfig?.shiftBufferMinutes ?? 120;
     const bufferMs = bufferMins * 60 * 1000;
 
-    let bestMatch = null;
-    let isNewCheckin = true;
-    let minDistance = Infinity;
+    // Determine the PHT day name for day-aware filtering
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const phtTimestamp = new Date(timestamp.getTime() + 8 * 60 * 60 * 1000);
+    const currentDayName = dayNames[phtTimestamp.getUTCDay()];
 
-    for (const { shift } of assignments) {
-        const record = recordMap.get(shift.id);
-        const needsCheckIn = !record;
-        const needsCheckOut = record && !record.checkOutTime;
-        const isCompleted = record && record.checkOutTime;
+    /** Safely parse a shift's workDays JSON field */
+    const getWorkDays = (shift: Shift): string[] => {
+        try { return JSON.parse(shift.workDays || '[]'); } catch { return []; }
+    };
 
-        if (isCompleted) continue; // Skip completed shifts for window matching
+    /**
+     * Core matching logic: find the best-fitting shift for the timestamp.
+     * Instead of returning the first window match (which favored primary sort order),
+     * collects ALL matching shifts and picks the one closest to the scan time.
+     * Priority: needsCheckOut > needsCheckIn (closest to shift start/end).
+     */
+    const tryMatch = (candidateShifts: typeof assignments): { shift: Shift; isNewCheckin: boolean } | null => {
+        // Collect all shifts whose buffer window contains the timestamp
+        const windowMatches: { shift: Shift; needsCheckIn: boolean; needsCheckOut: boolean; distToStart: number; distToEnd: number }[] = [];
+        let fallbackMatch: Shift | null = null;
+        let fallbackIsNew = true;
+        let fallbackMinDist = Infinity;
 
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const [endH, endM] = shift.endTime.split(':').map(Number);
+        for (const { shift } of candidateShifts) {
+            const record = recordMap.get(shift.id);
+            const needsCheckIn = !record;
+            const needsCheckOut = record && !record.checkOutTime;
+            const isCompleted = record && record.checkOutTime;
 
-        const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
-        const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+            if (isCompleted) continue;
 
-        if (shiftEnd <= shiftStart) {
-            shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
-        }
-
-        const windowStart = new Date(shiftStart.getTime() - bufferMs);
-        const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
-
-        if (timestamp >= windowStart && timestamp <= windowEnd) {
-            if (needsCheckIn || needsCheckOut) {
-                return { shift, isNewCheckin: needsCheckIn };
-            }
-        }
-
-        const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
-        const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
-        const minDist = Math.min(distStart, distEnd);
-
-        if (minDist < minDistance) {
-            minDistance = minDist;
-            bestMatch = shift;
-            isNewCheckin = needsCheckIn;
-        }
-    }
-
-    // Fallback if no active shift matches (distance-based)
-    if (!bestMatch) {
-        for (const { shift } of assignments) {
             const [startH, startM] = shift.startTime.split(':').map(Number);
             const [endH, endM] = shift.endTime.split(':').map(Number);
 
@@ -156,19 +142,109 @@ export async function resolveShiftForTimestamp(
                 shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
             }
 
-            const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
-            const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
-            const minDist = Math.min(distStart, distEnd);
+            const windowStart = new Date(shiftStart.getTime() - bufferMs);
+            const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
 
-            if (minDist < minDistance) {
-                minDistance = minDist;
-                bestMatch = shift;
-                isNewCheckin = true;
+            const distToStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
+            const distToEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+
+            if (timestamp >= windowStart && timestamp <= windowEnd) {
+                if (needsCheckIn || needsCheckOut) {
+                    windowMatches.push({ shift, needsCheckIn, needsCheckOut: !!needsCheckOut, distToStart, distToEnd });
+                }
             }
+
+            // Track fallback (distance-based) for when nothing matches a window
+            const minDist = Math.min(distToStart, distToEnd);
+            if (minDist < fallbackMinDist) {
+                fallbackMinDist = minDist;
+                fallbackMatch = shift;
+                fallbackIsNew = needsCheckIn;
+            }
+        }
+
+        // If we have window matches, pick the best one
+        if (windowMatches.length > 0) {
+            // Priority 1: Shifts needing checkout (employee already started)
+            const checkouts = windowMatches.filter(m => m.needsCheckOut);
+            if (checkouts.length > 0) {
+                // Pick the checkout whose end time is closest to the timestamp
+                checkouts.sort((a, b) => a.distToEnd - b.distToEnd);
+                return { shift: checkouts[0].shift, isNewCheckin: false };
+            }
+
+            // Priority 2: Shifts needing check-in — pick the one whose START is closest
+            // This ensures a 1:00 PM scan matches Afternoon (start 1:00 PM, dist 0)
+            // over Morning (start 8:00 AM, dist 5hr) when both windows overlap
+            const checkins = windowMatches.filter(m => m.needsCheckIn);
+            if (checkins.length > 0) {
+                checkins.sort((a, b) => a.distToStart - b.distToStart);
+                return { shift: checkins[0].shift, isNewCheckin: true };
+            }
+        }
+
+        if (fallbackMatch) return { shift: fallbackMatch, isNewCheckin: fallbackIsNew };
+        return null;
+    };
+
+    // --- Day-aware resolution strategy ---
+    // 1. Shifts needing checkout (employee already started) — always consider, regardless of workDay
+    // 2. Shifts scheduled for today's day — primary candidates for new check-ins
+    // 3. All remaining shifts — distance-based fallback
+
+    // Partition: shifts that already have an open record (need checkout) vs others
+    const shiftsNeedingCheckout = assignments.filter(a => {
+        const record = recordMap.get(a.shift.id);
+        return record && !record.checkOutTime;
+    });
+
+    // Always try pending checkouts first (employee is already working this shift)
+    if (shiftsNeedingCheckout.length > 0) {
+        const match = tryMatch(shiftsNeedingCheckout);
+        if (match) return match;
+    }
+
+    // Filter to shifts whose workDays include the current PHT day
+    const dayMatchingShifts = assignments.filter(a => {
+        const workDays = getWorkDays(a.shift);
+        return workDays.includes(currentDayName);
+    });
+
+    // Try day-matching shifts next
+    if (dayMatchingShifts.length > 0) {
+        const match = tryMatch(dayMatchingShifts);
+        if (match) return match;
+    }
+
+    // Final fallback: try all assignments (handles edge cases / manual overrides)
+    const match = tryMatch(assignments);
+    if (match) return match;
+
+    // Distance-based fallback across all shifts (even completed ones)
+    let bestMatch: Shift | null = null;
+    let minDistance = Infinity;
+    for (const { shift } of assignments) {
+        const [startH, startM] = shift.startTime.split(':').map(Number);
+        const [endH, endM] = shift.endTime.split(':').map(Number);
+
+        const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+        const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+
+        if (shiftEnd <= shiftStart) {
+            shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+
+        const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
+        const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+        const minDist = Math.min(distStart, distEnd);
+
+        if (minDist < minDistance) {
+            minDistance = minDist;
+            bestMatch = shift;
         }
     }
 
-    return { shift: bestMatch, isNewCheckin };
+    return { shift: bestMatch, isNewCheckin: true };
 }
 
 export const processAttendanceLogs = async (): Promise<ProcessResult> => {
