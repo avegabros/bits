@@ -28,7 +28,7 @@ export function ShiftStatsCards({ shifts, activeCount }: ShiftStatsCardsProps) {
       <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-start justify-between">
         <div>
           <p className="text-sm text-slate-400 font-medium">Total Assigned</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">{shifts.reduce((a, s) => a + s._count.Employee, 0)}</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">{shifts.reduce((a, s) => a + s._count.EmployeeShift, 0)}</p>
           <p className="text-xs text-slate-400 mt-1">Employees on shifts</p>
         </div>
         <div className="p-2.5 rounded-lg bg-blue-50"><Users className="w-5 h-5 text-blue-600" /></div>

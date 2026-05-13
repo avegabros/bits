@@ -103,7 +103,7 @@ export function ShiftTable({
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-1.5">
                     <Users size={13} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-600">{s._count.Employee}</span>
+                    <span className="text-xs font-bold text-slate-600">{s._count.EmployeeShift}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 text-center">
@@ -198,7 +198,7 @@ export function ShiftTable({
                   <div className="mt-3 flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                       <Users size={13} className="text-slate-400" />
-                      <span className="font-bold">{s._count.Employee}</span>
+                      <span className="font-bold">{s._count.EmployeeShift}</span>
                       <span className="text-slate-400">assigned</span>
                     </div>
                     {!isReadOnly && (

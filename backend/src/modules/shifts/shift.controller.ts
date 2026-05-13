@@ -41,7 +41,7 @@ export const getAllShifts = async (req: Request, res: Response) => {
     try {
         const shifts = await prisma.shift.findMany({
             orderBy: { name: 'asc' },
-            include: { _count: { select: { Employee: true } } }
+            include: { _count: { select: { EmployeeShift: true } } }
         });
 
         res.json({ success: true, shifts });
@@ -59,7 +59,7 @@ export const getShiftById = async (req: Request, res: Response) => {
 
         const shift = await prisma.shift.findUnique({
             where: { id },
-            include: { _count: { select: { Employee: true } } }
+            include: { _count: { select: { EmployeeShift: true } } }
         });
 
         if (!shift) return res.status(404).json({ success: false, message: 'Shift not found' });
@@ -369,14 +369,14 @@ export const deleteShift = async (req: Request, res: Response) => {
 
         const existing = await prisma.shift.findUnique({
             where: { id },
-            include: { _count: { select: { Employee: true } } }
+            include: { _count: { select: { EmployeeShift: true } } }
         });
         if (!existing) return res.status(404).json({ success: false, message: 'Shift not found' });
 
-        if (existing._count.Employee > 0) {
+        if (existing._count.EmployeeShift > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Cannot delete shift with ${existing._count.Employee} assigned employee(s). Reassign them first.`
+                message: `Cannot delete shift with ${existing._count.EmployeeShift} assigned employee(s). Reassign them first.`
             });
         }
 
