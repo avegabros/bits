@@ -324,27 +324,27 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
 
             {/* Create/Edit Modal */}
             {modalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-100 flex items-center justify-center p-4">
-                    <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 sm:p-6">
+                    <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
                             <h3 className="text-sm font-black text-foreground">{editingId ? 'Edit Holiday' : 'Add Holiday'}</h3>
-                            <button onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-secondary rounded-lg"><X className="w-4 h-4 text-muted-foreground" /></button>
+                            <button onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-secondary rounded-lg transition-colors cursor-pointer"><X className="w-4 h-4 text-muted-foreground" /></button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-5 overflow-y-auto">
                             {formError && <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-bold">{formError}</div>}
                             <div>
                                 <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Holiday Name</label>
-                                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. New Year's Day" className="w-full px-3 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50" />
+                                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. New Year's Day" className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all" />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Date</label>
-                                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50" />
+                                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all" />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Type</label>
                                 <div className="flex gap-2">
                                     {(['REGULAR', 'SPECIAL'] as const).map(t => (
-                                        <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${form.type === t ? (t === 'REGULAR' ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-amber-500/10 text-amber-500 border-amber-500/30') : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80'}`}>
+                                        <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${form.type === t ? (t === 'REGULAR' ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-amber-500/10 text-amber-500 border-amber-500/30') : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80'}`}>
                                             {t === 'REGULAR' ? '🔴 Regular' : '⭐ Special'}
                                         </button>
                                     ))}
@@ -357,7 +357,7 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                     <button
                                         type="button"
                                         onClick={() => setForm(f => ({ ...f, isNational: !f.isNational, branchIds: !f.isNational ? [] : f.branchIds }))}
-                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                                             form.isNational
                                                 ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/30'
                                                 : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80'
@@ -367,11 +367,11 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                         {form.isNational ? '🌐 All Branches (National)' : 'Specific Branches'}
                                     </button>
                                     {!form.isNational && (
-                                        <div className="mt-2 max-h-36 overflow-y-auto space-y-1 border border-border rounded-xl p-2 bg-secondary/30">
+                                        <div className="mt-2 max-h-48 overflow-y-auto space-y-1 border border-border rounded-xl p-2 bg-secondary/30">
                                             {branchesList.length === 0 ? (
                                                 <p className="text-[10px] text-muted-foreground text-center py-2">No branches available</p>
                                             ) : branchesList.map(b => (
-                                                <label key={b.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary/50 cursor-pointer transition-colors">
+                                                <label key={b.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-secondary/50 cursor-pointer transition-colors">
                                                     <input
                                                         type="checkbox"
                                                         checked={form.branchIds.includes(b.id)}
@@ -382,7 +382,7 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                                                                 setForm(f => ({ ...f, branchIds: f.branchIds.filter(id => id !== b.id) }));
                                                             }
                                                         }}
-                                                        className="rounded border-border text-indigo-500 focus:ring-indigo-500/30"
+                                                        className="rounded border-border text-indigo-500 focus:ring-indigo-500/30 w-4 h-4 cursor-pointer"
                                                     />
                                                     <span className="text-xs text-foreground font-medium">{b.name}</span>
                                                 </label>
@@ -393,12 +393,12 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
                             )}
                             <div>
                                 <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Description (optional)</label>
-                                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optional details..." className="w-full px-3 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 resize-none" />
+                                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Optional details..." className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 resize-none transition-all" />
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
-                            <button onClick={() => setModalOpen(false)} className="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-xl text-xs font-bold text-muted-foreground transition-colors">Cancel</button>
-                            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95">{saving ? 'Saving...' : editingId ? 'Update' : 'Create'}</button>
+                        <div className="px-6 py-4 border-t border-border flex justify-end gap-2 shrink-0 bg-card">
+                            <button onClick={() => setModalOpen(false)} className="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-xl text-xs font-bold text-muted-foreground transition-colors cursor-pointer">Cancel</button>
+                            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm">{saving ? 'Saving...' : editingId ? 'Update' : 'Create'}</button>
                         </div>
                     </div>
                 </div>
@@ -406,13 +406,13 @@ export function HolidayManagement({ role }: { role: 'admin' | 'hr' | 'user' | 'm
 
             {/* Delete Confirm */}
             {deleteConfirm && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-100 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
                         <h3 className="text-sm font-black text-foreground">Delete Holiday?</h3>
                         <p className="text-xs text-muted-foreground">Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.</p>
                         <div className="flex justify-end gap-2">
-                            <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-xl text-xs font-bold text-muted-foreground transition-colors">Cancel</button>
-                            <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95">Delete</button>
+                            <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-xl text-xs font-bold text-muted-foreground transition-colors cursor-pointer">Cancel</button>
+                            <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm">Delete</button>
                         </div>
                     </div>
                 </div>
