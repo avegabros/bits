@@ -16,13 +16,14 @@ interface ShiftFormModalProps {
   formLoading: boolean
   formError: string
   hasInvalidBreaks: boolean
+  shiftTimingError: string | null
   onClose: () => void
   onSubmit: () => void
 }
 
 export function ShiftFormModal({
   isFormOpen, editingShift, form, setForm,
-  formLoading, formError, hasInvalidBreaks,
+  formLoading, formError, hasInvalidBreaks, shiftTimingError,
   onClose, onSubmit,
 }: ShiftFormModalProps) {
   return (
@@ -123,6 +124,13 @@ export function ShiftFormModal({
               </div>
             </div>
 
+            {shiftTimingError && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50/50 border border-red-100 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300">
+                <AlertTriangle size={14} className="text-red-500 shrink-0" />
+                <p className="text-[11px] font-bold text-red-600 leading-tight">{shiftTimingError}</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Grace Period (mins)</label>
@@ -201,7 +209,7 @@ export function ShiftFormModal({
                               newBreaks[i].start = e.target.value;
                               return { ...f, breaks: newBreaks };
                             })}
-                            className={`flex-1 p-2 bg-slate-50 border rounded-xl text-[11px] font-bold text-slate-600 outline-none focus:ring-2 focus:ring-brand/20 ${getBreakError(b, form.startTime, form.endTime) ? 'border-red-200 bg-red-50/30' : 'border-slate-100'}`}
+                            className={`flex-1 p-2 bg-slate-50 border rounded-xl text-[11px] font-bold text-slate-600 outline-none focus:ring-2 focus:ring-brand/20 ${getBreakError(b, form.startTime, form.endTime, form.isNightShift) ? 'border-red-200 bg-red-50/30' : 'border-slate-100'}`}
                           />
                           <span className="text-slate-300 font-bold">→</span>
                           <input
@@ -211,7 +219,7 @@ export function ShiftFormModal({
                               newBreaks[i].end = e.target.value;
                               return { ...f, breaks: newBreaks };
                             })}
-                            className={`flex-1 p-2 bg-slate-50 border rounded-xl text-[11px] font-bold text-slate-600 outline-none focus:ring-2 focus:ring-brand/20 ${getBreakError(b, form.startTime, form.endTime) ? 'border-red-200 bg-red-50/30' : 'border-slate-100'}`}
+                            className={`flex-1 p-2 bg-slate-50 border rounded-xl text-[11px] font-bold text-slate-600 outline-none focus:ring-2 focus:ring-brand/20 ${getBreakError(b, form.startTime, form.endTime, form.isNightShift) ? 'border-red-200 bg-red-50/30' : 'border-slate-100'}`}
                           />
                         </div>
                       </div>
@@ -223,10 +231,10 @@ export function ShiftFormModal({
                         <Trash2 size={16} />
                       </button>
                     </div>
-                    {getBreakError(b, form.startTime, form.endTime) && (
+                    {getBreakError(b, form.startTime, form.endTime, form.isNightShift) && (
                       <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded-lg">
                         <AlertTriangle size={10} className="text-red-500" />
-                        <p className="text-[10px] text-red-600 font-bold">{getBreakError(b, form.startTime, form.endTime)}</p>
+                        <p className="text-[10px] text-red-600 font-bold">{getBreakError(b, form.startTime, form.endTime, form.isNightShift)}</p>
                       </div>
                     )}
                   </div>
@@ -390,7 +398,7 @@ export function ShiftFormModal({
           </button>
           <button 
             onClick={onSubmit} 
-            disabled={formLoading || hasInvalidBreaks} 
+            disabled={formLoading || hasInvalidBreaks || !!shiftTimingError} 
             className="flex-1 max-w-[200px] px-6 py-3.5 bg-brand text-white rounded-2xl text-sm font-bold shadow-xl shadow-brand/20 hover:bg-brand-dark disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
           >
             {formLoading ? (

@@ -49,6 +49,7 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
         formLoading={s.formLoading}
         formError={s.formError}
         hasInvalidBreaks={s.hasInvalidBreaks}
+        shiftTimingError={s.shiftTimingError}
         onClose={() => s.setIsFormOpen(false)}
         onSubmit={s.handleSubmit}
       />

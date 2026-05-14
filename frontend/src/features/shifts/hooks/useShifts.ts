@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/useToast'
 import type { Shift, ShiftFormData } from '../types'
 import { emptyForm } from '../types'
-import { toMinutes } from '../utils/shift-formatters'
+import { toMinutes, validateShiftConfig } from '../utils/shift-formatters'
 
 export function useShifts() {
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -62,7 +62,7 @@ export function useShifts() {
       const shiftEndMins = toMinutes(form.endTime)
       const breakStartMins = toMinutes(b.start)
       const breakEndMins = toMinutes(b.end)
-      const isOvernight = shiftEndMins <= shiftStartMins
+      const isOvernight = form.isNightShift
       if (isOvernight) {
         const validStart = breakStartMins >= shiftStartMins || breakStartMins < shiftEndMins
         const validEnd = breakEndMins > shiftStartMins || breakEndMins <= shiftEndMins
@@ -73,6 +73,8 @@ export function useShifts() {
     }
     return false
   })
+
+  const shiftTimingError = validateShiftConfig(form.startTime, form.endTime, form.isNightShift)
 
   const openCreate = () => {
     setEditingShift(null)
@@ -110,6 +112,10 @@ export function useShifts() {
   const handleSubmit = async () => {
     if (!form.shiftCode.trim() || !form.name.trim() || !form.startTime || !form.endTime) {
       setFormError('Shift Code, Name, Start Time, and End Time are required.')
+      return
+    }
+    if (shiftTimingError) {
+      setFormError(shiftTimingError)
       return
     }
     if (hasInvalidBreaks) {
@@ -182,7 +188,7 @@ export function useShifts() {
     // Modal
     isFormOpen, setIsFormOpen, editingShift,
     form, setForm, formLoading, formError, setFormError,
-    hasInvalidBreaks,
+    hasInvalidBreaks, shiftTimingError,
     // Delete
     deleteTarget, setDeleteTarget, deleteLoading,
     // Pagination

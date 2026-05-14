@@ -34,3 +34,17 @@ export interface UpdateAttendancePayload {
     status?: string;
     reason: string;
 }
+
+export interface ProcessResult {
+    success: boolean;
+    processed: number;
+    created: number;
+    updated: number;
+}
+
+export interface BasicAttendanceRecord {
+    date: Date;
+    checkInTime: Date | null;
+    checkOutTime: Date | null;
+    status: string | null;
+}

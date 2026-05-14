@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, buildChanges } from '../../shared/lib/auditHelpers';
+import { validateShiftTimes } from './shiftUtils';
 
 const FIELD_NAMES: Record<string, string> = {
     shiftCode: 'Shift Code',
@@ -87,6 +88,12 @@ export const createShift = async (req: Request, res: Response) => {
         const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
             return res.status(400).json({ success: false, message: 'Times must be in H:MM or HH:MM format (24-hour)' });
+        }
+
+        // Validate shift duration and cross-midnight settings
+        const shiftValidationError = validateShiftTimes(startTime, endTime, isNightShift === true || isNightShift === 'true');
+        if (shiftValidationError) {
+            return res.status(400).json({ success: false, message: shiftValidationError });
         }
 
         // Validate break time ranges
@@ -211,6 +218,16 @@ export const updateShift = async (req: Request, res: Response) => {
         const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (startTime && !timeRegex.test(startTime)) return res.status(400).json({ success: false, message: 'startTime must be H:MM or HH:MM (24-hour)' });
         if (endTime && !timeRegex.test(endTime)) return res.status(400).json({ success: false, message: 'endTime must be H:MM or HH:MM (24-hour)' });
+
+        // Validate shift duration and cross-midnight settings
+        const effectiveStart = startTime || existing.startTime;
+        const effectiveEnd = endTime || existing.endTime;
+        const effectiveIsNight = isNightShift !== undefined ? (isNightShift === true || isNightShift === 'true') : existing.isNightShift;
+        
+        const shiftValidationError = validateShiftTimes(effectiveStart, effectiveEnd, effectiveIsNight);
+        if (shiftValidationError) {
+            return res.status(400).json({ success: false, message: shiftValidationError });
+        }
 
         // Validate break time ranges
         if (Array.isArray(breaks) && breaks.length > 0) {
