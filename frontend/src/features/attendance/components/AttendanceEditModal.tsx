@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
-import { AttendanceRecord } from '../types';
+import { AttendanceRecord, AttendanceConflict } from '../types';
 import { toTimeInput } from '../utils/attendance-formatters';
 
 interface AttendanceEditModalProps {
@@ -16,6 +16,7 @@ interface AttendanceEditModalProps {
   setEditReason: (val: string) => void;
   handleApplyChanges: (multiEdits?: any[]) => void;
   actionLoading: boolean;
+  conflictErrors?: AttendanceConflict[];
 }
 
 export function AttendanceEditModal({
@@ -30,6 +31,7 @@ export function AttendanceEditModal({
   setEditReason,
   handleApplyChanges,
   actionLoading,
+  conflictErrors,
 }: AttendanceEditModalProps) {
   const [mounted, setMounted] = useState(false);
   const [multiEdits, setMultiEdits] = useState<any[]>([]);
@@ -151,6 +153,27 @@ export function AttendanceEditModal({
               <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">System Note</p>
                 <p className="text-[10px] text-slate-600 font-medium">{editingLog.notes}</p>
+              </div>
+            )}
+            {conflictErrors && conflictErrors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 p-4 rounded-2xl space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-600 shrink-0" />
+                  <span className="text-[10px] font-black text-red-800 uppercase tracking-wider">
+                    Attendance Conflict Detected
+                  </span>
+                </div>
+                {conflictErrors.map((conflict, i) => (
+                  <div key={i} className="flex items-start gap-2 pl-6">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                    <p className="text-[11px] text-red-700 font-medium leading-snug">
+                      {conflict.message}
+                    </p>
+                  </div>
+                ))}
+                <p className="text-[10px] text-red-500/80 font-medium pl-6">
+                  Please adjust the times to resolve conflicts before saving.
+                </p>
               </div>
             )}
             <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex gap-3">

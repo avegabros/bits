@@ -37,6 +37,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
     editReason, setEditReason,
     deletingLog, setDeletingLog,
     deleteReason, setDeleteReason,
+    conflictErrors,
     handleEditClick, handleApplyChanges, handleDeleteClick, handleDeleteSubmit, exportToCSV,
     toasts, dismissToast,
     getTodayDate,
@@ -174,6 +175,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
         setEditReason={setEditReason}
         handleApplyChanges={handleApplyChanges}
         actionLoading={actionLoading}
+        conflictErrors={conflictErrors}
       />
 
       {deletingLog && (

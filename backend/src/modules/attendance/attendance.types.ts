@@ -48,3 +48,18 @@ export interface BasicAttendanceRecord {
     checkOutTime: Date | null;
     status: string | null;
 }
+
+export interface AttendanceConflict {
+    type: 'overlap' | 'boundary_violation';
+    conflictingRecordId?: number;
+    conflictingShiftName?: string;
+    conflictingTimeRange?: string;
+    editedTimeRange: string;
+    shiftBoundary?: string;
+    message: string;
+}
+
+export interface AttendanceConflictReport {
+    hasConflicts: boolean;
+    conflicts: AttendanceConflict[];
+}

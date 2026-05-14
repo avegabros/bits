@@ -9,7 +9,8 @@ import {
     getEmployeeAttendanceHistory,
     toPHTDate,
     calculateAttendanceStatus,
-    resolveShiftForTimestamp
+    resolveShiftForTimestamp,
+    validateAttendanceConflicts
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -269,6 +270,22 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             }
         }
 
+        // ── Cross-Shift Conflict Validation ──────────────────────────────────
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: Number(employeeId),
+            date: recordDate,
+            checkInTime: effectiveCheckIn,
+            checkOutTime: effectiveCheckOut,
+        });
+
+        if (conflictReport.hasConflicts) {
+            return res.status(409).json({
+                success: false,
+                message: conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+        }
+
         // If HR User (or Admin acting as HR): Create a pending record + Adjustment Request
         if (isHRWorkflow) {
              const newRecord = await prisma.attendance.create({
@@ -470,6 +487,24 @@ export const updateAttendance = async (req: Request, res: Response) => {
                 res.status(400).json({ success: false, message: `Total work hours cannot exceed 16 hours. Currently: ${diffHours.toFixed(1)} hours.` });
                 return;
             }
+        }
+
+        // ── Cross-Shift Conflict Validation ──────────────────────────────────
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: existing.employeeId,
+            date: existing.date,
+            checkInTime: effectiveCheckIn,
+            checkOutTime: effectiveCheckOut,
+            excludeAttendanceId: recordId,
+        });
+
+        if (conflictReport.hasConflicts) {
+            res.status(409).json({
+                success: false,
+                message: conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+            return;
         }
 
         // ── HR users (or Admin acting as HR): create a pending adjustment (do NOT apply immediately) ──
@@ -1083,6 +1118,30 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
 
     if (!existing) {
       return res.status(400).json({ success: false, message: 'Attendance record no longer exists.' });
+    }
+
+    // ── Conflict check before applying approved adjustment ────────────
+    if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
+        const finalCheckIn = adjustment.requestedCheckIn ?? existing.checkInTime;
+        const finalCheckOut = adjustment.requestedCheckOut !== undefined
+            ? adjustment.requestedCheckOut
+            : existing.checkOutTime;
+
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: existing.employeeId,
+            date: existing.date,
+            checkInTime: finalCheckIn,
+            checkOutTime: finalCheckOut,
+            excludeAttendanceId: existing.id,
+        });
+
+        if (conflictReport.hasConflicts) {
+            return res.status(409).json({
+                success: false,
+                message: 'Cannot approve: ' + conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+        }
     }
 
     const isManualCreation = adjustment.originalCheckIn === null;

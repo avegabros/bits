@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/useToast'
 import { useTableSort } from '@/hooks/useTableSort'
 import { useAttendanceStream, AttendanceStreamPayload } from '@/features/attendance/hooks/useAttendanceStream'
 import { fmtHours, formatLate, fmtMins, toTimeInput } from '@/features/attendance/utils/attendance-formatters'
-import { AttendanceRecord } from '@/features/attendance/types'
+import { AttendanceRecord, AttendanceConflict } from '@/features/attendance/types'
 import * as XLSX from 'xlsx'
 
 interface RawAttendanceLog {
@@ -126,6 +126,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [editReason, setEditReason] = useState('')
   const [deletingLog, setDeletingLog] = useState<AttendanceRecord | null>(null)
   const [deleteReason, setDeleteReason] = useState('')
+  const [conflictErrors, setConflictErrors] = useState<AttendanceConflict[]>([])
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -604,6 +605,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     setEditCheckIn(toTimeInput(row.checkIn))
     setEditCheckOut(toTimeInput(row.checkOut))
     setEditReason('')
+    setConflictErrors([])
   }, [])
 
   const handleApplyChanges = useCallback(async (multiEdits?: any[]) => {
@@ -743,6 +745,12 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           body: JSON.stringify(body),
         })
         const data = await res.json()
+
+        if (res.status === 409 && data.conflicts) {
+          setConflictErrors(data.conflicts)
+          throw new Error(data.message || 'Attendance conflict detected')
+        }
+
         if (!data.success) {
           throw new Error(data.message || `Failed to update ${edit.shiftName || edit.shiftCode || 'record'}`)
         }
@@ -753,6 +761,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
 
       showToast('success', role === 'admin' ? 'Records Updated' : 'Adjustments Submitted',
         role === 'admin' ? 'Attendance records successfully updated!' : 'Adjustments submitted for admin approval!')
+      setConflictErrors([])
       setEditingLog(null)
       fetchRecords()
     } catch (e: unknown) {
@@ -904,6 +913,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     editReason, setEditReason,
     deletingLog, setDeletingLog,
     deleteReason, setDeleteReason,
+    conflictErrors,
     // Actions
     handleEditClick, handleApplyChanges, handleDeleteClick, handleDeleteSubmit, exportToCSV,
     // Toast

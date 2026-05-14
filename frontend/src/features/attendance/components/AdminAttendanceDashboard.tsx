@@ -31,6 +31,7 @@ function AdminAttendanceContent() {
     editReason, setEditReason,
     deletingLog, setDeletingLog,
     deleteReason, setDeleteReason,
+    conflictErrors,
     handleEditClick, handleApplyChanges, handleDeleteClick, handleDeleteSubmit, exportToCSV,
     toasts, dismissToast,
     getTodayDate,
@@ -171,6 +172,7 @@ function AdminAttendanceContent() {
         setEditReason={setEditReason}
         handleApplyChanges={handleApplyChanges}
         actionLoading={actionLoading}
+        conflictErrors={conflictErrors}
       />
 
       {deletingLog && (

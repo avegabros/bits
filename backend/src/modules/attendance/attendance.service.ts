@@ -17,3 +17,4 @@ export * from './attendance-processor';
 export * from './attendance-automation';
 export * from './attendance-queries';
 export * from './attendance.types';
+export * from './attendance-conflict.service';
