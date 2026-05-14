@@ -8,6 +8,9 @@ import {
     reconcileDevice,
     toggleDevice,
     streamDeviceStatus,
+    getDeviceQueueHealth,
+    drainDeviceQueues,
+    retryDeviceDeadLetters,
 } from './device.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
@@ -247,5 +250,47 @@ router.post('/unlock', (req, res) => {
  */
 import { syncBiometrics } from './device.controller';
 router.post('/sync-biometrics', syncBiometrics);
+
+/**
+ * @swagger
+ * /api/devices/queue/health:
+ *   get:
+ *     summary: Get overall health of the device synchronization queue
+ *     tags: [Devices]
+ */
+router.get('/queue/health', getDeviceQueueHealth);
+
+/**
+ * @swagger
+ * /api/devices/queue/drain:
+ *   post:
+ *     summary: Manually trigger a drain of all pending queue tasks
+ *     tags: [Devices]
+ */
+router.post('/queue/drain', drainDeviceQueues);
+
+/**
+ * @swagger
+ * /api/devices/queue/retry:
+ *   post:
+ *     summary: Reset all dead-letter tasks to pending status
+ *     tags: [Devices]
+ */
+router.post('/queue/retry', retryDeviceDeadLetters);
+
+/**
+ * @swagger
+ * /api/devices/queue/retry/{id}:
+ *   post:
+ *     summary: Reset dead-letter tasks for a specific device
+ *     tags: [Devices]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.post('/queue/retry/:id', retryDeviceDeadLetters);
 
 export default router;

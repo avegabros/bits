@@ -13,6 +13,12 @@ export interface ReconcileReport {
     deleted: { uid: number; userId: string; name: string }[]; // device-only → removed (or would be)
     protected: { uid: number; name: string }[];          // admin users skipped
     needsEnrollment: { zkId: number; name: string }[];  // users with 0 fingerprints
+    conflicts: {
+        type: 'UID_MISMATCH' | 'USERID_COLLISION';
+        zkId: number;
+        name: string;
+        details: string;
+    }[];
     errors: string[];
 }
 
@@ -25,6 +31,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
         deleted: [],
         protected: [],
         needsEnrollment: [],
+        conflicts: [],
         errors: [],
     };
 
@@ -124,10 +131,29 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
 
             if (PROTECTED_DEVICE_UIDS.includes(zkId)) continue;
 
-            // Check by trimmed visibleId first, then by UID as fallback.
-            // This prevents false "not on device" when the string has trailing spaces
-            // or the user was written with a different visibleId format.
-            const existsOnDevice = deviceByVisibleId.has(visibleId) || deviceByUid.has(zkId);
+            // 3. Conflict Detection (Identity Guard)
+            const dUserByVisibleId = deviceByVisibleId.get(visibleId);
+            const dUserByUid = deviceByUid.get(zkId);
+
+            if (dUserByVisibleId && dUserByVisibleId.uid !== zkId) {
+                report.conflicts.push({
+                    type: 'UID_MISMATCH',
+                    zkId,
+                    name: fullName,
+                    details: `User "${dUserByVisibleId.name}" has correct userId=${visibleId} but is at wrong internal UID=${dUserByVisibleId.uid} (expected ${zkId})`
+                });
+            }
+
+            if (dUserByUid && String(dUserByUid.userId).trim() !== visibleId) {
+                report.conflicts.push({
+                    type: 'USERID_COLLISION',
+                    zkId,
+                    name: fullName,
+                    details: `Target UID slot ${zkId} is occupied by user "${dUserByUid.name}" (userId=${dUserByUid.userId})`
+                });
+            }
+
+            const existsOnDevice = dUserByVisibleId || dUserByUid;
 
             const expectedCard = emp.EmployeeCardEnrollment.length > 0
                 ? (cardExclusions.has(emp.id) ? 0 : (emp.cardNumber || 0)) : 0;

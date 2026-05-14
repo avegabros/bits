@@ -82,7 +82,8 @@ export const enrollEmployeeFingerprint = async (
         const { findNextSafeZkId } = require('./zk-user.service');
         const release = await acquireRegistrationMutex();
         try {
-            currentZkId = await findNextSafeZkId();
+            const safeResult = await findNextSafeZkId();
+            currentZkId = safeResult.zkId;
             await prisma.employee.update({
                 where: { id: employeeId },
                 data: { zkId: currentZkId }

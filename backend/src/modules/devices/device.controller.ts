@@ -5,6 +5,7 @@ import { forceReleaseLock } from './zk';
 import deviceEmitter from '../../shared/events/deviceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, auditBatch, buildChanges } from '../../shared/lib/auditHelpers';
+import { getQueueHealth, drainAllPendingQueues, retryDeadLetterTasks } from './deviceSyncQueue.service';
 
 /** Unwrap node-zklib's ZKError: { err: Error, ip, command } → readable string */
 function zkErrMsg(err: unknown): string {
@@ -570,10 +571,15 @@ export const streamDeviceStatus = async (req: Request, res: Response): Promise<v
         );
     };
 
+    const onDeadLetter = (payload: any) => {
+        res.write(`event: dead-letter\ndata: ${JSON.stringify(payload)}\n\n`);
+    };
+
     deviceEmitter.on('status-change', onStatusChange);
     deviceEmitter.on('device-sync-result', onSyncResult);
     deviceEmitter.on('config-update', onConfigUpdate);
     deviceEmitter.on('enrollment-gap', onEnrollmentGap);
+    deviceEmitter.on('dead-letter', onDeadLetter);
 
     req.on('close', () => {
         clearInterval(heartbeatInterval);
@@ -581,6 +587,7 @@ export const streamDeviceStatus = async (req: Request, res: Response): Promise<v
         deviceEmitter.off('device-sync-result', onSyncResult);
         deviceEmitter.off('config-update', onConfigUpdate);
         deviceEmitter.off('enrollment-gap', onEnrollmentGap);
+        deviceEmitter.off('dead-letter', onDeadLetter);
         console.log(`[SSE] Client disconnected from device stream`);
     });
 
@@ -588,4 +595,32 @@ export const streamDeviceStatus = async (req: Request, res: Response): Promise<v
 };
 
 
+// ─── Queue Management ──────────────────────────────────────────────
 
+export const getDeviceQueueHealth = async (req: Request, res: Response) => {
+    try {
+        const report = await getQueueHealth();
+        res.json({ success: true, report });
+    } catch (error: unknown) {
+        res.status(500).json({ success: false, message: 'Failed to fetch queue health', error: zkErrMsg(error) });
+    }
+};
+
+export const drainDeviceQueues = async (req: Request, res: Response) => {
+    try {
+        const result = await drainAllPendingQueues();
+        res.json({ success: true, ...result });
+    } catch (error: unknown) {
+        res.status(500).json({ success: false, message: 'Failed to drain queues', error: zkErrMsg(error) });
+    }
+};
+
+export const retryDeviceDeadLetters = async (req: Request, res: Response) => {
+    try {
+        const deviceId = req.params.id ? parseInt(req.params.id as string) : undefined;
+        const count = await retryDeadLetterTasks(deviceId);
+        res.json({ success: true, count, message: `Reset ${count} dead-letter tasks to pending.` });
+    } catch (error: unknown) {
+        res.status(500).json({ success: false, message: 'Failed to retry dead-letters', error: zkErrMsg(error) });
+    }
+};

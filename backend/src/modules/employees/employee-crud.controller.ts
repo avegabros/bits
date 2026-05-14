@@ -498,7 +498,8 @@ export const createEmployee = async (req: Request, res: Response) => {
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
         try {
-            const nextZkId = await findNextSafeZkId();
+            const safeResult = await findNextSafeZkId();
+            const nextZkId = safeResult.zkId;
 
             newEmployee = await prisma.$transaction(async (tx) => {
                 const emp = await tx.employee.create({

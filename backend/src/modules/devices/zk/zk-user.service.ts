@@ -6,9 +6,15 @@ export const PROTECTED_DEVICE_UIDS = [1];
 const MIN_EMPLOYEE_ZK_ID = 2;
 
 interface SyncResult { success: boolean; message?: string; error?: string; newLogs?: number; count?: number; results?: Record<string, unknown>[]; }
+export interface SafeZkIdResult {
+    zkId: number;
+    scannedDeviceCount: number;
+    unreachableDevices: string[];
+    totalUsedIds: number;
+}
 
 
-export const findNextSafeZkId = async (): Promise<number> => {
+export const findNextSafeZkId = async (): Promise<SafeZkIdResult> => {
     // 1. Collect zkIds from DB.
     const dbEmployees = await prisma.employee.findMany({
         where: { zkId: { not: null } },
@@ -20,27 +26,45 @@ export const findNextSafeZkId = async (): Promise<number> => {
         ...PROTECTED_DEVICE_UIDS,
     ]);
 
-    // 2. Collect UIDs used on active devices.
+    // 2. Collect IDs used on active devices (both UID and userId).
     const activeDevices = await prisma.device.findMany({
-        where: { isActive: true },
+        where: { isActive: true, syncEnabled: true },
         orderBy: { id: 'asc' },
     });
+
+    const unreachableDevices: string[] = [];
 
     for (const dbDevice of activeDevices) {
         const zk = getDriver(dbDevice.ip, dbDevice.port);
         try {
             await connectWithRetry(zk, 1);
             const deviceUsers = await zk.getUsers();
-            // node-zklib does not export its user type, so 'any' is required here
+            
             deviceUsers.forEach((u) => {
+                // Scan both internal UID and external userId
                 if (typeof u.uid === 'number') usedIds.add(u.uid);
+                
+                const parsedUserId = parseInt(String(u.userId));
+                if (!isNaN(parsedUserId) && parsedUserId > 0) {
+                    usedIds.add(parsedUserId);
+                }
             });
-            console.log(`[ZK] findNextSafeZkId — scanned ${deviceUsers.length} UIDs from "${dbDevice.name}".`);
+            
+            console.log(`[ZK] findNextSafeZkId — scanned ${deviceUsers.length} users from "${dbDevice.name}".`);
         } catch (err: unknown) {
+            unreachableDevices.push(dbDevice.name);
             console.warn(`[ZK] findNextSafeZkId — could not reach "${dbDevice.name}" (${zkErrMsg(err)}).`);
         } finally {
-            try { await zk.disconnect(); } catch { /* ignore disconnect errors */ }
+            try { await zk.disconnect(); } catch { /* ignore */ }
         }
+    }
+
+    // FAIL-SAFE: Refuse assignment if any sync-enabled device was unreachable
+    if (unreachableDevices.length > 0) {
+        throw new Error(
+            `Cannot safely assign ZKID — ${unreachableDevices.length} device(s) unreachable: ${unreachableDevices.join(', ')}. ` +
+            `All sync-enabled devices must be online to guarantee ZKID uniqueness.`
+        );
     }
 
     // 3. Find first available candidate.
@@ -49,8 +73,22 @@ export const findNextSafeZkId = async (): Promise<number> => {
         candidate++;
     }
 
-    console.log(`[ZK] findNextSafeZkId — assigned zkId=${candidate} (checked ${usedIds.size} used IDs across DB + devices).`);
-    return candidate;
+    const { audit } = require('../../../shared/lib/auditLogger');
+    void audit({
+        action: 'ZKID_ASSIGNED',
+        level: 'INFO',
+        entityType: 'System',
+        source: 'device-sync',
+        details: `Assigned zkId=${candidate} (scanned ${usedIds.size} IDs across ${activeDevices.length} devices)`,
+        metadata: { zkId: candidate, scannedDevices: activeDevices.length, totalUsedIds: usedIds.size }
+    });
+
+    return {
+        zkId: candidate,
+        scannedDeviceCount: activeDevices.length,
+        unreachableDevices: [],
+        totalUsedIds: usedIds.size,
+    };
 };
 
 export async function triggerAutoReconcile(deviceId: number, deviceName: string): Promise<void> {

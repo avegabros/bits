@@ -25,65 +25,74 @@ export const enrollEmployeeCard = async (
         return { success: false, message: `Employee ${employeeId} not found in database.` };
     }
 
+    const fullName = `${employee.firstName} ${employee.lastName}`;
+
     let currentZkId = employee.zkId;
     let employeeUpdates: any = { cardNumber, updatedAt: new Date() };
 
-    if (!currentZkId) {
-        console.log(`[CardEnroll] Assigning new zkId for STAGED employee ${employeeId}...`);
-        const release = await acquireRegistrationMutex();
-        try {
-            currentZkId = await findNextSafeZkId();
+    const release = await acquireRegistrationMutex();
+    try {
+        if (!currentZkId) {
+            console.log(`[CardEnroll] Assigning new zkId for STAGED employee ${employeeId}...`);
+            const safeResult = await findNextSafeZkId();
+            currentZkId = safeResult.zkId;
             employeeUpdates.zkId = currentZkId;
-        } finally {
-            release();
         }
-    }
 
-    if (employee.employmentStatus === 'STAGED') {
-        const { generateRandomPassword } = require('../../../shared/utils/password.utils');
-        const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
-        const bcrypt = require('bcrypt');
+        if (employee.employmentStatus === 'STAGED') {
+            const { generateRandomPassword } = require('../../../shared/utils/password.utils');
+            const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
+            const bcrypt = require('bcrypt');
 
-        const newPassword = generateRandomPassword(10);
-        employeeUpdates.password = await bcrypt.hash(newPassword, 10);
-        employeeUpdates.employmentStatus = 'ACTIVE';
-        console.log(`[CardEnroll] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
+            const newPassword = generateRandomPassword(10);
+            employeeUpdates.password = await bcrypt.hash(newPassword, 10);
+            employeeUpdates.employmentStatus = 'ACTIVE';
+            console.log(`[CardEnroll] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
 
-        if (employee.email) {
-            setImmediate(async () => {
-                try {
-                    await sendWelcomeEmail(employee.email, fullName, newPassword);
-                } catch (emailErr) {
-                    console.error(`[CardEnroll] Failed to send welcome email to ${employee.email}`, emailErr);
-                }
-            });
+            if (employee.email) {
+                setImmediate(async () => {
+                    try {
+                        await sendWelcomeEmail(employee.email, fullName, newPassword);
+                    } catch (emailErr) {
+                        console.error(`[CardEnroll] Failed to send welcome email to ${employee.email}`, emailErr);
+                    }
+                });
+            }
         }
+
+        // 2. Validate card number uniqueness
+        const existingHolder = await prisma.employee.findUnique({
+            where: { cardNumber },
+            select: { id: true, firstName: true, lastName: true },
+        });
+
+        if (existingHolder && existingHolder.id !== employeeId) {
+            return {
+                success: false,
+                message: `Card #${cardNumber} is already assigned to ${existingHolder.firstName} ${existingHolder.lastName}.`,
+                error: 'duplicate_card',
+            };
+        }
+
+        // 3. Persist to DB FIRST.
+        await prisma.employee.update({
+            where: { id: employeeId },
+            data: employeeUpdates,
+        });
+
+    } finally {
+        release();
     }
 
-    // 2. Validate card number uniqueness
-    const existingHolder = await prisma.employee.findUnique({
-        where: { cardNumber },
-        select: { id: true, firstName: true, lastName: true },
-    });
-
-    if (existingHolder && existingHolder.id !== employeeId) {
-        return {
-            success: false,
-            message: `Card #${cardNumber} is already assigned to ${existingHolder.firstName} ${existingHolder.lastName}.`,
-            error: 'duplicate_card',
-        };
-    }
-
-    // 1. Queue update for target device or globally.
-    const fullName = `${employee.firstName} ${employee.lastName}`;
+    // 4. Queue update for target device or globally SECOND.
     const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
-    const { enqueueGlobalUpsertUser, enqueueUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
+    const { enqueueUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
     const { getExcludedDeviceIds } = require('../biometric-exclusion.service');
 
     try {
         if (targetDeviceId) {
             await enqueueUpsertUser(targetDeviceId, {
-                zkId: currentZkId,
+                zkId: currentZkId!,
                 name: fullName,
                 role: deviceRole,
                 card: cardNumber
@@ -101,7 +110,7 @@ export const enrollEmployeeCard = async (
             for (const dev of devices) {
                 const effectiveCard = cardExclusions.has(dev.id) ? 0 : cardNumber;
                 await enqueueUpsertUser(dev.id, {
-                    zkId: currentZkId,
+                    zkId: currentZkId!,
                     name: fullName,
                     role: deviceRole,
                     card: effectiveCard
@@ -118,12 +127,6 @@ export const enrollEmployeeCard = async (
                 }
             });
         }
-
-        // 2. Persist to DB.
-        await prisma.employee.update({
-            where: { id: employeeId },
-            data: employeeUpdates,
-        });
 
         return {
             success: true,

@@ -3,6 +3,7 @@ import { syncZkData, SyncZkDataResult } from '../devices/zk';
 import { audit } from '../../shared/lib/auditLogger';
 import { isCurrentlyInPeakWindow } from '../shifts/shiftUtils';
 import { processAttendanceLogs } from '../attendance/attendance.service';
+import { drainAllPendingQueues } from '../devices/deviceSyncQueue.service';
 
 /** Returns a formatted timestamp string for console logging (e.g. "11:15:30") */
 function ts(): string {
@@ -130,6 +131,12 @@ class SyncScheduler {
             if (orphanedCount > 0) {
                 console.warn(`[${ts()}] [SyncScheduler] Safety Net: Found ${orphanedCount} orphaned logs older than 5 minutes. Triggering recovery...`);
                 await processAttendanceLogs();
+            }
+
+            // Automated Queue Drain
+            const drainResult = await drainAllPendingQueues();
+            if (drainResult.devicesProcessed > 0) {
+                console.log(`[${ts()}] [SyncScheduler] Auto-drain: Attempted sync for ${drainResult.devicesProcessed} device(s) with pending tasks.`);
             }
         } catch (err) {
             console.error(`[${ts()}] [SyncScheduler] Orphan recovery check failed:`, err);
