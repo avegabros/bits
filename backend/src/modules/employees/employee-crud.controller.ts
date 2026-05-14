@@ -28,45 +28,11 @@ async function validateShiftGap(shiftIds: number[]): Promise<string | null> {
 
     const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
-    /** Build time intervals on a 1440-minute timeline. Night shifts split across midnight. */
-    const getIntervals = (shift: typeof orderedShifts[0]): number[][] => {
-        if (!shift) return [];
-        const s = toMins(shift.startTime);
-        const e = toMins(shift.endTime);
-        if (e > s) return [[s, e]];        // Normal shift
-        return [[s, 1440], [0, e]];         // Night shift wraps past midnight
+    const WEEK_MINS = 7 * 1440;
+    const DAY_MAP: Record<string, number> = {
+        'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5, 'Sun': 6
     };
-
-    /** Check if any interval from set A overlaps with any interval from set B */
-    const intervalsOverlap = (a: number[][], b: number[][]): boolean => {
-        for (const [a1, a2] of a) {
-            for (const [b1, b2] of b) {
-                if (a1 < b2 && b1 < a2) return true;
-            }
-        }
-        return false;
-    };
-
-    /** Find minimum gap between the nearest edges of two interval sets (circular 24h) */
-    const getMinGap = (a: number[][], b: number[][]): number => {
-        let minDistance = Infinity;
-        // Check gap from every end-of-A to every start-of-B, and vice versa
-        for (const [, a2] of a) {
-            for (const [b1] of b) {
-                let gap = b1 - a2;
-                if (gap < 0) gap += 1440;
-                minDistance = Math.min(minDistance, gap);
-            }
-        }
-        for (const [, b2] of b) {
-            for (const [a1] of a) {
-                let gap = a1 - b2;
-                if (gap < 0) gap += 1440;
-                minDistance = Math.min(minDistance, gap);
-            }
-        }
-        return minDistance;
-    };
+    const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     /** Safely parse a shift's workDays JSON field */
     const getWorkDays = (shift: typeof orderedShifts[0]): string[] => {
@@ -74,32 +40,100 @@ async function validateShiftGap(shiftIds: number[]): Promise<string | null> {
         try { return JSON.parse(shift.workDays || '[]'); } catch { return []; }
     };
 
-    // Check every pair of shifts for conflicts on shared days
+    /** Build time intervals on a weekly 10080-minute timeline. */
+    const getBaseIntervals = (shift: typeof orderedShifts[0]): { start: number, end: number }[] => {
+        if (!shift) return [];
+        const days = getWorkDays(shift);
+        const s = toMins(shift.startTime);
+        const e = toMins(shift.endTime);
+        const duration = e > s ? e - s : 1440 - s + e; // Handles overnight shifts
+
+        const intervals: { start: number, end: number }[] = [];
+        
+        for (const day of days) {
+            const dayIdx = DAY_MAP[day];
+            if (dayIdx === undefined) continue;
+            
+            const start = dayIdx * 1440 + s;
+            const end = start + duration;
+            intervals.push({ start, end });
+        }
+        return intervals;
+    };
+
+    /** Expand intervals by -1, 0, and +1 week to safely calculate circular gaps & overlaps */
+    const getExpandedIntervals = (intervals: { start: number, end: number }[]) => {
+        const expanded: { start: number, end: number }[] = [];
+        for (const offset of [-WEEK_MINS, 0, WEEK_MINS]) {
+            for (const inv of intervals) {
+                expanded.push({ start: inv.start + offset, end: inv.end + offset });
+            }
+        }
+        return expanded;
+    };
+
+    const getDayName = (mins: number) => {
+        const normalized = ((mins % WEEK_MINS) + WEEK_MINS) % WEEK_MINS;
+        return DAY_NAMES[Math.floor(normalized / 1440) % 7];
+    };
+
+    // Check every pair of shifts for conflicts across the entire week
     for (let i = 0; i < orderedShifts.length; i++) {
         for (let j = i + 1; j < orderedShifts.length; j++) {
             const a = orderedShifts[i];
             const b = orderedShifts[j];
             if (!a || !b) continue;
 
-            const daysA = getWorkDays(a);
-            const daysB = getWorkDays(b);
-            const commonDays = daysA.filter(d => daysB.includes(d));
+            const baseA = getBaseIntervals(a);
+            const baseB = getBaseIntervals(b);
+            const expandedA = getExpandedIntervals(baseA);
+            const expandedB = getExpandedIntervals(baseB);
 
-            // No overlapping work days → shifts can't conflict, skip this pair
-            if (commonDays.length === 0) continue;
+            // 1. Overlap Check (Base A vs Expanded B)
+            let hasOverlap = false;
+            let overlapDayA = '';
+            let overlapDayB = '';
 
-            const intervalsA = getIntervals(a);
-            const intervalsB = getIntervals(b);
-
-            // Block: time ranges overlap on shared days
-            if (intervalsOverlap(intervalsA, intervalsB)) {
-                return `Shifts "${a.name}" and "${b.name}" have overlapping times on ${commonDays.join(', ')}`;
+            for (const intA of baseA) {
+                for (const intB of expandedB) {
+                    if (intA.start < intB.end && intB.start < intA.end) {
+                        hasOverlap = true;
+                        overlapDayA = getDayName(intA.start);
+                        overlapDayB = getDayName(intB.start);
+                        break;
+                    }
+                }
+                if (hasOverlap) break;
             }
 
-            // Block: gap between shifts is less than configured minimum on shared days
-            const gap = getMinGap(intervalsA, intervalsB);
-            if (gap < minGap) {
-                return `Minimum gap of ${minGap} minutes between "${a.name}" and "${b.name}" not met on ${commonDays.join(', ')} (gap: ${gap} mins)`;
+            if (hasOverlap) {
+                const dayStr = overlapDayA === overlapDayB ? overlapDayA : `${overlapDayA}/${overlapDayB}`;
+                return `Shifts "${a.name}" and "${b.name}" have overlapping times near ${dayStr}`;
+            }
+
+            // 2. Minimum Gap Check
+            let minGapFound = Infinity;
+            
+            // Gap A -> B (End of A to Start of B)
+            for (const intA of baseA) {
+                for (const intB of expandedB) {
+                    if (intB.start >= intA.end) {
+                        minGapFound = Math.min(minGapFound, intB.start - intA.end);
+                    }
+                }
+            }
+
+            // Gap B -> A (End of B to Start of A)
+            for (const intB of baseB) {
+                for (const intA of expandedA) {
+                    if (intA.start >= intB.end) {
+                        minGapFound = Math.min(minGapFound, intA.start - intB.end);
+                    }
+                }
+            }
+
+            if (minGapFound < minGap) {
+                return `Minimum gap of ${minGap} minutes between "${a.name}" and "${b.name}" not met (gap: ${minGapFound} mins)`;
             }
         }
     }
