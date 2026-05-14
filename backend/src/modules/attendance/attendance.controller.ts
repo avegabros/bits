@@ -230,15 +230,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             }
         }
 
-        // Check if an attendance record already exists for this date to prevent duplicates
         const recordDate = toPHTDate(new Date(`${date}T00:00:00+08:00`));
-        const existingRecord = await prisma.attendance.findFirst({
-            where: { employeeId: Number(employeeId), date: recordDate }
-        });
-
-        if (existingRecord) {
-             return res.status(400).json({ success: false, message: `An attendance record already exists for this date. (ID: ${existingRecord.id})` });
-        }
 
         const employee = await prisma.employee.findUnique({
              where: { id: Number(employeeId) },
@@ -250,6 +242,15 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         const { shift: resolvedShift } = await resolveShiftForTimestamp(Number(employeeId), effectiveCheckIn, recordDate);
+
+        // Check if an attendance record already exists for this date and shift to prevent duplicates
+        const existingRecord = await prisma.attendance.findFirst({
+            where: { employeeId: Number(employeeId), date: recordDate, shiftId: resolvedShift?.id ?? null }
+        });
+
+        if (existingRecord) {
+             return res.status(400).json({ success: false, message: `An attendance record already exists for this date${resolvedShift ? ` and shift (${resolvedShift.name})` : ''}. (ID: ${existingRecord.id})` });
+        }
 
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
