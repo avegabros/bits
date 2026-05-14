@@ -10,6 +10,7 @@ import type { Shift } from '../types'
 import { ShiftStatsCards } from './ShiftStatsCards'
 import { ShiftDeleteModal } from './ShiftDeleteModal'
 import { ShiftFormModal } from './ShiftFormModal'
+import { ShiftConflictModal } from './ShiftConflictModal'
 import { ShiftTable } from './ShiftTable'
 
 interface ShiftsPageProps {
@@ -52,6 +53,13 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
         shiftTimingError={s.shiftTimingError}
         onClose={() => s.setIsFormOpen(false)}
         onSubmit={s.handleSubmit}
+      />
+
+      {/* Shift Conflict Modal */}
+      <ShiftConflictModal
+        isOpen={s.showConflictModal}
+        report={s.conflictReport}
+        onClose={() => s.setShowConflictModal(false)}
       />
 
       {/* Page Header */}

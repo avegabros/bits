@@ -7,6 +7,7 @@ import {
     deleteShift,
     toggleShift,
     getNextEmployeeNumber,
+    validateShiftEdit,
 } from './shift.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
@@ -70,6 +71,17 @@ router.post('/', adminManagerOrHR, createShift);
  *       - bearerAuth: []
  */
 router.put('/:id', adminManagerOrHR, updateShift);
+
+/**
+ * @swagger
+ * /api/shifts/{id}/validate-edit:
+ *   post:
+ *     summary: Validate if a shift edit causes conflicts
+ *     tags: [Shifts]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/:id/validate-edit', adminManagerOrHR, validateShiftEdit);
 
 /**
  * @swagger

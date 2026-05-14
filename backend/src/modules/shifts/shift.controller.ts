@@ -3,7 +3,7 @@ import { prisma } from '../../shared/lib/prisma';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, buildChanges } from '../../shared/lib/auditHelpers';
 import { validateShiftTimes } from './shiftUtils';
-
+import { validateShiftEditConflicts } from './shift-conflict.service';
 const FIELD_NAMES: Record<string, string> = {
     shiftCode: 'Shift Code',
     name: 'Name',
@@ -204,6 +204,39 @@ export const createShift = async (req: Request, res: Response) => {
     }
 };
 
+// POST /api/shifts/:id/validate-edit
+export const validateShiftEdit = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(String(req.params.id), 10);
+        if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid shift ID' });
+
+        const existing = await prisma.shift.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ success: false, message: 'Shift not found' });
+
+        const { startTime, endTime, isNightShift, workDays } = req.body;
+        const effectiveStart = startTime || existing.startTime;
+        const effectiveEnd = endTime || existing.endTime;
+        const effectiveIsNight = isNightShift !== undefined ? (isNightShift === true || isNightShift === 'true') : existing.isNightShift;
+        
+        const effectiveWorkDays = (() => {
+            if (workDays !== undefined) return Array.isArray(workDays) ? workDays : JSON.parse(workDays);
+            try { return JSON.parse(existing.workDays); } catch { return []; }
+        })();
+
+        const conflictReport = await validateShiftEditConflicts(id, {
+            startTime: effectiveStart,
+            endTime: effectiveEnd,
+            isNightShift: effectiveIsNight,
+            workDays: effectiveWorkDays
+        });
+
+        res.json({ success: true, ...conflictReport });
+    } catch (error: unknown) {
+        console.error('Error validating shift edit:', error);
+        res.status(500).json({ success: false, message: 'Failed to validate shift edit' });
+    }
+};
+
 // PUT /api/shifts/:id - Update a shift
 export const updateShift = async (req: Request, res: Response) => {
     try {
@@ -298,6 +331,27 @@ export const updateShift = async (req: Request, res: Response) => {
         if (name && name.trim() !== existing.name) {
             const dup = await prisma.shift.findFirst({ where: { name: name.trim() } });
             if (dup) return res.status(409).json({ success: false, message: 'Shift name already in use' });
+        }
+
+        const effectiveWorkDays = (() => {
+            if (workDays !== undefined) return Array.isArray(workDays) ? workDays : JSON.parse(workDays);
+            try { return JSON.parse(existing.workDays); } catch { return []; }
+        })();
+
+        const conflictReport = await validateShiftEditConflicts(id, {
+            startTime: effectiveStart,
+            endTime: effectiveEnd,
+            isNightShift: effectiveIsNight,
+            workDays: effectiveWorkDays
+        });
+
+        if (conflictReport.hasConflicts) {
+            return res.status(409).json({
+                success: false,
+                message: 'Shift update blocked due to scheduling conflicts with assigned employees.',
+                conflicts: conflictReport.conflicts,
+                affectedEmployeeCount: conflictReport.affectedEmployeeCount,
+            });
         }
 
         const updateData: Record<string, unknown> = {

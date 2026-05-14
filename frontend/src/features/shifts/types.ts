@@ -36,3 +36,20 @@ export const emptyForm = {
 }
 
 export type ShiftFormData = typeof emptyForm
+
+export interface EmployeeConflict {
+  employeeId: number
+  employeeName: string
+  conflictingShiftName: string
+  conflictingShiftTime: string
+  editedShiftTime: string
+  reason: string
+  commonDays: string[]
+}
+
+export interface ShiftConflictReport {
+  hasConflicts: boolean
+  conflicts: EmployeeConflict[]
+  affectedEmployeeCount: number
+  hasAttendanceRecords: boolean
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/useToast'
-import type { Shift, ShiftFormData } from '../types'
+import type { Shift, ShiftFormData, ShiftConflictReport } from '../types'
 import { emptyForm } from '../types'
 import { toMinutes, validateShiftConfig } from '../utils/shift-formatters'
 
@@ -21,6 +21,9 @@ export function useShifts() {
 
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const [conflictReport, setConflictReport] = useState<ShiftConflictReport | null>(null)
+  const [showConflictModal, setShowConflictModal] = useState(false)
 
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 10
@@ -142,6 +145,22 @@ export function useShifts() {
         breakMinutes: calculatedBreakMinutes
       }
 
+      if (editingShift) {
+        const valRes = await fetch(`/api/shifts/${editingShift.id}/validate-edit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        })
+        const valData = await valRes.json()
+        if (valData.success && valData.hasConflicts) {
+          setConflictReport(valData)
+          setShowConflictModal(true)
+          setFormLoading(false)
+          return
+        }
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -189,6 +208,7 @@ export function useShifts() {
     isFormOpen, setIsFormOpen, editingShift,
     form, setForm, formLoading, formError, setFormError,
     hasInvalidBreaks, shiftTimingError,
+    conflictReport, showConflictModal, setShowConflictModal,
     // Delete
     deleteTarget, setDeleteTarget, deleteLoading,
     // Pagination
