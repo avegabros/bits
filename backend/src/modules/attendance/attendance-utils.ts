@@ -43,3 +43,14 @@ export function formatToPhilippineTime(utcDate: Date): string {
         hour12: true
     });
 }
+
+/**
+ * Normalizes a Date to minute precision by zeroing out seconds and milliseconds.
+ * This ensures biometric punches (08:59:59) and manual edits (08:59:00) 
+ * behave identically in all attendance calculations.
+ */
+export function normalizeTime(date: Date): Date {
+    const normalized = new Date(date);
+    normalized.setUTCSeconds(0, 0);
+    return normalized;
+}

@@ -3,7 +3,7 @@ import { Shift } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
-import { toPHTDate, formatToPhilippineTime } from './attendance-utils';
+import { toPHTDate, formatToPhilippineTime, normalizeTime } from './attendance-utils';
 import { calculateAttendanceMetrics, calculateAttendanceStatus } from './attendance-calculator';
 import { ProcessResult } from './attendance.types';
 
@@ -13,6 +13,8 @@ export async function resolveShiftForTimestamp(
     dateOnly: Date,
     fallbackEmployeeShift?: Shift | null
 ): Promise<{ shift: Shift | null; isNewCheckin: boolean }> {
+    const normalizedTimestamp = normalizeTime(timestamp);
+
     const assignments = await prisma.employeeShift.findMany({
         where: { employeeId },
         include: { shift: true },
@@ -42,7 +44,7 @@ export async function resolveShiftForTimestamp(
     const bufferMs = bufferMins * 60 * 1000;
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const phtTimestamp = new Date(timestamp.getTime() + 8 * 60 * 60 * 1000);
+    const phtTimestamp = new Date(normalizedTimestamp.getTime() + 8 * 60 * 60 * 1000);
     const currentDayName = dayNames[phtTimestamp.getUTCDay()];
 
     const getWorkDays = (shift: Shift): string[] => {
@@ -76,10 +78,10 @@ export async function resolveShiftForTimestamp(
             const windowStart = new Date(shiftStart.getTime() - bufferMs);
             const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
 
-            const distToStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
-            const distToEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+            const distToStart = Math.abs(normalizedTimestamp.getTime() - shiftStart.getTime());
+            const distToEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
 
-            if (timestamp >= windowStart && timestamp <= windowEnd) {
+            if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
                 if (needsCheckIn || needsCheckOut) {
                     windowMatches.push({ shift, needsCheckIn, needsCheckOut: !!needsCheckOut, distToStart, distToEnd });
                 }
@@ -147,8 +149,8 @@ export async function resolveShiftForTimestamp(
             shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
         }
 
-        const distStart = Math.abs(timestamp.getTime() - shiftStart.getTime());
-        const distEnd = Math.abs(timestamp.getTime() - shiftEnd.getTime());
+        const distStart = Math.abs(normalizedTimestamp.getTime() - shiftStart.getTime());
+        const distEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
         const minDist = Math.min(distStart, distEnd);
 
         if (minDist < minDistance) {

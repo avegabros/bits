@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { ATTENDANCE_LIMITS } from '../system/system.constants';
-import { getTodayPHT } from './attendance-utils';
+import { getTodayPHT, normalizeTime } from './attendance-utils';
 import { BasicAttendanceRecord } from './attendance.types';
 
 /**
@@ -21,8 +21,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
 
     if (!shift) {
         // No shift assigned – fall back to a generic 8-hour day
-        const checkIn = new Date(record.checkInTime);
-        const checkOut = record.checkOutTime ? new Date(record.checkOutTime) : null;
+        const checkIn = normalizeTime(new Date(record.checkInTime));
+        const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
         const totalMs = checkOut ? checkOut.getTime() - checkIn.getTime() : 0;
         const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
         const expectedHours = ATTENDANCE_LIMITS.DEFAULT_EXPECTED_HOURS;
@@ -126,8 +126,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
     // Full expected shift duration (minutes), without break
     const fullShiftMins = (expectedEnd.getTime() - expectedStart.getTime()) / (1000 * 60);
 
-    const checkIn = new Date(record.checkInTime);
-    const checkOut = record.checkOutTime ? new Date(record.checkOutTime) : null;
+    const checkIn = normalizeTime(new Date(record.checkInTime));
+    const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
 
     // Build the effective break windows for overlap calculation.
     let effectiveBreaks = explicitBreaks;
@@ -246,7 +246,12 @@ export function calculateAttendanceStatus(
     date: Date,
     shift: Prisma.ShiftGetPayload<{}> | null
 ): string {
-    const record = { date, checkInTime, checkOutTime, status: 'present' };
+    const record = { 
+        date, 
+        checkInTime: normalizeTime(checkInTime), 
+        checkOutTime: checkOutTime ? normalizeTime(checkOutTime) : null, 
+        status: 'present' 
+    };
     const metrics = calculateAttendanceMetrics(record as any, shift);
     
     if (!checkOutTime) return 'incomplete';
