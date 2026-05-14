@@ -1,7 +1,8 @@
 'use client';
 
 import React, { Suspense } from 'react';
-import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle } from 'lucide-react';
+import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle, Clock } from 'lucide-react';
+import Link from 'next/link';
 import { useAttendanceDashboard } from '@/features/attendance/hooks/useAttendanceDashboard';
 import { AttendanceStats } from './AttendanceStats';
 import { AttendanceFilters } from './AttendanceFilters';
@@ -75,6 +76,12 @@ function ManagerAttendanceContent() {
           >
             <Download className="w-4 h-4" /> Export
           </button>
+          <Link
+            href="/manager/overtime?tab=pending"
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+          >
+            <Clock className="w-4 h-4" /> Manage OT
+          </Link>
         </div>
       </div>
 

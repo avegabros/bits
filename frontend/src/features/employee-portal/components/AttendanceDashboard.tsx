@@ -3,6 +3,8 @@ import { CalendarDays, Filter, Clock } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { useEmployeeAttendance } from '../hooks/useEmployeeAttendance'
+import { OvertimeRequestModal } from './OvertimeRequestModal'
+import { useAuth } from '@/hooks/useAuth'
 
 export function AttendanceDashboard() {
   const {
@@ -18,6 +20,9 @@ export function AttendanceDashboard() {
     handleApplyFilter,
     paginatedRecords
   } = useEmployeeAttendance()
+
+  const { employee } = useAuth()
+  const [isOTModalOpen, setIsOTModalOpen] = useState(false)
 
   // ── Shift filter (Employee Portal) ────────────────────────────────────────
   // Employees only see their own shifts — no "All Shifts" option.
@@ -87,6 +92,15 @@ export function AttendanceDashboard() {
             <CalendarDays className="w-6 h-6 text-red-600" /> My Attendance
           </h1>
           <p className="text-slate-500 text-sm mt-1">View your personal attendance history</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setIsOTModalOpen(true)}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98]"
+          >
+            <Clock className="w-4 h-4" /> Request OT
+          </button>
         </div>
 
         {/* Date Filter + Shift Selector */}
@@ -245,6 +259,14 @@ export function AttendanceDashboard() {
         entityName="records"
         loading={loading}
       />
+
+      {employee?.id && (
+        <OvertimeRequestModal 
+          isOpen={isOTModalOpen} 
+          onClose={() => setIsOTModalOpen(false)} 
+          employeeId={employee.id} 
+        />
+      )}
     </div>
   )
 }

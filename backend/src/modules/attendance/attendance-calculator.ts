@@ -8,7 +8,7 @@ import { BasicAttendanceRecord } from './attendance.types';
  * All times are stored as UTC where PHT midnight = UTC midnight offset by -8h
  * i.e. a stored timestamp of 2026-02-10T00:00:00Z represents 2026-02-10T08:00:00+08:00 PHT midnight workaround
  */
-export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift: Prisma.ShiftGetPayload<{}> | null) {
+export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift: Prisma.ShiftGetPayload<{}> | null, approvedOts?: { startTime: string, endTime: string }[]) {
     const shiftCode = shift?.shiftCode ?? null;
 
     if (!record.checkInTime) {
@@ -20,14 +20,34 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
     }
 
     if (!shift) {
-        // No shift assigned – fall back to a generic 8-hour day
+        // No shift assigned – mostly OT-only logic or generic fallbacks
         const checkIn = new Date(record.checkInTime);
         const checkOut = record.checkOutTime ? new Date(record.checkOutTime) : null;
         const totalMs = checkOut ? checkOut.getTime() - checkIn.getTime() : 0;
         const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
-        const expectedHours = ATTENDANCE_LIMITS.DEFAULT_EXPECTED_HOURS;
-        const overtime = Math.max(0, totalHours - expectedHours);
-        const undertime = totalHours > 0 ? Math.max(0, expectedHours - totalHours) : 0;
+        
+        let overtimeMinutes = 0;
+        if (checkOut && approvedOts && approvedOts.length > 0) {
+            const dateMs = new Date(record.date).getTime() + 8 * 60 * 60 * 1000;
+            approvedOts.forEach(ot => {
+                const [otStartH, otStartM] = ot.startTime.split(':').map(Number);
+                const [otEndH, otEndM] = ot.endTime.split(':').map(Number);
+
+                const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                if (otEndMs <= otStartMs) otEndMs += 24 * 60 * 60 * 1000;
+
+                const overlapStart = Math.max(checkIn.getTime(), otStartMs);
+                const overlapEnd = Math.min(checkOut.getTime(), otEndMs);
+
+                if (overlapEnd > overlapStart) {
+                    overtimeMinutes += (overlapEnd - overlapStart) / 60000;
+                }
+            });
+            overtimeMinutes = parseFloat((overtimeMinutes / 60).toFixed(1));
+        }
+
+        const undertimeMinutes = 0;
 
         // Late: after default shift start PHT
         const checkInPHT = new Date(checkIn.getTime() + 8 * 60 * 60 * 1000);
@@ -48,8 +68,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         return { 
             shiftCode: null, 
             lateMinutes, 
-            overtimeMinutes: parseFloat((overtime * 60).toFixed(1)), 
-            undertimeMinutes: parseFloat((undertime * 60).toFixed(1)), 
+            overtimeMinutes, 
+            undertimeMinutes, 
             totalHours, 
             isAnomaly, 
             isEarlyOut: false,
@@ -205,11 +225,35 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         }
         undertimeMinutes = Math.floor(missingMins);
 
-        // Overtime: employee stayed beyond expected end
-        const actualEndMs = checkOut.getTime();
-        const expectedEndMs = expectedEnd.getTime();
-        const otMs = Math.max(0, actualEndMs - expectedEndMs);
-        overtimeMinutes = parseFloat((otMs / (1000 * 60)).toFixed(1));
+        // Overtime: ONLY calculate if there are approved OT requests
+        overtimeMinutes = 0;
+        if (approvedOts && approvedOts.length > 0) {
+            const dateMs = new Date(record.date).getTime() + 8 * 60 * 60 * 1000;
+            approvedOts.forEach(ot => {
+                const [otStartH, otStartM] = ot.startTime.split(':').map(Number);
+                const [otEndH, otEndM] = ot.endTime.split(':').map(Number);
+
+                const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                
+                // If OT wraps past midnight
+                if (otEndMs <= otStartMs) {
+                    otEndMs += 24 * 60 * 60 * 1000;
+                }
+
+                // Intersection of actual presence [checkIn, checkOut] and approved OT [otStart, otEnd]
+                const actualCheckIn = new Date(record.checkInTime).getTime();
+                const actualCheckOut = checkOut.getTime();
+
+                const overlapStart = Math.max(actualCheckIn, otStartMs);
+                const overlapEnd = Math.min(actualCheckOut, otEndMs);
+
+                if (overlapEnd > overlapStart) {
+                    overtimeMinutes += (overlapEnd - overlapStart) / 60000;
+                }
+            });
+            overtimeMinutes = parseFloat((overtimeMinutes / 60).toFixed(1));
+        }
     }
 
     const today = getTodayPHT();
@@ -244,10 +288,11 @@ export function calculateAttendanceStatus(
     checkInTime: Date,
     checkOutTime: Date | null,
     date: Date,
-    shift: Prisma.ShiftGetPayload<{}> | null
+    shift: Prisma.ShiftGetPayload<{}> | null,
+    approvedOts?: { startTime: string, endTime: string }[]
 ): string {
     const record = { date, checkInTime, checkOutTime, status: 'present' };
-    const metrics = calculateAttendanceMetrics(record as any, shift);
+    const metrics = calculateAttendanceMetrics(record as any, shift, approvedOts);
     
     if (!checkOutTime) return 'incomplete';
     if (metrics.lateMinutes > 0) return 'late';

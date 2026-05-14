@@ -210,6 +210,8 @@ model Employee {
   Attendance                    Attendance[]
   AdjustmentsReviewed           AttendanceAdjustment[]          @relation("AdjustmentReviewedBy")
   AdjustmentsSubmitted          AttendanceAdjustment[]          @relation("AdjustmentSubmittedBy")
+  OvertimeReviewed              OvertimeRequest[]               @relation("OvertimeReviewedBy")
+  OvertimeSubmitted             OvertimeRequest[]               @relation("OvertimeSubmittedBy")
   AttendanceLog                 AttendanceLog[]
   AuditLogs                     AuditLog[]
   Branch                        Branch?                         @relation(fields: [branchId], references: [id])
@@ -448,4 +450,25 @@ enum Role {
 enum HolidayType {
   REGULAR
   SPECIAL
+}
+
+model OvertimeRequest {
+  id              Int       @id @default(autoincrement())
+  employeeId      Int
+  date            DateTime
+  startTime       String
+  endTime         String
+  reason          String
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedById    Int?
+  rejectionReason String?
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+
+  employee        Employee  @relation("OvertimeSubmittedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy      Employee? @relation("OvertimeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
 }
