@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Clock, AlertCircle } from 'lucide-react';
-import proxy from '@/proxy';
+import { apiFetch } from '@/lib/api/client';
 
 interface OvertimeRequestModalProps {
   isOpen: boolean;
@@ -28,14 +28,19 @@ export function OvertimeRequestModal({ isOpen, onClose, employeeId }: OvertimeRe
     try {
       setLoading(true);
       setError(null);
-      const res = await proxy.post('/api/attendance/overtime', {
-        employeeId,
-        date,
-        startTime,
-        endTime,
-        reason
+      
+      const res = await apiFetch<{ success: boolean; message: string }>('/api/attendance/overtime', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId,
+          date,
+          startTime,
+          endTime,
+          reason
+        })
       });
-      if (res.data.success) {
+
+      if (res.success) {
         setSuccess(true);
         setTimeout(() => {
           onClose();
@@ -46,10 +51,10 @@ export function OvertimeRequestModal({ isOpen, onClose, employeeId }: OvertimeRe
           setReason('');
         }, 2000);
       } else {
-        setError(res.data.message || 'Failed to submit request.');
+        setError(res.message || 'Failed to submit request.');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Server error.');
+      setError(err.message || 'Server error.');
     } finally {
       setLoading(false);
     }

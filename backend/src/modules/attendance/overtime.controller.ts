@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { audit } from '../../shared/lib/auditLogger';
+import { sendOvertimeStatusEmail } from '../../shared/services/email.service';
 
 // GET /api/attendance/overtime
 export const getOvertimeRequests = async (req: Request, res: Response) => {
@@ -86,7 +87,7 @@ export const createOvertimeRequest = async (req: Request, res: Response) => {
 // PATCH /api/attendance/overtime/:id
 export const updateOvertimeRequest = async (req: Request, res: Response) => {
     try {
-        const id = parseInt(req.params.id, 10);
+        const id = parseInt(req.params.id as string, 10);
         const { status, startTime, endTime, rejectionReason, reason } = req.body;
 
         const existing = await prisma.overtimeRequest.findUnique({ where: { id }, include: { employee: true } });
@@ -137,6 +138,17 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
             details: `Updated overtime request for ${updated.employee.firstName} ${updated.employee.lastName} (Status: ${updated.status})`
         });
 
+        // Trigger email notification if the status was changed to APPROVED or REJECTED
+        if (status && (status === 'APPROVED' || status === 'REJECTED') && existing.employee.email) {
+            void sendOvertimeStatusEmail(
+                existing.employee.email,
+                existing.employee.firstName,
+                existing.date,
+                status as 'APPROVED' | 'REJECTED',
+                rejectionReason
+            );
+        }
+
         res.json({ success: true, message: 'Overtime request updated', request: updated });
     } catch (error) {
         console.error('Error updating overtime request:', error);
@@ -147,7 +159,7 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
 // DELETE /api/attendance/overtime/:id
 export const deleteOvertimeRequest = async (req: Request, res: Response) => {
     try {
-        const id = parseInt(req.params.id, 10);
+        const id = parseInt(req.params.id as string, 10);
         const existing = await prisma.overtimeRequest.findUnique({ where: { id } });
         
         if (!existing) return res.status(404).json({ success: false, message: 'Request not found' });
@@ -156,7 +168,10 @@ export const deleteOvertimeRequest = async (req: Request, res: Response) => {
             return res.status(403).json({ success: false, message: 'Cannot delete this request' });
         }
 
-        await prisma.overtimeRequest.delete({ where: { id } });
+        await prisma.overtimeRequest.update({ 
+            where: { id },
+            data: { status: 'DELETED' }
+        });
 
         void audit({
             action: 'DELETE',

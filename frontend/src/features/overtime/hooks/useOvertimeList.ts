@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { OvertimeRequest } from '../types';
-import proxy from '@/proxy';
+import { apiFetch } from '@/lib/api/client';
 
 export function useOvertimeList(role: 'admin' | 'hr' | 'manager', status?: string) {
   const [requests, setRequests] = useState<OvertimeRequest[]>([]);
@@ -11,9 +11,9 @@ export function useOvertimeList(role: 'admin' | 'hr' | 'manager', status?: strin
     try {
       setLoading(true);
       const url = status ? `/api/attendance/overtime?status=${status}` : '/api/attendance/overtime';
-      const response = await proxy.get(url);
-      if (response.data.success) {
-        setRequests(response.data.requests);
+      const response = await apiFetch<{ success: boolean; requests: OvertimeRequest[] }>(url);
+      if (response.success) {
+        setRequests(response.requests);
       }
     } catch (error) {
       console.error('Failed to fetch overtime requests', error);
@@ -26,19 +26,38 @@ export function useOvertimeList(role: 'admin' | 'hr' | 'manager', status?: strin
     fetchRequests();
   }, [status]);
 
-  const handleReview = async (id: number, action: 'APPROVED' | 'REJECTED', reason?: string) => {
+  const handleReview = async (id: number, action: 'APPROVED' | 'REJECTED' | 'PENDING', reason?: string) => {
     try {
       setActionLoading(id);
       const payload: any = { status: action };
       if (action === 'REJECTED' && reason) {
         payload.rejectionReason = reason;
       }
-      const response = await proxy.patch(`/api/attendance/overtime/${id}`, payload);
-      if (response.data.success) {
-        setRequests(prev => prev.map(req => req.id === id ? response.data.request : req));
+      const response = await apiFetch<{ success: boolean; request: OvertimeRequest }>(`/api/attendance/overtime/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      if (response.success) {
+        setRequests(prev => prev.map(req => req.id === id ? response.request : req));
       }
     } catch (error) {
       console.error('Error reviewing request', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      setActionLoading(id);
+      const response = await apiFetch<{ success: boolean }>(`/api/attendance/overtime/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.success) {
+        setRequests(prev => prev.filter(req => req.id !== id));
+      }
+    } catch (error) {
+      console.error('Error deleting request', error);
     } finally {
       setActionLoading(null);
     }
@@ -49,6 +68,7 @@ export function useOvertimeList(role: 'admin' | 'hr' | 'manager', status?: strin
     loading,
     actionLoading,
     handleReview,
+    handleDelete,
     refresh: fetchRequests
   };
 }

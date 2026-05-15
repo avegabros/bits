@@ -1,28 +1,31 @@
 import React, { useState } from 'react';
 import { useOvertimeList } from '../hooks/useOvertimeList';
-import { CheckCircle, XCircle, Search, Clock, Calendar } from 'lucide-react';
+import { CheckCircle, XCircle, Search, Clock, Calendar, RotateCcw, Trash2 } from 'lucide-react';
 
 interface OvertimeListPageProps {
   role: 'admin' | 'manager' | 'hr';
   statusFilter?: string;
+  hidePending?: boolean;
 }
 
-export function OvertimeListPage({ role, statusFilter }: OvertimeListPageProps) {
-  const { requests, loading, actionLoading, handleReview } = useOvertimeList(role, statusFilter);
+export function OvertimeListPage({ role, statusFilter, hidePending }: OvertimeListPageProps) {
+  const { requests, loading, actionLoading, handleReview, handleDelete } = useOvertimeList(role, statusFilter);
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+
+  const displayedRequests = hidePending ? requests.filter(r => r.status !== 'PENDING') : requests;
 
   if (loading) {
     return <div className="py-12 text-center text-slate-500 font-medium">Loading requests...</div>;
   }
 
-  if (requests.length === 0) {
+  if (displayedRequests.length === 0) {
     return <div className="py-12 text-center text-slate-500 font-medium">No {statusFilter ? statusFilter.toLowerCase() : ''} requests found.</div>;
   }
 
   return (
     <div className="space-y-4">
-      {requests.map(req => (
+      {displayedRequests.map(req => (
         <div key={req.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -30,6 +33,7 @@ export function OvertimeListPage({ role, statusFilter }: OvertimeListPageProps) 
                 <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
                   req.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                   req.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                  req.status === 'DELETED' ? 'bg-slate-500/10 text-slate-600 border-slate-500/20' :
                   'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
                 }`}>
                   {req.status}
@@ -72,6 +76,33 @@ export function OvertimeListPage({ role, statusFilter }: OvertimeListPageProps) 
                 >
                   <XCircle size={16} /> Reject
                 </button>
+              </div>
+            )}
+
+            {req.status !== 'PENDING' && (
+              <div className="flex items-center gap-2 md:self-start mt-4 md:mt-0">
+                <button
+                  onClick={() => handleReview(req.id, 'PENDING')}
+                  disabled={actionLoading === req.id}
+                  className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-1.5 shadow-sm"
+                  title={req.status === 'DELETED' ? "Restore to Pending status" : "Revert back to Pending status"}
+                >
+                  <RotateCcw size={14} /> {req.status === 'DELETED' ? 'Restore' : 'Revert'}
+                </button>
+                {req.status !== 'DELETED' && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to completely delete this overtime request?')) {
+                        handleDelete(req.id);
+                      }
+                    }}
+                    disabled={actionLoading === req.id}
+                    className="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 transition-all flex items-center gap-1.5 shadow-sm"
+                    title="Move to Deleted History"
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
+                )}
               </div>
             )}
           </div>

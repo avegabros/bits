@@ -11,6 +11,7 @@ interface AttendanceMobileCardsProps {
   rowsPerPage: number
   handleEditClick?: (row: AttendanceRecord) => void
   handleDeleteClick?: (row: AttendanceRecord) => void
+  onShiftClick?: (shiftCode: string, row: AttendanceRecord) => void
 }
 
 export function AttendanceMobileCards({
@@ -21,6 +22,7 @@ export function AttendanceMobileCards({
   rowsPerPage,
   handleEditClick,
   handleDeleteClick,
+  onShiftClick,
 }: AttendanceMobileCardsProps) {
   if (loading) {
     return (
@@ -189,25 +191,53 @@ export function AttendanceMobileCards({
                       : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
                     return (
                       <div key={idx} className="flex flex-col">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`}>
-                          {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
-                        </span>
+                        {onShiftClick && (sr.shiftCode || sr.shiftName) ? (
+                          <button 
+                            onClick={() => onShiftClick(sr.shiftName || sr.shiftCode || '', row)}
+                            className={`group text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                            title="Click to filter and edit"
+                          >
+                            <span className="group-hover:hidden">{sr.shiftCode ?? sr.shiftName ?? 'No Shift'}</span>
+                            <span className="hidden group-hover:inline">{sr.shiftName ?? sr.shiftCode ?? 'No Shift'}</span>
+                          </button>
+                        ) : (
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`} title={sr.shiftName || sr.shiftCode || undefined}>
+                            {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
+                          </span>
+                        )}
                       </div>
                     )
                   })}
                 </div>
-              ) : (row.shiftName || row.shiftCode) ? (
+              ) : (row.shiftName || row.shiftCode) ? (() => {
+                const isComplete = row.checkIn !== '—' && row.checkOut !== '—' && row.checkoutSource !== 'auto_closed';
+                const colorClass = isComplete
+                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20'
+                  : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20';
+                
+                return (
                 <div className="flex flex-col gap-0.5">
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode ?? row.shiftName}</span>
+                  {onShiftClick ? (
+                    <button 
+                      onClick={() => onShiftClick(row.shiftName || row.shiftCode || '', row)}
+                      className={`group text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                      title="Click to filter and edit"
+                    >
+                      <span className="group-hover:hidden">{row.shiftCode ?? row.shiftName}</span>
+                      <span className="hidden group-hover:inline">{row.shiftName ?? row.shiftCode}</span>
+                    </button>
+                  ) : (
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`} title={row.shiftName || row.shiftCode || undefined}>{row.shiftCode ?? row.shiftName}</span>
+                  )}
                 </div>
-              ) : (
+              )})() : (
                 <span className="text-[10px] text-muted-foreground italic font-medium">No shift</span>
               )}
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Reg Hrs</p>
               <p className="font-mono text-foreground font-black text-sm">
-                {row.isShiftActive ? <span className="text-blue-500 text-xs font-bold uppercase tracking-widest">Active</span> : fmtHours(Math.max(0, row.totalHours - (row.overtimeMinutes / 60)))}
+                {row.isShiftActive ? <span className="text-blue-500 text-xs font-bold uppercase tracking-widest">Active</span> : fmtHours(Math.max(0, row.totalHours))}
               </p>
             </div>
           </div>

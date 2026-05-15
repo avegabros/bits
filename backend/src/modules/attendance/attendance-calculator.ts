@@ -44,7 +44,7 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
                     overtimeMinutes += (overlapEnd - overlapStart) / 60000;
                 }
             });
-            overtimeMinutes = parseFloat((overtimeMinutes / 60).toFixed(1));
+            overtimeMinutes = parseFloat(overtimeMinutes.toFixed(1));
         }
 
         const undertimeMinutes = 0;
@@ -189,13 +189,14 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         }
 
         const effectiveCheckIn = new Date(expectedStart.getTime() + lateMinutes * 60 * 1000);
-        const rawWorkedMins = (checkOut.getTime() - effectiveCheckIn.getTime()) / 60000;
+        const effectiveCheckOut = new Date(Math.min(checkOut.getTime(), expectedEnd.getTime()));
+        const rawWorkedMins = Math.max(0, (effectiveCheckOut.getTime() - effectiveCheckIn.getTime()) / 60000);
         
         let overlappingBreakMins = 0;
         if (!isHalfDay) {
             effectiveBreaks.forEach(b => {
                 const overlapStart = Math.max(effectiveCheckIn.getTime(), b.start.getTime());
-                const overlapEnd = Math.min(checkOut.getTime(), b.end.getTime());
+                const overlapEnd = Math.min(effectiveCheckOut.getTime(), b.end.getTime());
                 if (overlapEnd > overlapStart) {
                     overlappingBreakMins += (overlapEnd - overlapStart) / 60000;
                 }
@@ -241,18 +242,20 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
                     otEndMs += 24 * 60 * 60 * 1000;
                 }
 
-                // Intersection of actual presence [checkIn, checkOut] and approved OT [otStart, otEnd]
-                const actualCheckIn = new Date(record.checkInTime).getTime();
-                const actualCheckOut = checkOut.getTime();
+                // Intersection of actual OT execution [actualStartTime, actualEndTime] and approved OT [otStart, otEnd]
+                if (ot.actualStartTime && ot.actualEndTime) {
+                    const actualCheckIn = new Date(ot.actualStartTime).getTime();
+                    const actualCheckOut = new Date(ot.actualEndTime).getTime();
 
-                const overlapStart = Math.max(actualCheckIn, otStartMs);
-                const overlapEnd = Math.min(actualCheckOut, otEndMs);
+                    const overlapStart = Math.max(actualCheckIn, otStartMs);
+                    const overlapEnd = Math.min(actualCheckOut, otEndMs);
 
-                if (overlapEnd > overlapStart) {
-                    overtimeMinutes += (overlapEnd - overlapStart) / 60000;
+                    if (overlapEnd > overlapStart) {
+                        overtimeMinutes += (overlapEnd - overlapStart) / 60000;
+                    }
                 }
             });
-            overtimeMinutes = parseFloat((overtimeMinutes / 60).toFixed(1));
+            overtimeMinutes = parseFloat(overtimeMinutes.toFixed(1));
         }
     }
 

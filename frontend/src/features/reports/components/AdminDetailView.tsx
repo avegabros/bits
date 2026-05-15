@@ -153,7 +153,7 @@ export function AdminDetailView({
                                 },
                                 {
                                     label: 'Regular Hrs',
-                                    value: Math.max(0, employee.totalHours - employee.overtime).toFixed(2),
+                                    value: Math.max(0, employee.totalHours).toFixed(2),
                                     color: 'text-slate-600/90',
                                 },
                             ].map((s, i) => (
@@ -324,7 +324,7 @@ export function AdminDetailView({
                                                     <span className="text-muted-foreground text-xs italic font-sans uppercase font-bold">Live</span>
                                                 ) : (
                                                     <span className="text-xs font-bold text-slate-600">
-                                                        {hoursWorked > 0 ? `${Math.max(0, hoursWorked - (otMins / 60)).toFixed(2)}` : '—'}
+                                                        {hoursWorked > 0 ? `${Math.max(0, hoursWorked).toFixed(2)}` : '—'}
                                                     </span>
                                                 )}
                                             </td>
@@ -397,7 +397,7 @@ export function AdminDetailView({
                         </span>
                         <div className="h-4 w-px bg-slate-200" />
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            Total Reg Hrs: <span className="text-slate-900">{Math.max(0, employee.totalHours - employee.overtime).toFixed(2)}</span>
+                            Total Reg Hrs: <span className="text-slate-900">{Math.max(0, employee.totalHours).toFixed(2)}</span>
                         </span>
                     </div>
                 </div>

@@ -462,6 +462,8 @@ model OvertimeRequest {
   status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
   reviewedById    Int?
   rejectionReason String?
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
   submittedAt     DateTime  @default(now())
   reviewedAt      DateTime?
 

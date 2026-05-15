@@ -30,6 +30,10 @@ function ManagerAttendanceContent() {
     getTodayDate,
   } = useAttendanceDashboard('manager');
 
+  const handleShiftQuickNav = (shiftName: string, _row: any) => {
+    setShiftFilter(shiftName);
+  };
+
   return (
     <div className="space-y-5">
       {/* Premium Header */}
@@ -150,6 +154,10 @@ function ManagerAttendanceContent() {
               absent: stats.absent,
               total: stats.total,
             }}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
+            onShiftClick={handleShiftQuickNav}
           />
         </div>
       </div>

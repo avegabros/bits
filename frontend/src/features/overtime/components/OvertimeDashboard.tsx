@@ -16,6 +16,8 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
   const initialTab = (searchParams.get('tab') === 'history' || !canReview) ? 'history' : 'pending';
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>(initialTab);
 
+  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'DELETED'>('ALL');
+
   const handleTabChange = (tab: 'pending' | 'history') => {
     setActiveTab(tab);
     router.push(`?tab=${tab}`, { scroll: false });
@@ -74,10 +76,17 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
         {activeTab === 'pending' && <OvertimeListPage role={role} statusFilter="PENDING" />}
         {activeTab === 'history' && (
           <div className="space-y-6">
-             {/* Just rendering the list without filtering by 'PENDING' will render all, but we only want approved/rejected */}
              <div className="mb-4">
-                <h2 className="text-xl font-bold mb-4">Approved & Rejected Requests</h2>
-                <OvertimeListPage role={role} />
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold">Approved & Rejected Requests</h2>
+                  <div className="flex items-center gap-2 mt-4 md:mt-0">
+                     <button onClick={() => setHistoryFilter('ALL')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${historyFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>All History</button>
+                     <button onClick={() => setHistoryFilter('APPROVED')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${historyFilter === 'APPROVED' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>Approved</button>
+                     <button onClick={() => setHistoryFilter('REJECTED')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${historyFilter === 'REJECTED' ? 'bg-red-500 text-white shadow-sm shadow-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>Rejected</button>
+                     <button onClick={() => setHistoryFilter('DELETED')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${historyFilter === 'DELETED' ? 'bg-slate-500 text-white shadow-sm shadow-slate-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Deleted</button>
+                  </div>
+                </div>
+                <OvertimeListPage role={role} statusFilter={historyFilter === 'ALL' ? undefined : historyFilter} hidePending={true} />
              </div>
           </div>
         )}
