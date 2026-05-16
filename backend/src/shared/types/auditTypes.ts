@@ -55,7 +55,8 @@ export type AuditEntity =
     | 'Company'
     | 'Holiday'
     | 'Account'
-    | 'System';
+    | 'System'
+    | 'OvertimeRequest';
 
 // ── Categories ───────────────────────────────────────────────────────────
 export type AuditCategory =

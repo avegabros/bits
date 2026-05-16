@@ -14,6 +14,7 @@ interface AttendanceDesktopTableProps {
   rowsPerPage: number
   handleEditClick?: (row: AttendanceRecord) => void
   handleDeleteClick?: (row: AttendanceRecord) => void
+  onShiftClick?: (shiftCode: string, row: AttendanceRecord) => void
 }
 
 export function AttendanceDesktopTable({
@@ -26,6 +27,7 @@ export function AttendanceDesktopTable({
   rowsPerPage,
   handleEditClick,
   handleDeleteClick,
+  onShiftClick,
 }: AttendanceDesktopTableProps) {
   return (
     <table className="w-full text-left border-collapse min-w-[800px] bg-card">
@@ -95,18 +97,48 @@ export function AttendanceDesktopTable({
                         : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
                       return (
                         <div key={idx} className="flex flex-col items-center">
-                          <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`}>
-                            {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
-                          </span>
+                          {onShiftClick && (sr.shiftCode || sr.shiftName) ? (
+                            <button 
+                              onClick={() => onShiftClick(sr.shiftName || sr.shiftCode || '', row)}
+                              className={`group text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                              title="Click to filter and edit"
+                            >
+                              <span className="group-hover:hidden">{sr.shiftCode ?? sr.shiftName ?? 'No Shift'}</span>
+                              <span className="hidden group-hover:inline">{sr.shiftName ?? sr.shiftCode ?? 'No Shift'}</span>
+                            </button>
+                          ) : (
+                            <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`} title={sr.shiftName || sr.shiftCode || undefined}>
+                              {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
+                            </span>
+                          )}
                         </div>
                       )
                     })}
                   </div>
-                ) : (row.shiftName || row.shiftCode) ? (
+                ) : (row.shiftName || row.shiftCode) ? (() => {
+                  const isComplete = row.checkIn !== '—' && row.checkOut !== '—' && row.checkoutSource !== 'auto_closed';
+                  const colorClass = isComplete
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20'
+                    : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20';
+                  
+                  return (
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${row.isNightShift ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{row.shiftCode ?? row.shiftName}</span>
+                    {onShiftClick ? (
+                      <button 
+                        onClick={() => onShiftClick(row.shiftName || row.shiftCode || '', row)}
+                        className={`group text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                        title="Click to filter and edit"
+                      >
+                        <span className="group-hover:hidden">{row.shiftCode ?? row.shiftName}</span>
+                        <span className="hidden group-hover:inline">{row.shiftName ?? row.shiftCode}</span>
+                      </button>
+                    ) : (
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`} title={row.shiftName || row.shiftCode || undefined}>
+                        {row.shiftCode ?? row.shiftName}
+                      </span>
+                    )}
                   </div>
-                ) : (
+                )})() : (
                   <span className="text-[10px] text-muted-foreground italic font-medium">No Shift</span>
                 )}
               </td>
@@ -225,7 +257,7 @@ export function AttendanceDesktopTable({
               </td>
               {/* Hours */}
               <td className="px-4 py-4 text-sm font-mono text-slate-700 font-bold text-center">
-                {row.isShiftActive ? <span className="text-slate-400 text-xs italic">Live</span> : fmtHours(Math.max(0, row.totalHours - (row.overtimeMinutes / 60)))}
+                {row.isShiftActive ? <span className="text-slate-400 text-xs italic">Live</span> : fmtHours(Math.max(0, row.totalHours))}
               </td>
               {/* OT */}
               <td className="px-2 py-3 text-center">

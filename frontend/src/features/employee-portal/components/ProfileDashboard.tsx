@@ -1,9 +1,10 @@
-import React from 'react'
-import { UserCircle, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import React, { useState } from 'react'
+import { UserCircle, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, Bell, X } from 'lucide-react'
 import { useEmployeeProfile } from '../hooks/useEmployeeProfile'
 import { employeeSelfApi } from '@/lib/api'
 import { ProfilePictureUpload } from './ProfilePictureUpload'
 import { PortalEmployeeProfile } from '../utils/portal-types'
+import { useEmployeeOvertime } from '../hooks/useEmployeeOvertime'
 
 export function ProfileDashboard() {
   const {
@@ -26,6 +27,21 @@ export function ProfileDashboard() {
     setShowConfirmPassword,
     handleChangePassword
   } = useEmployeeProfile()
+
+  const { requests: overtimeRequests } = useEmployeeOvertime()
+  const [dismissedNotifications, setDismissedNotifications] = useState<number[]>([])
+
+  const recentNotifications = overtimeRequests
+    .filter(req => req.status !== 'PENDING' && req.reviewedAt && !dismissedNotifications.includes(req.id))
+    .filter(req => {
+      // Show only if reviewed in the last 7 days
+      const reviewDate = new Date(req.reviewedAt!)
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      return reviewDate >= sevenDaysAgo
+    })
+    .sort((a, b) => new Date(b.reviewedAt!).getTime() - new Date(a.reviewedAt!).getTime())
+    .slice(0, 3) // Show max 3 recent notifications
 
   if (loading || !profile) {
     return (
@@ -50,6 +66,51 @@ export function ProfileDashboard() {
                 You are currently using a system-generated password. For your security, please update your password below and save it somewhere safe.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {recentNotifications.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+            <Bell className="w-4 h-4 text-blue-500" /> Recent Notifications
+          </h3>
+          <div className="space-y-2">
+            {recentNotifications.map(notif => (
+              <div key={notif.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-sm text-slate-700">
+                    {notif.source === 'ASSIGNED' ? (
+                      <>
+                        You have been assigned overtime on <span className="font-bold">{new Date(notif.date).toLocaleDateString()}</span> ({notif.startTime} to {notif.endTime}) by your manager.
+                      </>
+                    ) : (
+                      <>
+                        Your overtime request for <span className="font-bold">{new Date(notif.date).toLocaleDateString()}</span> ({notif.startTime} to {notif.endTime}) has been 
+                        <span className={`font-bold ml-1 ${notif.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {notif.status}
+                        </span>.
+                      </>
+                    )}
+                  </p>
+                  {notif.status === 'REJECTED' && notif.rejectionReason && (
+                    <p className="text-xs text-slate-500 mt-1"><span className="font-bold">Reason:</span> {notif.rejectionReason}</p>
+                  )}
+                  {notif.source === 'ASSIGNED' && notif.reason && (
+                    <p className="text-xs text-slate-500 mt-1"><span className="font-bold">Reason:</span> {notif.reason}</p>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1.5 font-medium">{new Date(notif.reviewedAt!).toLocaleString()}</p>
+                </div>
+                <button 
+                  onClick={() => setDismissedNotifications(prev => [...prev, notif.id])}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors ml-4 shrink-0"
+                  title="Dismiss notification"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

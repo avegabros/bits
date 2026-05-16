@@ -30,6 +30,7 @@ interface AttendanceTableProps {
   setShiftFilter?: (val: string) => void;
   shifts?: string[];
   dragScrollRef?: React.RefObject<HTMLDivElement | null>
+  onShiftClick?: (shiftCode: string, row: AttendanceRecord) => void;
 }
 
 export function AttendanceTable({
@@ -51,6 +52,7 @@ export function AttendanceTable({
   setShiftFilter,
   shifts,
   dragScrollRef,
+  onShiftClick,
 }: AttendanceTableProps) {
   // Disable actions if viewing "All Shifts" to force specific shift selection
   const canEdit = shiftFilter !== 'All Shifts';
@@ -113,6 +115,7 @@ export function AttendanceTable({
           rowsPerPage={rowsPerPage}
           handleEditClick={effectiveEditClick}
           handleDeleteClick={effectiveDeleteClick}
+          onShiftClick={onShiftClick}
         />
       </div>
 
@@ -134,6 +137,7 @@ export function AttendanceTable({
           rowsPerPage={rowsPerPage}
           handleEditClick={effectiveEditClick}
           handleDeleteClick={effectiveDeleteClick}
+          onShiftClick={onShiftClick}
         />
       </div>
 

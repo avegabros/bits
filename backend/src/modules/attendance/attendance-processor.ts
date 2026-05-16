@@ -179,11 +179,48 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
         const minCheckoutMins = syncConfig?.globalMinCheckoutMinutes ?? 120;
         const minCheckoutHours = minCheckoutMins / 60;
 
+        const employeeIds = [...new Set(logs.map(l => l.employeeId))];
+        
+        const dateValues = new Set<number>();
+        logs.forEach(l => {
+            const dateOnly = toPHTDate(l.timestamp);
+            dateValues.add(dateOnly.getTime());
+            
+            const phtDate = new Date(dateOnly.getTime() + 8 * 60 * 60 * 1000);
+            const utcMidnight = new Date(Date.UTC(phtDate.getUTCFullYear(), phtDate.getUTCMonth(), phtDate.getUTCDate()));
+            dateValues.add(utcMidnight.getTime());
+        });
+        const queryDates = Array.from(dateValues).map(ms => new Date(ms));
+
+        const approvedOts = await prisma.overtimeRequest.findMany({
+            where: {
+                employeeId: { in: employeeIds },
+                date: { in: queryDates },
+                status: 'APPROVED'
+            },
+            select: { id: true, employeeId: true, date: true, startTime: true, endTime: true, actualStartTime: true, actualEndTime: true }
+        });
+
+        const getPhtDateStr = (d: Date) => {
+            const pht = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+            return pht.toISOString().slice(0, 10);
+        };
+
+        const otsByEmpAndDate = new Map<string, typeof approvedOts>();
+        for (const ot of approvedOts) {
+            const key = `${ot.employeeId}_${getPhtDateStr(ot.date)}`;
+            const list = otsByEmpAndDate.get(key) || [];
+            list.push(ot);
+            otsByEmpAndDate.set(key, list);
+        }
+
         let created = 0;
         let updated = 0;
 
         for (const log of logs) {
             const dateOnly = toPHTDate(log.timestamp);
+            const dateKey = `${log.employeeId}_${getPhtDateStr(dateOnly)}`;
+            const recordOts = otsByEmpAndDate.get(dateKey) || [];
 
             const { shift: resolvedShift } = await resolveShiftForTimestamp(
                 log.employeeId, 
@@ -243,7 +280,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     });
 
                     const shift = createdRecord.employee?.Shift ?? null;
-                    const metrics = calculateAttendanceMetrics(createdRecord, shift);
+                    const metrics = calculateAttendanceMetrics(createdRecord, shift, recordOts);
 
                     attendanceEmitter.emit('new-record', {
                         type: 'check-in',
@@ -295,6 +332,49 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
 
                     if (existingAttendance.checkOutTime) {
                         if (log.timestamp > existingAttendance.checkOutTime) {
+                            // OVERTIME BIOMETRIC CHECK-IN LOGIC
+                            if (recordOts && recordOts.length > 0) {
+                                // There is an approved OT for today.
+                                // Instead of stretching the normal shift's checkout time, 
+                                // we route this scan to the OvertimeRequest actual execution fields.
+                                const ot = recordOts[0];
+                                
+                                // If we already have an actualStartTime but no actualEndTime, this is the OT checkout
+                                // If we already have both, we overwrite the actualEndTime
+                                if (!ot.actualStartTime) {
+                                    await prisma.overtimeRequest.update({
+                                        where: { id: ot.id },
+                                        data: { actualStartTime: log.timestamp }
+                                    });
+                                    ot.actualStartTime = log.timestamp;
+                                    void audit({
+                                        action: 'CHECK_IN',
+                                        entityType: 'OvertimeRequest',
+                                        entityId: ot.id,
+                                        performedBy: log.employeeId,
+                                        source: 'device-sync',
+                                        details: `Employee biometric OT check-in`
+                                    });
+                                } else {
+                                    await prisma.overtimeRequest.update({
+                                        where: { id: ot.id },
+                                        data: { actualEndTime: log.timestamp }
+                                    });
+                                    ot.actualEndTime = log.timestamp;
+                                    void audit({
+                                        action: 'CHECK_OUT',
+                                        entityType: 'OvertimeRequest',
+                                        entityId: ot.id,
+                                        performedBy: log.employeeId,
+                                        source: 'device-sync',
+                                        details: `Employee biometric OT check-out`
+                                    });
+                                }
+
+                                await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                                continue;
+                            }
+
                             const updateData: Record<string, unknown> = {
                                 checkOutTime: log.timestamp,
                                 updatedAt: new Date(),
@@ -342,7 +422,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             });
 
                             const shift = updatedRecord.employee?.Shift ?? null;
-                            const metrics = calculateAttendanceMetrics(updatedRecord, shift);
+                            const metrics = calculateAttendanceMetrics(updatedRecord, shift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
                                 type: 'check-out',
@@ -412,7 +492,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
 
                         const shift2 = updatedRecord2.employee?.Shift ?? null;
-                        const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2);
+                        const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2, recordOts);
 
                         attendanceEmitter.emit('new-record', {
                             type: 'check-out',

@@ -18,6 +18,7 @@ import {
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR, managerOrAdmin, adminOrHR } from '../../shared/middleware/role.middleware';
 import { departmentScope } from '../../shared/middleware/departmentScope.middleware';
+import overtimeRoutes from './overtime.routes';
 
 const router = Router();
 
@@ -27,7 +28,10 @@ router.use(authenticate);
 // Apply department scoping for MANAGER roles
 router.use(departmentScope);
 
-// Apply role-based authorization to all routes (ADMIN, MANAGER, or HR)
+// Overtime routes (Available to all authenticated users, handled internally)
+router.use('/overtime', overtimeRoutes);
+
+// Apply role-based authorization to all subsequent routes (ADMIN, MANAGER, or HR)
 router.use(adminManagerOrHR);
 
 /**

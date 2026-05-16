@@ -75,12 +75,58 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
         })
     ]);
 
+    // Fetch approved overtime requests for the fetched records
+    const employeeIds = [...new Set(records.map(r => r.employeeId))];
+    
+    // Build an array of possible date representations
+    const dateValues = new Set<number>();
+    records.forEach(r => {
+        dateValues.add(r.date.getTime()); // The raw attendance date (e.g. 16:00 UTC)
+        
+        // The UTC midnight representation of the PHT date
+        const phtDate = new Date(r.date.getTime() + 8 * 60 * 60 * 1000);
+        const utcMidnight = new Date(Date.UTC(phtDate.getUTCFullYear(), phtDate.getUTCMonth(), phtDate.getUTCDate()));
+        dateValues.add(utcMidnight.getTime());
+    });
+    const queryDates = Array.from(dateValues).map(ms => new Date(ms));
+
+    const approvedOts = await prisma.overtimeRequest.findMany({
+        where: {
+            employeeId: { in: employeeIds },
+            date: { in: queryDates },
+            status: 'APPROVED'
+        },
+        select: {
+            employeeId: true,
+            date: true,
+            startTime: true,
+            endTime: true
+        }
+    });
+
+    // Group OTs by employeeId + PHT Date String
+    const getPhtDateStr = (d: Date) => {
+        const pht = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+        return pht.toISOString().slice(0, 10);
+    };
+
+    const otsByEmpAndDate = new Map<string, typeof approvedOts>();
+    for (const ot of approvedOts) {
+        const key = `${ot.employeeId}_${getPhtDateStr(ot.date)}`;
+        const list = otsByEmpAndDate.get(key) || [];
+        list.push(ot);
+        otsByEmpAndDate.set(key, list);
+    }
+
     // Enrich each record with shift-based calculations
     const data = records.map((record) => {
         const shift = record.shift ?? record.employee?.Shift ?? null;
         const finalStatus = record.status;
 
-        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift);
+        const dateKey = `${record.employeeId}_${getPhtDateStr(record.date)}`;
+        const recordOts = otsByEmpAndDate.get(dateKey) || [];
+
+        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift, recordOts);
         return {
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,

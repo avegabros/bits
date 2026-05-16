@@ -161,7 +161,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
                   </td>
                   <td className="px-6 py-5 text-center">
                     <span className="text-sm font-bold font-mono text-slate-800">
-                      {Math.max(0, employee.totalHours - employee.overtime).toFixed(2)}
+                      {Math.max(0, employee.totalHours).toFixed(2)}
                     </span>
                   </td>
                   <td className="px-6 py-5">
