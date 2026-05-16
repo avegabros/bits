@@ -100,7 +100,6 @@ export function EmployeeTable({
                     {employee.EmployeeShift && employee.EmployeeShift.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
                         {[...employee.EmployeeShift]
-                          .sort((a, b) => (a.shift.startTime || '24:00').localeCompare(b.shift.startTime || '24:00'))
                           .map((es, idx) => (
                           <div key={es.id || idx}>
                             <div className="flex items-center gap-1.5">

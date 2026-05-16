@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import { generateRandomPassword } from '../../shared/utils/password.utils';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
 import { validateShiftGap } from '../shifts/shift-conflict.service';
+import { getChronologicalShiftIds } from '../shifts/shift-ordering.service';
 
 // GET /api/employees/:id - Get a single employee by ID (for profile view)
 export const getEmployeeById = async (req: Request, res: Response) => {
@@ -483,6 +484,9 @@ export const createEmployee = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: gapError });
         }
 
+        // Chronologically sort shift assignments to prevent selection-order bugs
+        const sortedShiftIds = await getChronologicalShiftIds(shiftIds || []);
+
         type NewEmployeeResult = Prisma.EmployeeGetPayload<{
             select: {
                 id: true; zkId: true; employeeNumber: true; firstName: true; lastName: true;
@@ -522,7 +526,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                         hireDate: hireDate ? new Date(hireDate) : undefined,
                         employmentStatus: employmentStatus || 'ACTIVE',
                         zkId: nextZkId,
-                        shiftId: shiftId ? parseInt(shiftId, 10) : null,
+                        shiftId: sortedShiftIds.length > 0 ? sortedShiftIds[0] : (shiftId ? parseInt(shiftId, 10) : null),
                         needsPasswordChange: true,
                         updatedAt: new Date()
                     },
@@ -550,9 +554,9 @@ export const createEmployee = async (req: Request, res: Response) => {
                         employmentStatus: true, createdAt: true }
                 });
 
-                if (shiftIds && Array.isArray(shiftIds) && shiftIds.length > 0) {
+                if (sortedShiftIds.length > 0) {
                     await tx.employeeShift.createMany({
-                        data: shiftIds.map((sid: number, i: number) => ({
+                        data: sortedShiftIds.map((sid: number, i: number) => ({
                             employeeId: emp.id,
                             shiftId: sid,
                             sortOrder: i,
@@ -785,6 +789,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: gapError });
         }
 
+        // Chronologically sort shift assignments to prevent selection-order bugs
+        const sortedShiftIds = await getChronologicalShiftIds(shiftIds || []);
+
         updateData.updatedAt = new Date();
 
         // Update the employee and shifts in a single transaction
@@ -826,9 +833,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
                 await tx.employeeShift.deleteMany({ where: { employeeId } });
 
                 // Create new assignments (if any)
-                if (shiftIds.length > 0) {
+                if (sortedShiftIds.length > 0) {
                     await tx.employeeShift.createMany({
-                        data: shiftIds.map((sid: number, i: number) => ({
+                        data: sortedShiftIds.map((sid: number, i: number) => ({
                             employeeId,
                             shiftId: sid,
                             sortOrder: i,
@@ -841,7 +848,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
                 // (Though it might have been in updateData, we ensure it here)
                 await tx.employee.update({
                     where: { id: employeeId },
-                    data: { shiftId: shiftIds[0] || null }
+                    data: { shiftId: sortedShiftIds[0] || null }
                 });
             }
 

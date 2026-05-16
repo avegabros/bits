@@ -4,6 +4,7 @@ import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, buildChanges } from '../../shared/lib/auditHelpers';
 import { validateShiftTimes } from './shiftUtils';
 import { validateShiftEditConflicts } from './shift-conflict.service';
+import { validateShiftBreaks } from './shift-break-validation.service';
 const FIELD_NAMES: Record<string, string> = {
     shiftCode: 'Shift Code',
     name: 'Name',
@@ -12,7 +13,6 @@ const FIELD_NAMES: Record<string, string> = {
     graceMinutes: 'Grace Period (mins)',
     breakMinutes: 'Break Duration (mins)',
     isNightShift: 'Night Shift',
-    isActive: 'Status',
     description: 'Description',
     workDays: 'Work Days',
     halfDays: 'Half Days',
@@ -23,7 +23,6 @@ const FIELD_NAMES: Record<string, string> = {
 const formatShiftValue = (key: string, val: unknown): string => {
     if (val === null || val === undefined) return 'None';
     if (key === 'isNightShift') return val ? 'Yes' : 'No';
-    if (key === 'isActive') return val ? 'Active' : 'Inactive';
     if (key === 'workDays' || key === 'halfDays' || key === 'breaks') {
         try {
             const parsed = typeof val === 'string' ? JSON.parse(val) : val;
@@ -96,63 +95,17 @@ export const createShift = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: shiftValidationError });
         }
 
-        // Validate break time ranges
+        // Validate break time ranges and overlaps
         if (Array.isArray(breaks) && breaks.length > 0) {
-            for (const brk of breaks) {
-                const brkFrom = (brk.from || brk.start || '').trim();
-                const brkTo = (brk.to || brk.end || '').trim();
-
-                if (!brkFrom || !brkTo) {
+            const shiftStart = (startTime || '').trim();
+            const shiftEnd = (endTime || '').trim();
+            if (shiftStart && shiftEnd) {
+                const breakError = validateShiftBreaks(shiftStart, shiftEnd, breaks);
+                if (breakError) {
                     return res.status(400).json({
                         success: false,
-                        message: 'Each break must have both a "from" and "to" time.'
+                        message: breakError
                     });
-                }
-
-                if (!timeRegex.test(brkFrom) || !timeRegex.test(brkTo)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Break times must be in H:MM or HH:MM format (24-hour).'
-                    });
-                }
-
-                const toMinutes = (t: string) => {
-                    const [h, m] = t.split(':').map(Number);
-                    return h * 60 + m;
-                };
-
-                if (toMinutes(brkTo) <= toMinutes(brkFrom)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `Break "to" time (${brkTo}) must be later than "from" time (${brkFrom}).`
-                    });
-                }
-
-                const shiftStart = (startTime || '').trim()
-                const shiftEnd = (endTime || '').trim()
-                if (shiftStart && shiftEnd) {
-                    const shiftStartMins = toMinutes(shiftStart)
-                    const shiftEndMins = toMinutes(shiftEnd)
-                    const breakStartMins = toMinutes(brkFrom)
-                    const breakEndMins = toMinutes(brkTo)
-                    const isOvernight = shiftEndMins <= shiftStartMins
-                    if (isOvernight) {
-                        const validStart = breakStartMins >= shiftStartMins || breakStartMins < shiftEndMins
-                        const validEnd = breakEndMins > shiftStartMins || breakEndMins <= shiftEndMins
-                        if (!validStart || !validEnd) {
-                            return res.status(400).json({
-                                success: false,
-                                message: `Break ${brkFrom}–${brkTo} must fall within the shift hours (${shiftStart}–${shiftEnd}).`
-                            })
-                        }
-                    } else {
-                        if (breakStartMins < shiftStartMins || breakEndMins > shiftEndMins) {
-                            return res.status(400).json({
-                                success: false,
-                                message: `Break ${brkFrom}–${brkTo} must fall within the shift hours (${shiftStart}–${shiftEnd}).`
-                            })
-                        }
-                    }
                 }
             }
         }
@@ -246,7 +199,7 @@ export const updateShift = async (req: Request, res: Response) => {
         const existing = await prisma.shift.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ success: false, message: 'Shift not found' });
 
-        const { shiftCode, name, startTime, endTime, graceMinutes, breakMinutes, isNightShift, isActive, description, workDays, halfDays, halfDayHours, breaks } = req.body;
+        const { shiftCode, name, startTime, endTime, graceMinutes, breakMinutes, isNightShift, description, workDays, halfDays, halfDayHours, breaks } = req.body;
 
         const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (startTime && !timeRegex.test(startTime)) return res.status(400).json({ success: false, message: 'startTime must be H:MM or HH:MM (24-hour)' });
@@ -262,63 +215,17 @@ export const updateShift = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: shiftValidationError });
         }
 
-        // Validate break time ranges
+        // Validate break time ranges and overlaps
         if (Array.isArray(breaks) && breaks.length > 0) {
-            for (const brk of breaks) {
-                const brkFrom = (brk.from || brk.start || '').trim();
-                const brkTo = (brk.to || brk.end || '').trim();
-
-                if (!brkFrom || !brkTo) {
+            const effectiveStart = (startTime || existing.startTime || '').trim();
+            const effectiveEnd = (endTime || existing.endTime || '').trim();
+            if (effectiveStart && effectiveEnd) {
+                const breakError = validateShiftBreaks(effectiveStart, effectiveEnd, breaks);
+                if (breakError) {
                     return res.status(400).json({
                         success: false,
-                        message: 'Each break must have both a "from" and "to" time.'
+                        message: breakError
                     });
-                }
-
-                if (!timeRegex.test(brkFrom) || !timeRegex.test(brkTo)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Break times must be in H:MM or HH:MM format (24-hour).'
-                    });
-                }
-
-                const toMinutes = (t: string) => {
-                    const [h, m] = t.split(':').map(Number);
-                    return h * 60 + m;
-                };
-
-                if (toMinutes(brkTo) <= toMinutes(brkFrom)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `Break "to" time (${brkTo}) must be later than "from" time (${brkFrom}).`
-                    });
-                }
-
-                const effectiveStart = (startTime || existing.startTime || '').trim()
-                const effectiveEnd = (endTime || existing.endTime || '').trim()
-                if (effectiveStart && effectiveEnd) {
-                    const shiftStartMins = toMinutes(effectiveStart)
-                    const shiftEndMins = toMinutes(effectiveEnd)
-                    const breakStartMins = toMinutes(brkFrom)
-                    const breakEndMins = toMinutes(brkTo)
-                    const isOvernight = shiftEndMins <= shiftStartMins
-                    if (isOvernight) {
-                        const validStart = breakStartMins >= shiftStartMins || breakStartMins < shiftEndMins
-                        const validEnd = breakEndMins > shiftStartMins || breakEndMins <= shiftEndMins
-                        if (!validStart || !validEnd) {
-                            return res.status(400).json({
-                                success: false,
-                                message: `Break ${brkFrom}–${brkTo} must fall within the shift hours (${effectiveStart}–${effectiveEnd}).`
-                            })
-                        }
-                    } else {
-                        if (breakStartMins < shiftStartMins || breakEndMins > shiftEndMins) {
-                            return res.status(400).json({
-                                success: false,
-                                message: `Break ${brkFrom}–${brkTo} must fall within the shift hours (${effectiveStart}–${effectiveEnd}).`
-                            })
-                        }
-                    }
                 }
             }
         }
@@ -362,7 +269,6 @@ export const updateShift = async (req: Request, res: Response) => {
             ...(graceMinutes != null && { graceMinutes: parseInt(graceMinutes) }),
             ...(breakMinutes != null && { breakMinutes: parseInt(breakMinutes) }),
             ...(isNightShift != null && { isNightShift: isNightShift === true || isNightShift === 'true' }),
-            ...(isActive != null && { isActive: isActive === true || isActive === 'true' }),
             ...(description !== undefined && { description: description?.trim() || null }),
             ...(workDays !== undefined && { workDays: Array.isArray(workDays) ? JSON.stringify(workDays) : workDays }),
             ...(halfDays !== undefined && { halfDays: Array.isArray(halfDays) ? JSON.stringify(halfDays) : halfDays }),
@@ -400,37 +306,6 @@ export const updateShift = async (req: Request, res: Response) => {
     }
 };
 
-// PATCH /api/shifts/:id/toggle - Toggle isActive status
-export const toggleShift = async (req: Request, res: Response) => {
-    try {
-        const id = parseInt(String(req.params.id));
-        if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid shift ID' });
-
-        const existing = await prisma.shift.findUnique({ where: { id } });
-        if (!existing) return res.status(404).json({ success: false, message: 'Shift not found' });
-
-        const shift = await prisma.shift.update({
-            where: { id },
-            data: { isActive: !existing.isActive }
-        });
-
-        void auditUpdate({
-            entityType: 'Shift',
-            entityId: shift.id,
-            performedBy: req.user?.employeeId,
-            source: 'admin-panel',
-            details: `Shift "${shift.name}" was ${shift.isActive ? 'activated' : 'deactivated'}`,
-            correlationId: req.correlationId
-        }, [
-            { field: 'Status', oldValue: existing.isActive ? 'Active' : 'Inactive', newValue: shift.isActive ? 'Active' : 'Inactive' }
-        ]);
-
-        res.json({ success: true, shift, message: `Shift ${shift.isActive ? 'activated' : 'deactivated'}` });
-    } catch (error) {
-        console.error('Error toggling shift:', error);
-        res.status(500).json({ success: false, message: 'Failed to toggle shift status' });
-    }
-};
 
 // DELETE /api/shifts/:id - Delete a shift
 export const deleteShift = async (req: Request, res: Response) => {

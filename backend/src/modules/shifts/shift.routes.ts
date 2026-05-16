@@ -5,7 +5,6 @@ import {
     createShift,
     updateShift,
     deleteShift,
-    toggleShift,
     getNextEmployeeNumber,
     validateShiftEdit,
 } from './shift.controller';
@@ -83,16 +82,7 @@ router.put('/:id', adminManagerOrHR, updateShift);
  */
 router.post('/:id/validate-edit', adminManagerOrHR, validateShiftEdit);
 
-/**
- * @swagger
- * /api/shifts/{id}/toggle:
- *   patch:
- *     summary: Toggle shift active status
- *     tags: [Shifts]
- *     security:
- *       - bearerAuth: []
- */
-router.patch('/:id/toggle', adminManagerOrHR, toggleShift);
+
 
 /**
  * @swagger

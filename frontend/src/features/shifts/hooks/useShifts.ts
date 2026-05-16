@@ -10,7 +10,6 @@ export function useShifts() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
 
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -47,14 +46,10 @@ export function useShifts() {
   const filtered = shifts.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.shiftCode.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchStatus = filterActive === 'all' ? true : filterActive === 'active' ? s.isActive : !s.isActive
-    return matchSearch && matchStatus
+    return matchSearch
   })
 
-  // Reset page on filter change
-  useEffect(() => { setCurrentPage(1) }, [searchTerm, filterActive])
-
-  const activeCount = shifts.filter(s => s.isActive).length
+  useEffect(() => { setCurrentPage(1) }, [searchTerm])
 
   // Break validation helper
   const hasInvalidBreaks = form.breaks.some(b => {
@@ -176,16 +171,6 @@ export function useShifts() {
     finally { setFormLoading(false) }
   }
 
-  const handleToggle = async (s: Shift) => {
-    try {
-      const res = await fetch(`/api/shifts/${s.id}/toggle`, {
-        method: 'PATCH', credentials: 'include'
-      })
-      const data = await res.json()
-      if (data.success) { showToast('success', 'Shift Toggled', data.message); fetchShifts() }
-    } catch { showToast('error', 'Toggle Failed', 'Failed to toggle shift') }
-  }
-
   const handleDelete = async () => {
     if (!deleteTarget) return
     setDeleteLoading(true)
@@ -202,8 +187,7 @@ export function useShifts() {
 
   return {
     shifts, loading, searchTerm, setSearchTerm,
-    filterActive, setFilterActive,
-    filtered, activeCount,
+    filtered,
     // Modal
     isFormOpen, setIsFormOpen, editingShift,
     form, setForm, formLoading, formError, setFormError,
@@ -214,7 +198,7 @@ export function useShifts() {
     // Pagination
     currentPage, setCurrentPage, rowsPerPage,
     // Actions
-    openCreate, openEdit, handleSubmit, handleToggle, handleDelete,
+    openCreate, openEdit, handleSubmit, handleDelete,
     // Toast
     toasts, showToast, dismissToast,
   }

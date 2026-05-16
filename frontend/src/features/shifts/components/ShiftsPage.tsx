@@ -78,7 +78,7 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
       </div>
 
       {/* Summary Stats */}
-      <ShiftStatsCards shifts={s.shifts} activeCount={s.activeCount} />
+      <ShiftStatsCards shifts={s.shifts} />
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row items-center bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm gap-4">
@@ -90,14 +90,6 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
             className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none w-full focus:ring-2 focus:ring-red-500/10 focus:border-red-200 transition-all"
           />
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          {(['all', 'active', 'inactive'] as const).map(f => (
-            <button key={f} onClick={() => s.setFilterActive(f)}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold capitalize transition-all ${s.filterActive === f ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-              {f}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Shifts Table / Cards */}
@@ -108,7 +100,6 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
           sortKey={sortKey as string | null}
           sortOrder={sortOrder}
           handleSort={handleSort}
-          onToggle={s.handleToggle}
           onEdit={s.openEdit}
           onDelete={s.setDeleteTarget}
           isReadOnly={false}

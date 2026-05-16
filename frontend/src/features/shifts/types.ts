@@ -9,7 +9,6 @@ export interface Shift {
   graceMinutes: number
   breakMinutes: number
   isNightShift: boolean
-  isActive: boolean
   description: string | null
   workDays: string
   halfDays: string
