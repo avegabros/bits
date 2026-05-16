@@ -8,7 +8,7 @@ import { BasicAttendanceRecord } from './attendance.types';
  * All times are stored as UTC where PHT midnight = UTC midnight offset by -8h
  * i.e. a stored timestamp of 2026-02-10T00:00:00Z represents 2026-02-10T08:00:00+08:00 PHT midnight workaround
  */
-export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift: Prisma.ShiftGetPayload<{}> | null, approvedOts?: { startTime: string, endTime: string }[]) {
+export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift: Prisma.ShiftGetPayload<{}> | null, approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[]) {
     const shiftCode = shift?.shiftCode ?? null;
 
     if (!record.checkInTime) {
@@ -292,7 +292,7 @@ export function calculateAttendanceStatus(
     checkOutTime: Date | null,
     date: Date,
     shift: Prisma.ShiftGetPayload<{}> | null,
-    approvedOts?: { startTime: string, endTime: string }[]
+    approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[]
 ): string {
     const record = { date, checkInTime, checkOutTime, status: 'present' };
     const metrics = calculateAttendanceMetrics(record as any, shift, approvedOts);
