@@ -81,13 +81,24 @@ export function ProfileDashboard() {
               <div key={notif.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
                   <p className="text-sm text-slate-700">
-                    Your overtime request for <span className="font-bold">{new Date(notif.date).toLocaleDateString()}</span> ({notif.startTime} to {notif.endTime}) has been 
-                    <span className={`font-bold ml-1 ${notif.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {notif.status}
-                    </span>.
+                    {notif.source === 'ASSIGNED' ? (
+                      <>
+                        You have been assigned overtime on <span className="font-bold">{new Date(notif.date).toLocaleDateString()}</span> ({notif.startTime} to {notif.endTime}) by your manager.
+                      </>
+                    ) : (
+                      <>
+                        Your overtime request for <span className="font-bold">{new Date(notif.date).toLocaleDateString()}</span> ({notif.startTime} to {notif.endTime}) has been 
+                        <span className={`font-bold ml-1 ${notif.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {notif.status}
+                        </span>.
+                      </>
+                    )}
                   </p>
                   {notif.status === 'REJECTED' && notif.rejectionReason && (
                     <p className="text-xs text-slate-500 mt-1"><span className="font-bold">Reason:</span> {notif.rejectionReason}</p>
+                  )}
+                  {notif.source === 'ASSIGNED' && notif.reason && (
+                    <p className="text-xs text-slate-500 mt-1"><span className="font-bold">Reason:</span> {notif.reason}</p>
                   )}
                   <p className="text-[10px] text-slate-400 mt-1.5 font-medium">{new Date(notif.reviewedAt!).toLocaleString()}</p>
                 </div>

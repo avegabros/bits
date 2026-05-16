@@ -5,7 +5,8 @@ export interface OvertimeRequest {
   startTime: string;
   endTime: string;
   reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
+  source: 'REQUESTED' | 'ASSIGNED';
   rejectionReason?: string | null;
   submittedAt: string;
   reviewedAt?: string | null;

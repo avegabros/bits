@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { audit } from '../../shared/lib/auditLogger';
-import { sendOvertimeStatusEmail } from '../../shared/services/email.service';
+import { sendOvertimeStatusEmail, sendOvertimeAssignedEmail } from '../../shared/services/email.service';
 
 // GET /api/attendance/overtime
 export const getOvertimeRequests = async (req: Request, res: Response) => {
@@ -61,6 +61,7 @@ export const createOvertimeRequest = async (req: Request, res: Response) => {
                 endTime,
                 reason,
                 status,
+                source: 'REQUESTED',
                 reviewedById,
                 reviewedAt
             },
@@ -81,6 +82,84 @@ export const createOvertimeRequest = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error creating overtime request:', error);
         res.status(500).json({ success: false, message: 'Failed to create overtime request' });
+    }
+};
+
+// POST /api/attendance/overtime/batch
+export const batchCreateOvertimeRequests = async (req: Request, res: Response) => {
+    try {
+        const { employeeIds, date, startTime, endTime, reason } = req.body;
+
+        if (req.user?.role !== 'ADMIN' && req.user?.role !== 'MANAGER') {
+            return res.status(403).json({ success: false, message: 'Only Managers and Admins can assign overtime' });
+        }
+
+        if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0 || !date || !startTime || !endTime || !reason) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const requestDate = new Date(date);
+
+        // Verify employees exist and, if manager, they are in manager's departments
+        const employees = await prisma.employee.findMany({
+            where: { id: { in: employeeIds } },
+            select: { id: true, departmentId: true, firstName: true, lastName: true, email: true }
+        });
+
+        if (employees.length !== employeeIds.length) {
+            return res.status(400).json({ success: false, message: 'One or more employees not found' });
+        }
+
+        if (req.user?.role === 'MANAGER' && req.managerDepartmentIds) {
+            for (const emp of employees) {
+                if (!emp.departmentId || !req.managerDepartmentIds.includes(emp.departmentId)) {
+                    return res.status(403).json({ success: false, message: `Forbidden: Employee ${emp.firstName} ${emp.lastName} belongs to a department you do not manage.` });
+                }
+            }
+        }
+
+        const createdRequests = [];
+
+        for (const emp of employees) {
+            const request = await prisma.overtimeRequest.create({
+                data: {
+                    employeeId: emp.id,
+                    date: requestDate,
+                    startTime,
+                    endTime,
+                    reason,
+                    status: 'APPROVED',
+                    source: 'ASSIGNED',
+                    reviewedById: req.user?.employeeId,
+                    reviewedAt: new Date()
+                }
+            });
+            createdRequests.push(request);
+
+            void audit({
+                action: 'CREATE',
+                entityType: 'OvertimeRequest',
+                entityId: request.id,
+                performedBy: req.user?.employeeId,
+                details: `Assigned overtime for ${emp.firstName} ${emp.lastName} on ${date}`
+            });
+
+            if (emp.email) {
+                void sendOvertimeAssignedEmail(
+                    emp.email,
+                    `${emp.firstName} ${emp.lastName}`,
+                    requestDate,
+                    startTime,
+                    endTime,
+                    reason
+                );
+            }
+        }
+
+        res.status(201).json({ success: true, message: 'Overtime assigned successfully', created: createdRequests.length, results: createdRequests });
+    } catch (error) {
+        console.error('Error assigning overtime in batch:', error);
+        res.status(500).json({ success: false, message: 'Failed to assign overtime' });
     }
 };
 
@@ -110,8 +189,8 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
         if (reason) dataToUpdate.reason = reason;
 
         if (status && status !== existing.status && req.user?.role !== 'USER') {
-            if (req.user?.role !== 'MANAGER') {
-                return res.status(403).json({ success: false, message: 'Only Managers can approve or reject overtime requests' });
+            if (req.user?.role !== 'MANAGER' && req.user?.role !== 'ADMIN') {
+                return res.status(403).json({ success: false, message: 'Only Managers and Admins can approve or reject overtime requests' });
             }
             dataToUpdate.status = status;
             dataToUpdate.reviewedById = req.user?.employeeId;

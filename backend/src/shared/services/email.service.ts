@@ -76,3 +76,67 @@ export const sendOvertimeStatusEmail = async (
         return false;
     }
 };
+
+export const sendOvertimeAssignedEmail = async (
+    toEmail: string,
+    employeeName: string,
+    overtimeDate: Date,
+    startTime: string,
+    endTime: string,
+    reason: string
+) => {
+    try {
+        if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+            console.warn('[EmailService] SMTP credentials not configured. Skipping assigned email.');
+            return false;
+        }
+
+        const dateStr = new Date(overtimeDate).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        const color = '#3B82F6'; // Blue for assigned
+        const emoji = '📋';
+
+        const mailOptions = {
+            from: `"BITS Attendance System" <${process.env.SMTP_USER}>`,
+            to: toEmail,
+            subject: `Overtime Assigned - ${dateStr}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-w: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+                    <div style="background-color: ${color}; padding: 20px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Overtime Assigned ${emoji}</h1>
+                    </div>
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi <strong>${employeeName}</strong>,</p>
+                        <p style="font-size: 16px; color: #374151;">
+                            You have been assigned overtime on <strong>${dateStr}</strong> from <strong>${startTime}</strong> to <strong>${endTime}</strong> by your manager.
+                        </p>
+                        
+                        <div style="background-color: #f9fafb; border-left: 4px solid ${color}; padding: 15px; margin-top: 20px; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 14px; color: #4b5563;"><strong>Reason:</strong></p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #374151;">${reason}</p>
+                        </div>
+                        
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+                            You can view the full details of your request by logging into the Employee Portal.
+                            <br><br>
+                            Best regards,<br>
+                            BITS Attendance System
+                        </p>
+                    </div>
+                </div>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`[EmailService] Overtime assigned email sent to ${toEmail} (${info.messageId})`);
+        return true;
+    } catch (error) {
+        console.error('[EmailService] Failed to send assigned email:', error);
+        return false;
+    }
+};

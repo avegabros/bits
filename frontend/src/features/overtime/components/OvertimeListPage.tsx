@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useOvertimeList } from '../hooks/useOvertimeList';
-import { CheckCircle, XCircle, Search, Clock, Calendar, RotateCcw, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, Search, Clock, Calendar, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 
 interface OvertimeListPageProps {
   role: 'admin' | 'manager' | 'hr';
@@ -29,17 +29,26 @@ export function OvertimeListPage({ role, statusFilter, hidePending }: OvertimeLi
         <div key={req.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
-                  req.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
-                  req.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                  req.status === 'DELETED' ? 'bg-slate-500/10 text-slate-600 border-slate-500/20' :
-                  'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
-                }`}>
-                  {req.status}
-                </span>
-                <span className="text-sm font-bold text-slate-800">{req.employee.firstName} {req.employee.lastName}</span>
-                <span className="text-xs text-slate-500 font-medium">{req.employee.Department?.name || 'No Dept'}</span>
+              <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
+                    req.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                    req.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                    req.status === 'DELETED' ? 'bg-slate-500/10 text-slate-600 border-slate-500/20' :
+                    'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                  }`}>
+                    {req.status}
+                  </span>
+                  {req.source === 'ASSIGNED' && (
+                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border bg-blue-500/10 text-blue-600 border-blue-500/20 flex items-center gap-1">
+                      <UserPlus size={12} /> Assigned
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-800">{req.employee.firstName} {req.employee.lastName}</span>
+                  <span className="text-xs text-slate-500 font-medium">{req.employee.Department?.name || 'No Dept'}</span>
+                </div>
               </div>
               
               <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 font-medium">

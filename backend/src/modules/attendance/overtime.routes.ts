@@ -4,8 +4,10 @@ import {
     getOvertimeRequests,
     createOvertimeRequest,
     updateOvertimeRequest,
-    deleteOvertimeRequest
+    deleteOvertimeRequest,
+    batchCreateOvertimeRequests
 } from './overtime.controller';
+import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
 const router = Router();
 
@@ -14,6 +16,7 @@ router.use(authenticate);
 
 // Overtime requests routes
 router.get('/', getOvertimeRequests);
+router.post('/batch', adminManagerOrHR, batchCreateOvertimeRequests);
 router.post('/', createOvertimeRequest);
 router.patch('/:id', updateOvertimeRequest);
 router.delete('/:id', deleteOvertimeRequest);

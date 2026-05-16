@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Clock, History } from 'lucide-react';
+import { Clock, History, UserPlus } from 'lucide-react';
 import { OvertimeListPage } from './OvertimeListPage';
+import { AssignOvertimeModal } from './AssignOvertimeModal';
 
 interface OvertimeDashboardProps {
   role: 'admin' | 'hr' | 'manager';
@@ -12,11 +13,12 @@ interface OvertimeDashboardProps {
 export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const canReview = role === 'manager';
+  const canReview = role === 'manager' || role === 'admin';
   const initialTab = (searchParams.get('tab') === 'history' || !canReview) ? 'history' : 'pending';
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>(initialTab);
 
   const [historyFilter, setHistoryFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'DELETED'>('ALL');
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
   const handleTabChange = (tab: 'pending' | 'history') => {
     setActiveTab(tab);
@@ -58,6 +60,15 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
               Pending Review
             </button>
           )}
+          {canReview && (
+            <button
+              onClick={() => setIsAssignModalOpen(true)}
+              className="h-[36px] px-[16px] rounded-[6px] text-[14px] font-medium transition-all duration-200 flex items-center gap-[8px] bg-blue-600 text-white border border-blue-600 hover:bg-blue-700"
+            >
+              <UserPlus size={16} />
+              Assign Overtime
+            </button>
+          )}
           <button
             onClick={() => handleTabChange('history')}
             className={`h-[36px] px-[16px] rounded-[6px] text-[14px] font-medium transition-all duration-200 flex items-center gap-[8px] border ${
@@ -91,6 +102,20 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
           </div>
         )}
       </div>
+
+      {isAssignModalOpen && (
+        <AssignOvertimeModal
+          isOpen={isAssignModalOpen}
+          onClose={() => {
+            setIsAssignModalOpen(false);
+            // Optionally force a refresh by toggling tabs or similar, but the hook should handle it 
+            // if we pass a refresh function, though we don't have it here yet. 
+            // Setting a state or reloading could work. We'll let the user reload or switch tabs.
+            window.location.reload();
+          }}
+          role={role}
+        />
+      )}
     </div>
   );
 }
