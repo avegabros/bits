@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Clock, History, UserPlus } from 'lucide-react';
+import { Clock, History, UserPlus, Monitor } from 'lucide-react';
 import { OvertimeListPage } from './OvertimeListPage';
 import { AssignOvertimeModal } from './AssignOvertimeModal';
+import { OTMonitoringTab } from './OTMonitoringTab';
 
 interface OvertimeDashboardProps {
   role: 'admin' | 'hr' | 'manager';
@@ -14,25 +15,27 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const canReview = role === 'manager' || role === 'admin';
-  const initialTab = (searchParams.get('tab') === 'history' || !canReview) ? 'history' : 'pending';
-  const [activeTab, setActiveTab] = useState<'pending' | 'history'>(initialTab);
+  const resolveTab = (param: string | null, canReview: boolean): 'pending' | 'history' | 'monitoring' => {
+    if (!canReview) return 'history';
+    if (param === 'history' || param === 'monitoring' || param === 'pending') return param;
+    return 'pending';
+  };
+  const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'monitoring'>(resolveTab(searchParams.get('tab'), canReview));
 
   const [historyFilter, setHistoryFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'DELETED'>('ALL');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
-  const handleTabChange = (tab: 'pending' | 'history') => {
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleTabChange = (tab: 'pending' | 'history' | 'monitoring') => {
     setActiveTab(tab);
     router.push(`?tab=${tab}`, { scroll: false });
   };
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'history' || !canReview) {
-      setActiveTab('history');
-    } else {
-      setActiveTab('pending');
-    }
-  }, [searchParams]);
+    setActiveTab(resolveTab(tabParam, canReview));
+  }, [searchParams, canReview]);
 
   return (
     <div className="space-y-[24px] max-w-full bg-[#F5F5F5] min-h-screen">
@@ -70,6 +73,17 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
             </button>
           )}
           <button
+            onClick={() => handleTabChange('monitoring')}
+            className={`h-[36px] px-[16px] rounded-[6px] text-[14px] font-medium transition-all duration-200 flex items-center gap-[8px] border ${
+              activeTab === 'monitoring'
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-transparent text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            <Monitor size={16} />
+            Live Monitoring
+          </button>
+          <button
             onClick={() => handleTabChange('history')}
             className={`h-[36px] px-[16px] rounded-[6px] text-[14px] font-medium transition-all duration-200 flex items-center gap-[8px] border ${
               activeTab === 'history'
@@ -84,7 +98,7 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
       </div>
 
       <div className="px-[20px]">
-        {activeTab === 'pending' && <OvertimeListPage role={role} statusFilter="PENDING" />}
+        {activeTab === 'pending' && <OvertimeListPage role={role} statusFilter="PENDING" refreshKey={refreshKey} />}
         {activeTab === 'history' && (
           <div className="space-y-6">
              <div className="mb-4">
@@ -97,8 +111,16 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
                      <button onClick={() => setHistoryFilter('DELETED')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${historyFilter === 'DELETED' ? 'bg-slate-500 text-white shadow-sm shadow-slate-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Deleted</button>
                   </div>
                 </div>
-                <OvertimeListPage role={role} statusFilter={historyFilter === 'ALL' ? undefined : historyFilter} hidePending={true} />
+                <OvertimeListPage role={role} statusFilter={historyFilter === 'ALL' ? undefined : historyFilter} hidePending={true} refreshKey={refreshKey} />
              </div>
+          </div>
+        )}
+        {activeTab === 'monitoring' && (
+          <div className="space-y-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold mb-6">Live Overtime Sessions</h2>
+              <OTMonitoringTab role={role} />
+            </div>
           </div>
         )}
       </div>
@@ -108,10 +130,7 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
           isOpen={isAssignModalOpen}
           onClose={() => {
             setIsAssignModalOpen(false);
-            // Optionally force a refresh by toggling tabs or similar, but the hook should handle it 
-            // if we pass a refresh function, though we don't have it here yet. 
-            // Setting a state or reloading could work. We'll let the user reload or switch tabs.
-            window.location.reload();
+            setRefreshKey(k => k + 1);
           }}
           role={role}
         />

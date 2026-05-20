@@ -17,6 +17,13 @@ interface Employee {
   Department: { name: string } | null;
 }
 
+interface BackendValidationError {
+  employeeId?: number;
+  employeeName?: string;
+  errors?: { message: string; code?: string }[];
+  message?: string;
+}
+
 export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeModalProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,19 +38,32 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
   
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
   
   const [submitting, setSubmitting] = useState(false);
   const [successCount, setSuccessCount] = useState<number | null>(null);
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Fetch employees
   useEffect(() => {
     if (!isOpen) return;
     
+    if (debouncedQuery.trim().length < 2) {
+      setEmployees([]);
+      return;
+    }
+
     const fetchEmployees = async () => {
       setLoading(true);
+      setError(null);
       try {
-        const response = await apiFetch<{ success: boolean; employees: Employee[] }>('/api/employees');
+        const response = await apiFetch<{ success: boolean; employees: Employee[] }>(`/api/employees?search=${encodeURIComponent(debouncedQuery)}&limit=50&fields=minimal`);
         if (response.success && response.employees) {
           setEmployees(response.employees);
         } else {
@@ -58,7 +78,7 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
     };
     
     fetchEmployees();
-  }, [isOpen]);
+  }, [isOpen, debouncedQuery]);
 
   // Derived state: Departments (only useful for admin since manager only gets their own anyway)
   const departments = useMemo(() => {
@@ -72,11 +92,10 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
   // Derived state: Filtered employees
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => {
-      const matchesSearch = `${e.firstName} ${e.lastName} ${e.employeeNumber}`.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDept = selectedDepartment === 'ALL' || e.Department?.name === selectedDepartment;
-      return matchesSearch && matchesDept;
+      return matchesDept;
     });
-  }, [employees, searchQuery, selectedDepartment]);
+  }, [employees, selectedDepartment]);
 
   // Selection handlers
   const toggleSelection = (id: number) => {
@@ -111,8 +130,15 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
       setError('Please fill out all required fields.');
       return;
     }
-    if (startTime >= endTime) {
-      setError('Start time must be before end time.');
+    // Zero-duration check
+    if (startTime === endTime) {
+      setError('Start time and end time cannot be the same.');
+      return;
+    }
+    // Past-date check (PHT-aware)
+    const todayPHT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    if (date < todayPHT) {
+      setError('Cannot assign overtime for a past date.');
       return;
     }
 
@@ -120,7 +146,7 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
       setSubmitting(true);
       setError(null);
       
-      const res = await apiFetch<{ success: boolean; message: string; created: number }>('/api/attendance/overtime/batch', {
+      const res = await apiFetch<{ success: boolean; message: string; created: number; validationErrors?: BackendValidationError[] }>('/api/attendance/overtime/batch', {
         method: 'POST',
         body: JSON.stringify({
           employeeIds: selectedIds,
@@ -137,10 +163,21 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
           onClose();
         }, 2000);
       } else {
-        setError(res.message || 'Failed to assign overtime.');
+        // Show validation errors from backend if available
+        if (res.validationErrors && Array.isArray(res.validationErrors)) {
+          const errorMessages = res.validationErrors
+            .map((ve) => ve.employeeName
+              ? `${ve.employeeName}: ${ve.errors?.[0]?.message || 'Validation failed'}`
+              : ve.message || 'Validation failed')
+            .join('\n');
+          setError(errorMessages || res.message || 'Validation failed.');
+        } else {
+          setError(res.message || 'Failed to assign overtime.');
+        }
       }
-    } catch (err: any) {
-      setError(err.message || 'Server error.');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Server error.';
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -223,13 +260,18 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
                     </span>
                   </div>
                   <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-100">
-                    {loading ? (
-                      <div className="p-4 text-center text-sm text-slate-500">Loading employees...</div>
+                    {debouncedQuery.trim().length < 2 ? (
+                      <div className="p-4 text-center text-sm text-slate-500">Type at least 2 characters to search employees...</div>
+                    ) : loading ? (
+                      <div className="p-4 flex justify-center items-center gap-2 text-sm text-slate-500">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        Searching...
+                      </div>
                     ) : filteredEmployees.length === 0 ? (
                       <div className="p-4 text-center text-sm text-slate-500">No employees found matching filters.</div>
                     ) : (
                       filteredEmployees.map(emp => (
-                        <label key={emp.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors">
+                        <div key={emp.id} onClick={() => toggleSelection(emp.id)} className={`flex items-center gap-3 px-3 py-2 cursor-pointer rounded-lg transition-colors ${selectedIds.includes(emp.id) ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-slate-50'}`}>
                           {selectedIds.includes(emp.id) ? (
                             <CheckSquare className="w-4 h-4 text-blue-600" />
                           ) : (
@@ -239,11 +281,33 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
                             <p className="text-sm font-bold text-slate-800 truncate">{emp.firstName} {emp.lastName}</p>
                             <p className="text-xs text-slate-500 truncate">{emp.Department?.name || 'No Dept'} • {emp.employeeNumber}</p>
                           </div>
-                        </label>
+                        </div>
                       ))
                     )}
                   </div>
                 </div>
+                {/* Selected Employees Summary */}
+                {selectedIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                    {employees
+                      .filter(e => selectedIds.includes(e.id))
+                      .map(e => (
+                        <span
+                          key={e.id}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded-full"
+                        >
+                          {e.firstName} {e.lastName}
+                          <button
+                            type="button"
+                            onClick={(ev) => { ev.stopPropagation(); toggleSelection(e.id); }}
+                            className="ml-0.5 text-blue-500 hover:text-blue-700"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {/* Date & Time Section */}

@@ -23,3 +23,18 @@ export interface OvertimeRequest {
     lastName: string;
   } | null;
 }
+
+export interface OTSession {
+  id: number;
+  employee: { id: number; firstName: string; lastName: string; department: string; branch: string };
+  date: string;
+  approved: { startTime: string; endTime: string };
+  actual: { startTime: string | null; endTime: string | null };
+  actualDurationMinutes: number;
+  approvedDurationMinutes: number;
+  sessionState: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'MISSED' | 'PARTIAL';
+  device: { checkIn: string | null; checkOut: string | null };
+  linkedAttendanceId: number | null;
+  source: 'REQUESTED' | 'ASSIGNED';
+  reason?: string;
+}

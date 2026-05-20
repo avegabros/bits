@@ -1,33 +1,88 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { audit } from '../../shared/lib/auditLogger';
 import { sendOvertimeStatusEmail, sendOvertimeAssignedEmail } from '../../shared/services/email.service';
+import { validateOvertimeRequest, OTValidationError } from './overtime-validation.service';
 
 // GET /api/attendance/overtime
 export const getOvertimeRequests = async (req: Request, res: Response) => {
     try {
-        const { employeeId, status, date } = req.query;
+        const { employeeId, status, date, page: queryPage, limit: queryLimit, search, departmentId, startDate, endDate } = req.query;
 
-        const where: any = {};
+        const page = parseInt(queryPage as string, 10) || 1;
+        const limit = Math.min(parseInt(queryLimit as string, 10) || 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.OvertimeRequestWhereInput = {};
+        
         if (employeeId) where.employeeId = parseInt(employeeId as string, 10);
-        if (status) where.status = status;
-        if (date) where.date = new Date(date as string);
+        if (status) where.status = status as string;
+        
+        // Exact date or date range
+        if (date) {
+            where.date = new Date(date as string);
+        } else if (startDate || endDate) {
+            where.date = {};
+            if (startDate) where.date.gte = new Date(startDate as string);
+            if (endDate) where.date.lte = new Date(endDate as string);
+        }
+
+        // Employee Search
+        if (search) {
+            const searchTerms = (search as string).trim().split(/\s+/);
+            const nameConditions = searchTerms.map(term => ({
+                OR: [
+                    { firstName: { contains: term, mode: 'insensitive' as const } },
+                    { lastName: { contains: term, mode: 'insensitive' as const } },
+                ]
+            }));
+            where.employee = { AND: nameConditions };
+        }
+
+        // Department filter
+        if (departmentId) {
+            where.employee = where.employee || {};
+            where.employee.departmentId = parseInt(departmentId as string, 10);
+        }
+
+        // Scope to manager's departments if applicable
+        if (req.user?.role === 'MANAGER' && req.managerDepartmentIds) {
+            where.employee = where.employee || {};
+            where.employee.departmentId = { in: req.managerDepartmentIds };
+        }
 
         // If USER, they can only see their own requests
         if (req.user?.role === 'USER') {
             where.employeeId = req.user.employeeId;
+            // Clean up employee-specific conditions to avoid conflicts
+            delete where.employee;
         }
 
-        const requests = await prisma.overtimeRequest.findMany({
-            where,
-            include: {
-                employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, Department: { select: { name: true } } } },
-                reviewedBy: { select: { id: true, firstName: true, lastName: true } }
-            },
-            orderBy: { submittedAt: 'desc' }
-        });
+        const [total, requests] = await Promise.all([
+            prisma.overtimeRequest.count({ where }),
+            prisma.overtimeRequest.findMany({
+                where,
+                skip,
+                take: limit,
+                include: {
+                    employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, Department: { select: { name: true } } } },
+                    reviewedBy: { select: { id: true, firstName: true, lastName: true } }
+                },
+                orderBy: { submittedAt: 'desc' }
+            })
+        ]);
 
-        res.json({ success: true, requests });
+        res.json({ 
+            success: true, 
+            requests,
+            meta: { 
+                total, 
+                page, 
+                limit, 
+                totalPages: Math.ceil(total / limit) 
+            }
+        });
     } catch (error) {
         console.error('Error fetching overtime requests:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch overtime requests' });
@@ -47,6 +102,29 @@ export const createOvertimeRequest = async (req: Request, res: Response) => {
         }
 
         const requestDate = new Date(date);
+
+        const match = reason?.match(/^\[EXTENSION:(\d+)\]/);
+        const excludeOvertimeIds: number[] = [];
+        if (match) {
+            excludeOvertimeIds.push(parseInt(match[1], 10));
+        }
+
+        // ── OT Validation ──────────────────────────────────────────────────
+        const validationResult = await validateOvertimeRequest({
+            employeeId: targetEmployeeId,
+            date: requestDate,
+            startTime,
+            endTime,
+            excludeOvertimeIds,
+        });
+
+        if (!validationResult.valid) {
+            return res.status(400).json({
+                success: false,
+                message: validationResult.errors[0].message,
+                validationErrors: validationResult.errors,
+            });
+        }
 
         // If manager creates it directly, auto-approve it.
         const status = req.user?.role === 'MANAGER' ? 'APPROVED' : 'PENDING';
@@ -118,10 +196,35 @@ export const batchCreateOvertimeRequests = async (req: Request, res: Response) =
             }
         }
 
-        const createdRequests = [];
+        // ── Per-Employee OT Validation ───────────────────────────────────────
+        const allErrors: { employeeId: number; employeeName: string; errors: OTValidationError[] }[] = [];
 
         for (const emp of employees) {
-            const request = await prisma.overtimeRequest.create({
+            const result = await validateOvertimeRequest({
+                employeeId: emp.id,
+                date: requestDate,
+                startTime,
+                endTime,
+            });
+            if (!result.valid) {
+                allErrors.push({
+                    employeeId: emp.id,
+                    employeeName: `${emp.firstName} ${emp.lastName}`,
+                    errors: result.errors,
+                });
+            }
+        }
+
+        if (allErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Validation failed for ${allErrors.length} employee(s).`,
+                validationErrors: allErrors,
+            });
+        }
+
+        const createdRequests = await prisma.$transaction(
+            employees.map(emp => prisma.overtimeRequest.create({
                 data: {
                     employeeId: emp.id,
                     date: requestDate,
@@ -132,22 +235,25 @@ export const batchCreateOvertimeRequests = async (req: Request, res: Response) =
                     source: 'ASSIGNED',
                     reviewedById: req.user?.employeeId,
                     reviewedAt: new Date()
-                }
-            });
-            createdRequests.push(request);
+                },
+                include: { employee: { select: { firstName: true, lastName: true, email: true } } }
+            }))
+        );
 
+        // Fire-and-forget: audit + emails
+        for (const request of createdRequests) {
             void audit({
                 action: 'CREATE',
                 entityType: 'OvertimeRequest',
                 entityId: request.id,
                 performedBy: req.user?.employeeId,
-                details: `Assigned overtime for ${emp.firstName} ${emp.lastName} on ${date}`
+                details: `Assigned overtime for ${request.employee.firstName} ${request.employee.lastName} on ${date}`
             });
 
-            if (emp.email) {
+            if (request.employee?.email) {
                 void sendOvertimeAssignedEmail(
-                    emp.email,
-                    `${emp.firstName} ${emp.lastName}`,
+                    request.employee.email,
+                    `${request.employee.firstName} ${request.employee.lastName}`,
                     requestDate,
                     startTime,
                     endTime,
@@ -183,20 +289,94 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
             }
         }
 
-        const dataToUpdate: any = {};
+        const dataToUpdate: Prisma.OvertimeRequestUncheckedUpdateInput = {};
         if (startTime) dataToUpdate.startTime = startTime;
         if (endTime) dataToUpdate.endTime = endTime;
         if (reason) dataToUpdate.reason = reason;
+
+        if (startTime || endTime) {
+            const effectiveStartTime = startTime || existing.startTime;
+            const effectiveEndTime = endTime || existing.endTime;
+
+            const match = (reason || existing.reason)?.match(/^\[EXTENSION:(\d+)\]/);
+            const excludeOvertimeIds = [id];
+            if (match) {
+                excludeOvertimeIds.push(parseInt(match[1], 10));
+            }
+
+            const result = await validateOvertimeRequest({
+                employeeId: existing.employeeId,
+                date: existing.date,
+                startTime: effectiveStartTime,
+                endTime: effectiveEndTime,
+                excludeOvertimeIds,
+            });
+            if (!result.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: result.errors[0].message,
+                    validationErrors: result.errors,
+                });
+            }
+        }
+
+        let isMerged = false;
+        let mergedRequest: any = null;
 
         if (status && status !== existing.status && req.user?.role !== 'USER') {
             if (req.user?.role !== 'MANAGER' && req.user?.role !== 'ADMIN') {
                 return res.status(403).json({ success: false, message: 'Only Managers and Admins can approve or reject overtime requests' });
             }
-            dataToUpdate.status = status;
-            dataToUpdate.reviewedById = req.user?.employeeId;
-            dataToUpdate.reviewedAt = new Date();
-            if (status === 'REJECTED' && rejectionReason) {
-                dataToUpdate.rejectionReason = rejectionReason;
+            
+            if (status === 'APPROVED') {
+                const match = existing.reason?.match(/^\[EXTENSION:(\d+)\]\s*(.*)$/);
+                if (match) {
+                    const originalId = parseInt(match[1], 10);
+                    const extensionReason = match[2];
+
+                    const originalRequest = await prisma.overtimeRequest.findUnique({
+                        where: { id: originalId }
+                    });
+
+                    if (originalRequest && originalRequest.employeeId === existing.employeeId) {
+                        // Update original request: extend its endTime and append reason
+                        mergedRequest = await prisma.overtimeRequest.update({
+                            where: { id: originalId },
+                            data: {
+                                endTime: endTime || existing.endTime,
+                                reason: `${originalRequest.reason}\n[Extension Approved]: ${extensionReason}`,
+                                reviewedById: req.user?.employeeId,
+                                reviewedAt: new Date()
+                            },
+                            include: {
+                                employee: { select: { id: true, firstName: true, lastName: true } },
+                                reviewedBy: { select: { id: true, firstName: true, lastName: true } }
+                            }
+                        });
+
+                        dataToUpdate.status = 'MERGED';
+                        dataToUpdate.reviewedById = req.user?.employeeId;
+                        dataToUpdate.reviewedAt = new Date();
+                        isMerged = true;
+
+                        void audit({
+                            action: 'UPDATE',
+                            entityType: 'OvertimeRequest',
+                            entityId: originalId,
+                            performedBy: req.user?.employeeId,
+                            details: `Merged overtime extension request ID ${existing.id} into original OT request ID ${originalId} (New endTime: ${endTime || existing.endTime})`
+                        });
+                    }
+                }
+            }
+
+            if (!isMerged) {
+                dataToUpdate.status = status;
+                dataToUpdate.reviewedById = req.user?.employeeId;
+                dataToUpdate.reviewedAt = new Date();
+                if (status === 'REJECTED' && rejectionReason) {
+                    dataToUpdate.rejectionReason = rejectionReason;
+                }
             }
         }
 
@@ -214,18 +394,30 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
             entityType: 'OvertimeRequest',
             entityId: updated.id,
             performedBy: req.user?.employeeId,
-            details: `Updated overtime request for ${updated.employee.firstName} ${updated.employee.lastName} (Status: ${updated.status})`
+            details: isMerged
+                ? `Approved and merged overtime extension request ID ${updated.id} (Status: MERGED)`
+                : `Updated overtime request for ${updated.employee.firstName} ${updated.employee.lastName} (Status: ${updated.status})`
         });
 
         // Trigger email notification if the status was changed to APPROVED or REJECTED
         if (status && (status === 'APPROVED' || status === 'REJECTED') && existing.employee.email) {
-            void sendOvertimeStatusEmail(
-                existing.employee.email,
-                existing.employee.firstName,
-                existing.date,
-                status as 'APPROVED' | 'REJECTED',
-                rejectionReason
-            );
+            if (isMerged && mergedRequest) {
+                void sendOvertimeStatusEmail(
+                    existing.employee.email,
+                    existing.employee.firstName,
+                    existing.date,
+                    'APPROVED',
+                    undefined
+                );
+            } else {
+                void sendOvertimeStatusEmail(
+                    existing.employee.email,
+                    existing.employee.firstName,
+                    existing.date,
+                    status as 'APPROVED' | 'REJECTED',
+                    rejectionReason || undefined
+                );
+            }
         }
 
         res.json({ success: true, message: 'Overtime request updated', request: updated });

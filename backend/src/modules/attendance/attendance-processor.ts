@@ -356,6 +356,23 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                         details: `Employee biometric OT check-in`
                                     });
                                 } else {
+                                    // Minimum checkout gap for OT (cap at half the approved OT duration or global minCheckoutHours)
+                                    const otCheckInTime = new Date(ot.actualStartTime);
+                                    const otDiffMs = log.timestamp.getTime() - otCheckInTime.getTime();
+                                    const otDiffHours = otDiffMs / (1000 * 60 * 60);
+
+                                    const [sH, sM] = ot.startTime.split(':').map(Number);
+                                    const [eH, eM] = ot.endTime.split(':').map(Number);
+                                    let otDurationHours = (eH + eM/60) - (sH + sM/60);
+                                    if (otDurationHours < 0) otDurationHours += 24;
+
+                                    const effectiveOTMinCheckout = Math.min(otDurationHours / 2, minCheckoutHours);
+
+                                    if (otDiffHours < effectiveOTMinCheckout) {
+                                        await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                                        continue;
+                                    }
+
                                     await prisma.overtimeRequest.update({
                                         where: { id: ot.id },
                                         data: { actualEndTime: log.timestamp }

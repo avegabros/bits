@@ -14,6 +14,9 @@ const router = Router();
 // Apply auth middleware to all routes
 router.use(authenticate);
 
+import { getOvertimeSessions } from './overtime-sessions.controller';
+router.get('/sessions', adminManagerOrHR, getOvertimeSessions);
+
 // Overtime requests routes
 router.get('/', getOvertimeRequests);
 router.post('/batch', adminManagerOrHR, batchCreateOvertimeRequests);

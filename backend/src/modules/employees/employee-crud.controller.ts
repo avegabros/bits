@@ -132,79 +132,118 @@ export const getEmployeeById = async (req: Request, res: Response) => {
 // GET /api/employees - Get all employees
 export const getAllEmployees = async (req: Request, res: Response) => {
     try {
+        const { search, page: queryPage, limit: queryLimit, fields } = req.query;
+
+        const page = parseInt(queryPage as string, 10) || 1;
+        // Default to 9999 if no limit specified to preserve backward compatibility
+        const limit = queryLimit ? parseInt(queryLimit as string, 10) : 9999;
+        const skip = (page - 1) * limit;
+
         const where: Prisma.EmployeeWhereInput = {};
         if (req.managerDepartmentIds && req.query.scope !== 'company') {
             where.departmentId = { in: req.managerDepartmentIds };
         }
 
-        const employees = await prisma.employee.findMany({
-            where,
-            select: {
-                id: true,
-                zkId: true,
-                cardNumber: true,
-                employeeNumber: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                suffix: true,
-                gender: true,
-                dateOfBirth: true,
-                email: true,
-                role: true,
-                departmentId: true,
-                Department: { select: { name: true } },
-                branchId: true,
-                Branch: { select: { name: true } },
-                companyId: true,
-                Company: { select: { id: true, name: true } },
-                position: true,
-                contactNumber: true,
-                hireDate: true,
-                employmentStatus: true,
-                profilePicture: true,
-                shiftId: true,
-                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
-                EmployeeShift: {
-                    select: {
-                        id: true,
-                        sortOrder: true,
-                        isPrimary: true,
-                        shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
-                    },
-                    orderBy: { sortOrder: 'asc' }
+        if (search) {
+            const searchTerms = (search as string).trim().split(/\s+/);
+            const nameConditions = searchTerms.map(term => ({
+                OR: [
+                    { firstName: { contains: term, mode: 'insensitive' as const } },
+                    { lastName: { contains: term, mode: 'insensitive' as const } },
+                ]
+            }));
+            where.AND = nameConditions;
+        }
+
+        const isMinimal = fields === 'minimal';
+
+        const selectConfig: Prisma.EmployeeSelect = isMinimal ? {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeNumber: true,
+            departmentId: true,
+            Department: { select: { name: true } },
+            Branch: { select: { name: true } },
+        } : {
+            id: true,
+            zkId: true,
+            cardNumber: true,
+            employeeNumber: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            suffix: true,
+            gender: true,
+            dateOfBirth: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            Department: { select: { name: true } },
+            branchId: true,
+            Branch: { select: { name: true } },
+            companyId: true,
+            Company: { select: { id: true, name: true } },
+            position: true,
+            contactNumber: true,
+            hireDate: true,
+            employmentStatus: true,
+            profilePicture: true,
+            shiftId: true,
+            Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+            EmployeeShift: {
+                select: {
+                    id: true,
+                    sortOrder: true,
+                    isPrimary: true,
+                    shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
                 },
-                createdAt: true,
-                EmployeeDeviceEnrollment: {
-                    select: {
-                        enrolledAt: true,
-                        device: {
-                            select: {
-                                id: true,
-                                name: true,
-                                location: true,
-                                isActive: true,
-                            },
+                orderBy: { sortOrder: 'asc' }
+            },
+            createdAt: true,
+            EmployeeDeviceEnrollment: {
+                select: {
+                    enrolledAt: true,
+                    device: {
+                        select: {
+                            id: true,
+                            name: true,
+                            location: true,
+                            isActive: true,
                         },
                     },
                 },
-                EmployeeFingerprintEnrollment: {
-                    select: {
-                        id: true,
-                    },
+            },
+            EmployeeFingerprintEnrollment: {
+                select: {
+                    id: true,
                 },
             },
-            orderBy: [
-                { role: 'asc' },
-                { zkId: 'asc' },
-            ],
-        });
+        };
 
-
+        const [total, employees] = await Promise.all([
+            prisma.employee.count({ where }),
+            prisma.employee.findMany({
+                where,
+                select: selectConfig,
+                orderBy: [
+                    { role: 'asc' },
+                    { zkId: 'asc' },
+                ],
+                skip,
+                take: limit,
+            })
+        ]);
 
         res.json({
             success: true,
-            employees: employees,
+            employees,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
         console.error('Error fetching employees:', error);
