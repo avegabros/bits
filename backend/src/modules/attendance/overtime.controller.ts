@@ -273,7 +273,7 @@ export const batchCreateOvertimeRequests = async (req: Request, res: Response) =
 export const updateOvertimeRequest = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id as string, 10);
-        const { status, startTime, endTime, rejectionReason, reason } = req.body;
+        const { status, startTime, endTime, rejectionReason, reason, actualStartTime, actualEndTime } = req.body;
 
         const existing = await prisma.overtimeRequest.findUnique({ where: { id }, include: { employee: true } });
         if (!existing) return res.status(404).json({ success: false, message: 'Request not found' });
@@ -293,6 +293,15 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
         if (startTime) dataToUpdate.startTime = startTime;
         if (endTime) dataToUpdate.endTime = endTime;
         if (reason) dataToUpdate.reason = reason;
+
+        /* TESTING ONLY - MANUAL OT EDITING (NOTE: Please delete this block after testing stage) */
+        if (actualStartTime !== undefined) {
+            dataToUpdate.actualStartTime = actualStartTime ? new Date(actualStartTime) : null;
+        }
+        if (actualEndTime !== undefined) {
+            dataToUpdate.actualEndTime = actualEndTime ? new Date(actualEndTime) : null;
+        }
+        /* END OF TESTING ONLY BLOCK */
 
         if (startTime || endTime) {
             const effectiveStartTime = startTime || existing.startTime;

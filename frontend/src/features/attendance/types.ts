@@ -35,6 +35,7 @@ export interface AttendanceRecord {
   isPending?: boolean;
   isMerged?: boolean;
   subRecords?: AttendanceRecord[];
+  approvedOts?: any[];
 }
 
 export interface AttendanceStats {

@@ -100,7 +100,9 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             employeeId: true,
             date: true,
             startTime: true,
-            endTime: true
+            endTime: true,
+            actualStartTime: true,
+            actualEndTime: true
         }
     });
 
@@ -118,15 +120,37 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
         otsByEmpAndDate.set(key, list);
     }
 
+    // --- OT De-duplication ---
+    // When an employee has multiple shifts on the same day (e.g. Half Morning + Half Afternoon),
+    // each shift produces a separate attendance record with the same PHT date. Without de-duplication,
+    // every record fetches the same approved OT list and computes overtime independently, causing
+    // the OT minutes to be multiplied by the number of shifts. To fix this, we identify the
+    // chronologically latest record per employee per day and only assign approved OTs to that record.
+    const latestRecordIdMap = new Map<string, number>();
+    const latestRecordTimeMap = new Map<string, number>();
+
+    records.forEach(r => {
+        if (!r.checkInTime) return;
+        const key = `${r.employeeId}_${getPhtDateStr(r.date)}`;
+        const timeMs = new Date(r.checkInTime).getTime();
+        const existing = latestRecordTimeMap.get(key);
+        if (existing === undefined || timeMs > existing) {
+            latestRecordTimeMap.set(key, timeMs);
+            latestRecordIdMap.set(key, r.id);
+        }
+    });
+
     // Enrich each record with shift-based calculations
     const data = records.map((record) => {
         const shift = record.shift ?? record.employee?.Shift ?? null;
         const finalStatus = record.status;
 
         const dateKey = `${record.employeeId}_${getPhtDateStr(record.date)}`;
-        const recordOts = otsByEmpAndDate.get(dateKey) || [];
+        // Only the latest record for this employee+date gets approved OTs for calculation to prevent duplication
+        const isLatestForDay = latestRecordIdMap.get(dateKey) === record.id;
+        const recordOtsForCalc = isLatestForDay ? (otsByEmpAndDate.get(dateKey) || []) : [];
 
-        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift, recordOts);
+        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift, recordOtsForCalc);
         return {
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,
@@ -138,6 +162,7 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             isEdited: !!(record.checkin_updated || record.checkout_updated),
             isPending: record.AttendanceAdjustment && record.AttendanceAdjustment.length > 0,
             ...metrics,
+            approvedOts: otsByEmpAndDate.get(dateKey) || [],
         };
     });
 

@@ -48,6 +48,7 @@ interface RawAttendanceLog {
   isEdited?: boolean
   isPending?: boolean
   displayStatus?: string
+  approvedOts?: any[]
 }
 
 interface RawEmployee {
@@ -343,6 +344,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
             checkoutSource: log.checkoutSource ?? null,
             isEdited: log.isEdited ?? false,
             isPending,
+            approvedOts: log.approvedOts,
           }
         })
 
@@ -545,6 +547,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
                 lateMinutes: group.reduce((sum, r) => sum + r.lateMinutes, 0),
                 overtimeMinutes: group.reduce((sum, r) => sum + r.overtimeMinutes, 0),
                 undertimeMinutes: group.reduce((sum, r) => sum + r.undertimeMinutes, 0),
+                approvedOts: group.find(r => r.approvedOts && r.approvedOts.length > 0)?.approvedOts || [],
               })
             }
           }
