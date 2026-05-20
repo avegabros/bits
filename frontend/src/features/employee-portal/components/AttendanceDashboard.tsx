@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { CalendarDays, Filter, Clock } from 'lucide-react'
+import { CalendarDays, Clock } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { useEmployeeAttendance } from '../hooks/useEmployeeAttendance'
@@ -36,29 +36,28 @@ export function AttendanceDashboard() {
     return Array.from(seen).sort()
   }, [records])
 
-  const [shiftFilter, setShiftFilter] = useState<string | null>(null)
+  const [shiftFilter, setShiftFilter] = useState<string>('ALL')
 
-  // Auto-default to primary shift once records load
+  // Reset page to 1 when filter changes
   useEffect(() => {
-    if (shiftFilter === null && uniqueShifts.length > 0) {
-      setShiftFilter(uniqueShifts[0])
-    }
-  }, [uniqueShifts, shiftFilter])
+    setCurrentPage(1)
+  }, [shiftFilter, setCurrentPage])
 
   // Filtered records based on selected shift (when multiple shifts exist)
-  const filteredRecords = useMemo(() => {
-    if (uniqueShifts.length <= 1 || !shiftFilter) return paginatedRecords
-    return paginatedRecords.filter(r => {
+  const allFilteredRecords = useMemo(() => {
+    if (uniqueShifts.length <= 1 || !shiftFilter || shiftFilter === 'ALL') return records
+    return records.filter(r => {
       const label = r.shiftName ?? r.shiftCode ?? null
       return label === shiftFilter
     })
-  }, [paginatedRecords, shiftFilter, uniqueShifts])
+  }, [records, shiftFilter, uniqueShifts])
+
+  const filteredRecords = useMemo(() => {
+    return allFilteredRecords.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
+  }, [allFilteredRecords, currentPage, rowsPerPage])
 
   // Total record count for pagination — filter from full set when shift filter active
-  const filteredTotal = useMemo(() => {
-    if (uniqueShifts.length <= 1 || !shiftFilter) return records.length
-    return records.filter(r => (r.shiftName ?? r.shiftCode ?? null) === shiftFilter).length
-  }, [records, shiftFilter, uniqueShifts])
+  const filteredTotal = allFilteredRecords.length
 
   const formatTime = (timeStr?: string | null) => {
     if (!timeStr) return '--:--'
@@ -127,7 +126,7 @@ export function AttendanceDashboard() {
           {uniqueShifts.length > 1 && (
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Shift</label>
-              <Select value={shiftFilter ?? uniqueShifts[0]} onValueChange={setShiftFilter}>
+              <Select value={shiftFilter} onValueChange={setShiftFilter}>
                 <SelectTrigger className="w-40 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold" id="employee-shift-filter">
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
@@ -135,6 +134,7 @@ export function AttendanceDashboard() {
                   </div>
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="ALL">All Shifts</SelectItem>
                   {uniqueShifts.map(s => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
@@ -142,13 +142,6 @@ export function AttendanceDashboard() {
               </Select>
             </div>
           )}
-          <button 
-            onClick={handleApplyFilter}
-            className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
-            title="Filter"
-          >
-            <Filter className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

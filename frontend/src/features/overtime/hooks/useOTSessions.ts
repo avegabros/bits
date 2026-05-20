@@ -26,8 +26,8 @@ export function useOTSessions() {
   const [filters, setFilters] = useState<OTSessionFilters>({
     search: '',
     departmentId: null,
-    startDate: '',
-    endDate: '',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
     sessionState: ''
   });
 
