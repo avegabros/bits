@@ -60,7 +60,7 @@ function buildTableRows(
 ): TableRowData[] {
     return calendarDates.map(loopDate => {
         const loopDateStr = loopDate.toISOString().split('T')[0];
-        const record = records.find(r => {
+        const dayRecords = records.filter(r => {
             const rDateStr = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             return rDateStr === loopDateStr;
         });
@@ -77,8 +77,9 @@ function buildTableRows(
         let isWorkingDay = true;
         let missingStatus = '';
         const holiday = holidayMap?.get(loopDateStr) ?? null;
+        let recordToPass: AttendanceRecord | undefined = undefined;
 
-        if (!record) {
+        if (dayRecords.length === 0) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             isFuture = loopDateStr > todayStr;
             const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
@@ -102,19 +103,45 @@ function buildTableRows(
             }
             statusType = missingStatus;
         } else {
-            checkInVal = new Date(record.checkInTime);
-            checkOutVal = record.checkOutTime ? new Date(record.checkOutTime) : null;
-            workedHrsVal = record.totalHours ?? 0;
-            lateMinsVal = record.lateMinutes ?? 0;
-            otMinsVal = record.overtimeMinutes ?? 0;
-            utMinsVal = record.undertimeMinutes ?? 0;
-            statusType = getRecordStatusFromBackend(record);
+            // Sort day records chronologically by check-in time
+            const sortedDayRecords = [...dayRecords].sort((a, b) => 
+                new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+            );
+
+            const firstRecord = sortedDayRecords[0];
+            const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+            const isShiftActive = dayRecords.some(r => r.isShiftActive);
+
+            workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+            lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+            otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+            utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+            // Construct representative merged record
+            const mergedRecord: AttendanceRecord = {
+                ...firstRecord,
+                isShiftActive,
+                checkOutTime: lastRecord.checkOutTime,
+                gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+                checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+                checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+                notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+                isEarlyOut: lastRecord.isEarlyOut,
+                isAnomaly: dayRecords.some(r => r.isAnomaly),
+                lateMinutes: lateMinsVal,
+                status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+            };
+
+            recordToPass = mergedRecord;
+            checkInVal = new Date(firstRecord.checkInTime);
+            checkOutVal = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+            statusType = getRecordStatusFromBackend(mergedRecord);
         }
 
         return {
             loopDate,
             loopDateStr,
-            record,
+            record: recordToPass,
             statusType,
             missingStatus,
             isFuture,

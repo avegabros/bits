@@ -199,12 +199,13 @@ export const handleExportIndividual = (
     'Note',
   ]);
   // Build a lookup map keyed by YYYY-MM-DD (same logic as EmployeeModal)
-  const recordsByDate = new Map<string, AttendanceRecord>();
+  const recordsByDate = new Map<string, AttendanceRecord[]>();
   records.forEach((r) => {
     const key = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     if (!recordsByDate.has(key)) {
-      recordsByDate.set(key, r);
+      recordsByDate.set(key, []);
     }
+    recordsByDate.get(key)!.push(r);
   });
 
   // Determine which short-day names are working days (mirrors EmployeeModal)
@@ -237,17 +238,45 @@ export const handleExportIndividual = (
     const dayOfWeek = cursor.getUTCDay();
     const dateKey = cursor.toISOString().split('T')[0];
     const dayShort = cursor.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
-    const r = recordsByDate.get(dateKey);
+    const dayRecords = recordsByDate.get(dateKey) || [];
 
-    if (r) {
-      // Record exists — mirrors EmployeeModal record branch
-      const checkIn = new Date(r.checkInTime);
-      const checkOut = r.checkOutTime ? new Date(r.checkOutTime) : null;
-      const hoursWorked = r.totalHours ? Math.max(0, r.totalHours).toFixed(2) : '—';
-      const statusLabel = getRecordStatusFromBackend(r);
-      const lateMins = r.lateMinutes ?? 0;
-      const otMins = r.overtimeMinutes ?? 0;
-      const utMins = r.undertimeMinutes ?? 0;
+    if (dayRecords.length > 0) {
+      // Sort day records chronologically by check-in time
+      const sortedDayRecords = [...dayRecords].sort((a, b) => 
+        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+      );
+
+      const firstRecord = sortedDayRecords[0];
+      const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+      const isShiftActive = dayRecords.some(r => r.isShiftActive);
+
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+      // Construct representative merged record
+      const mergedRecord: AttendanceRecord = {
+        ...firstRecord,
+        isShiftActive,
+        checkOutTime: lastRecord.checkOutTime,
+        gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+        checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+        checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+        notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+        isEarlyOut: lastRecord.isEarlyOut,
+        isAnomaly: dayRecords.some(r => r.isAnomaly),
+        lateMinutes: lateMinsVal,
+        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+      };
+
+      const checkIn = new Date(firstRecord.checkInTime);
+      const checkOut = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+      const hoursWorked = workedHrsVal > 0 ? workedHrsVal.toFixed(2) : '—';
+      const statusLabel = getRecordStatusFromBackend(mergedRecord);
+      const lateMins = lateMinsVal;
+      const otMins = otMinsVal;
+      const utMins = utMinsVal;
 
       // Status mapping — exact match with UI
       let displayStatus: string;
@@ -264,20 +293,20 @@ export const handleExportIndividual = (
       }
 
       // Check Out column — mirrors UI "Active" indicator
-      const checkOutLabel = r.isShiftActive
+      const checkOutLabel = isShiftActive
         ? 'Active'
         : checkOut
           ? checkOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
           : '—';
 
       // Hours column — mirrors UI "Live" indicator
-      const hoursLabel = r.isShiftActive ? 'Live' : hoursWorked;
+      const hoursLabel = isShiftActive ? 'Live' : hoursWorked;
 
       // Late column — mirrors UI "0m (Grace)" notation
       let lateLabel: string | number;
       if (lateMins > 0) {
         lateLabel = formatLateHrs(lateMins);
-      } else if (r.gracePeriodApplied) {
+      } else if (mergedRecord.gracePeriodApplied) {
         lateLabel = '0m (Grace)';
       } else {
         lateLabel = '—';
@@ -511,16 +540,54 @@ export const handleExportAllCompanies = async (
   }
 
   // Attendance: employeeId → dateStr → record
-  const attByEmployee = new Map<number, Map<string, any>>();
+  const attByEmployeeTemp = new Map<number, Map<string, any[]>>();
   for (const r of records) {
     const empId = r.employeeId;
-    if (!attByEmployee.has(empId)) attByEmployee.set(empId, new Map());
+    if (!attByEmployeeTemp.has(empId)) attByEmployeeTemp.set(empId, new Map());
     const dateStr = new Date(r.date).toLocaleDateString('en-CA', {
       timeZone: 'Asia/Manila',
     });
-    if (!attByEmployee.get(empId)!.has(dateStr)) {
-      attByEmployee.get(empId)!.set(dateStr, r);
+    if (!attByEmployeeTemp.get(empId)!.has(dateStr)) {
+      attByEmployeeTemp.get(empId)!.set(dateStr, []);
     }
+    attByEmployeeTemp.get(empId)!.get(dateStr)!.push(r);
+  }
+
+  const attByEmployee = new Map<number, Map<string, any>>();
+  for (const [empId, dateMap] of attByEmployeeTemp.entries()) {
+    const mergedDateMap = new Map<string, any>();
+    for (const [dateStr, dayRecords] of dateMap.entries()) {
+      const sortedDayRecords = [...dayRecords].sort((a, b) => 
+        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+      );
+      const firstRecord = sortedDayRecords[0];
+      const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+      const isShiftActive = dayRecords.some(r => r.isShiftActive);
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+      const mergedRecord = {
+        ...firstRecord,
+        isShiftActive,
+        checkInTime: firstRecord.checkInTime,
+        checkOutTime: lastRecord.checkOutTime,
+        gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+        checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+        checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+        notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+        isEarlyOut: lastRecord.isEarlyOut,
+        isAnomaly: dayRecords.some(r => r.isAnomaly),
+        lateMinutes: lateMinsVal,
+        undertimeMinutes: utMinsVal,
+        overtimeMinutes: otMinsVal,
+        totalHours: workedHrsVal,
+        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+      };
+      mergedDateMap.set(dateStr, mergedRecord);
+    }
+    attByEmployee.set(empId, mergedDateMap);
   }
 
   // ── 5. Group employees by company (direct companyId) ────────────────
