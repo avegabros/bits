@@ -100,11 +100,11 @@ export function AttendanceDesktopTable({
                           {onShiftClick && (sr.shiftCode || sr.shiftName) ? (
                             <button 
                               onClick={() => onShiftClick(sr.shiftName || sr.shiftCode || '', row)}
-                              className={`group text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                              className={`group/shift text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
                               title="Click to filter and edit"
                             >
-                              <span className="group-hover:hidden">{sr.shiftCode ?? sr.shiftName ?? 'No Shift'}</span>
-                              <span className="hidden group-hover:inline">{sr.shiftName ?? sr.shiftCode ?? 'No Shift'}</span>
+                              <span className="group-hover/shift:hidden">{sr.shiftCode ?? sr.shiftName ?? 'No Shift'}</span>
+                              <span className="hidden group-hover/shift:inline">{sr.shiftName ?? sr.shiftCode ?? 'No Shift'}</span>
                             </button>
                           ) : (
                             <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`} title={sr.shiftName || sr.shiftCode || undefined}>
@@ -126,11 +126,11 @@ export function AttendanceDesktopTable({
                     {onShiftClick ? (
                       <button 
                         onClick={() => onShiftClick(row.shiftName || row.shiftCode || '', row)}
-                        className={`group text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                        className={`group/shift text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
                         title="Click to filter and edit"
                       >
-                        <span className="group-hover:hidden">{row.shiftCode ?? row.shiftName}</span>
-                        <span className="hidden group-hover:inline">{row.shiftName ?? row.shiftCode}</span>
+                        <span className="group-hover/shift:hidden">{row.shiftCode ?? row.shiftName}</span>
+                        <span className="hidden group-hover/shift:inline">{row.shiftName ?? row.shiftCode}</span>
                       </button>
                     ) : (
                       <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${colorClass}`} title={row.shiftName || row.shiftCode || undefined}>
