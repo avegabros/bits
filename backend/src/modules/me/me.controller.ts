@@ -83,10 +83,64 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
             orderBy: { date: 'desc' },
         });
 
+        const dateValues = new Set(records.map(r => r.date.getTime()));
+        const queryDates = Array.from(dateValues).map(ms => new Date(ms));
+
+        const approvedOts = await prisma.overtimeRequest.findMany({
+            where: {
+                employeeId,
+                date: { in: queryDates },
+                status: 'APPROVED'
+            },
+            select: {
+                employeeId: true,
+                date: true,
+                startTime: true,
+                endTime: true,
+                actualStartTime: true,
+                actualEndTime: true
+            }
+        });
+
+        // Group OTs by employeeId + PHT Date String
+        const getPhtDateStr = (d: Date) => {
+            const pht = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+            return pht.toISOString().slice(0, 10);
+        };
+
+        const otsByEmpAndDate = new Map<string, typeof approvedOts>();
+        for (const ot of approvedOts) {
+            const key = `${ot.employeeId}_${getPhtDateStr(ot.date)}`;
+            const list = otsByEmpAndDate.get(key) || [];
+            list.push(ot);
+            otsByEmpAndDate.set(key, list);
+        }
+
+        // --- OT De-duplication for employee portal ---
+        const latestRecordIdMap = new Map<string, number>();
+        const latestRecordTimeMap = new Map<string, number>();
+
+        records.forEach(r => {
+            if (!r.checkInTime) return;
+            const key = `${r.employeeId}_${getPhtDateStr(r.date)}`;
+            const timeMs = new Date(r.checkInTime).getTime();
+            const existing = latestRecordTimeMap.get(key);
+            if (existing === undefined || timeMs > existing) {
+                latestRecordTimeMap.set(key, timeMs);
+                latestRecordIdMap.set(key, r.id);
+            }
+        });
+
         // Enrich each record with shift-based calculations
         const enrichedData = records.map((record) => {
             const shift = record.employee?.Shift ?? null;
-            const metrics = calculateAttendanceMetrics(record, shift);
+            const dateKey = `${record.employeeId}_${getPhtDateStr(record.date)}`;
+
+            // Only the latest record for this employee+date gets approved OTs for calculations to prevent duplication
+            const isLatestForDay = latestRecordIdMap.get(dateKey) === record.id;
+            const recordOtsForCalc = isLatestForDay ? (otsByEmpAndDate.get(dateKey) || []) : [];
+
+            const metrics = calculateAttendanceMetrics(record, shift, recordOtsForCalc);
             return {
                 ...record,
                 checkInDeviceName: record.checkInDevice?.name || null,
@@ -95,6 +149,7 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
                 checkInTimePH: formatToPhilippineTime(record.checkInTime),
                 checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null,
                 ...metrics,
+                approvedOts: otsByEmpAndDate.get(dateKey) || [],
             };
         });
 

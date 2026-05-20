@@ -116,6 +116,7 @@ export function AttendanceTable({
           handleEditClick={effectiveEditClick}
           handleDeleteClick={effectiveDeleteClick}
           onShiftClick={onShiftClick}
+          shiftFilter={shiftFilter}
         />
       </div>
 
@@ -138,6 +139,7 @@ export function AttendanceTable({
           handleEditClick={effectiveEditClick}
           handleDeleteClick={effectiveDeleteClick}
           onShiftClick={onShiftClick}
+          shiftFilter={shiftFilter}
         />
       </div>
 

@@ -39,6 +39,23 @@ export async function resolveShiftForTimestamp(
     });
 
     const recordMap = new Map(records.map(r => [r.shiftId, r]));
+
+    // Find the maximum sortOrder of any assigned shift that has a record on this date.
+    // If multiple shifts have records, we should only allow matching to shifts with sortOrder >= maxWorkedSortOrder.
+    // This prevents subsequent punches from erroneously matching earlier, missed shifts.
+    let maxWorkedSortOrder = -1;
+    for (const assignment of assignments) {
+        if (recordMap.has(assignment.shift.id)) {
+            if (assignment.sortOrder > maxWorkedSortOrder) {
+                maxWorkedSortOrder = assignment.sortOrder;
+            }
+        }
+    }
+
+    const filteredAssignments = maxWorkedSortOrder >= 0
+        ? assignments.filter(a => a.sortOrder >= maxWorkedSortOrder)
+        : assignments;
+
     const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
     const bufferMins = syncConfig?.shiftBufferMinutes ?? 120;
     const bufferMs = bufferMins * 60 * 1000;
@@ -63,8 +80,6 @@ export async function resolveShiftForTimestamp(
             const needsCheckOut = record && !record.checkOutTime;
             const isCompleted = record && record.checkOutTime;
 
-            if (isCompleted) continue;
-
             const [startH, startM] = shift.startTime.split(':').map(Number);
             const [endH, endM] = shift.endTime.split(':').map(Number);
 
@@ -81,7 +96,7 @@ export async function resolveShiftForTimestamp(
             const distToStart = Math.abs(normalizedTimestamp.getTime() - shiftStart.getTime());
             const distToEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
 
-            if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
+            if (!isCompleted && normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
                 if (needsCheckIn || needsCheckOut) {
                     windowMatches.push({ shift, needsCheckIn, needsCheckOut: !!needsCheckOut, distToStart, distToEnd });
                 }
@@ -113,7 +128,7 @@ export async function resolveShiftForTimestamp(
         return null;
     };
 
-    const shiftsNeedingCheckout = assignments.filter(a => {
+    const shiftsNeedingCheckout = filteredAssignments.filter(a => {
         const record = recordMap.get(a.shift.id);
         return record && !record.checkOutTime;
     });
@@ -123,7 +138,7 @@ export async function resolveShiftForTimestamp(
         if (match) return match;
     }
 
-    const dayMatchingShifts = assignments.filter(a => {
+    const dayMatchingShifts = filteredAssignments.filter(a => {
         const workDays = getWorkDays(a.shift);
         return workDays.includes(currentDayName);
     });
@@ -133,12 +148,12 @@ export async function resolveShiftForTimestamp(
         if (match) return match;
     }
 
-    const match = tryMatch(assignments);
+    const match = tryMatch(filteredAssignments);
     if (match) return match;
 
     let bestMatch: Shift | null = null;
     let minDistance = Infinity;
-    for (const { shift } of assignments) {
+    for (const { shift } of filteredAssignments) {
         const [startH, startM] = shift.startTime.split(':').map(Number);
         const [endH, endM] = shift.endTime.split(':').map(Number);
 

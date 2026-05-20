@@ -1,5 +1,5 @@
-import React from 'react'
-import { Edit2, Fingerprint, PenLine, AlertTriangle, Trash2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { Edit2, Fingerprint, PenLine, AlertTriangle, Trash2, Clock } from 'lucide-react'
 import { fmtHours, formatLate, fmtMins } from '../utils/attendance-formatters'
 import { AttendanceRecord } from '../types'
 
@@ -12,6 +12,7 @@ interface AttendanceMobileCardsProps {
   handleEditClick?: (row: AttendanceRecord) => void
   handleDeleteClick?: (row: AttendanceRecord) => void
   onShiftClick?: (shiftCode: string, row: AttendanceRecord) => void
+  shiftFilter?: string | null
 }
 
 export function AttendanceMobileCards({
@@ -23,7 +24,11 @@ export function AttendanceMobileCards({
   handleEditClick,
   handleDeleteClick,
   onShiftClick,
+  shiftFilter,
 }: AttendanceMobileCardsProps) {
+  const [expandedOTRecordId, setExpandedOTRecordId] = useState<string | number | null>(null)
+  const isAllShifts = !shiftFilter || shiftFilter === 'All Shifts';
+
   if (loading) {
     return (
       <div className="px-6 py-16 text-center">
@@ -241,11 +246,146 @@ export function AttendanceMobileCards({
               </p>
             </div>
           </div>
-          {(row.lateMinutes > 0 || row.overtimeMinutes > 0 || row.undertimeMinutes > 0) && (
+          {(row.lateMinutes > 0 || row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0) || row.undertimeMinutes > 0) && (
             <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/50">
               {row.lateMinutes > 0 && <span className="text-[10px] font-bold text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase tracking-widest">Late {formatLate(row.lateMinutes)}</span>}
-              {row.overtimeMinutes > 0 && <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">OT +{fmtMins(row.overtimeMinutes)}</span>}
+              {(row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0)) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedOTRecordId(expandedOTRecordId === row.id ? null : row.id);
+                  }}
+                  className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase tracking-widest cursor-pointer hover:bg-emerald-500/20 transition-all"
+                  title="Click to view detailed overtime records"
+                >
+                  OT +{fmtMins(row.overtimeMinutes)}
+                </button>
+              )}
               {row.undertimeMinutes > 0 && <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">UT -{fmtMins(row.undertimeMinutes)}</span>}
+            </div>
+          )}
+          {expandedOTRecordId === row.id && (
+            <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-200/60">
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-500" /> Overtime Details
+                </p>
+                <button
+                  onClick={() => setExpandedOTRecordId(null)}
+                  className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+                >
+                  Close
+                </button>
+              </div>
+              
+              {row.approvedOts && row.approvedOts.length > 0 ? (
+                <div className="space-y-4">
+                  {row.approvedOts.map((ot: any, idx: number) => {
+                    const [startH, startM] = ot.startTime.split(':').map(Number);
+                    const [endH, endM] = ot.endTime.split(':').map(Number);
+                    let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+                    if (diffMins < 0) diffMins += 24 * 60;
+                    const approvedHours = (diffMins / 60).toFixed(1);
+
+                    let actualHours: string | null = null;
+                    if (ot.actualStartTime && ot.actualEndTime) {
+                      const actualStart = new Date(ot.actualStartTime);
+                      const actualEnd = new Date(ot.actualEndTime);
+                      const diffMs = actualEnd.getTime() - actualStart.getTime();
+                      if (diffMs > 0) {
+                        actualHours = (diffMs / (1000 * 60 * 60)).toFixed(1);
+                      }
+                    }
+
+                    // Format requested times to 12-hour with AM/PM
+                    const fmtTime12 = (t: string) => {
+                      const [h, m] = t.split(':').map(Number);
+                      const ampm = h >= 12 ? 'PM' : 'AM';
+                      const h12 = h % 12 || 12;
+                      return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+                    };
+
+                    // Format actual timestamps
+                    const fmtActual = (dt: string | null | undefined) => {
+                      if (!dt) return null;
+                      return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                    };
+
+                    const actualIn = fmtActual(ot.actualStartTime);
+                    const actualOut = fmtActual(ot.actualEndTime);
+
+                    const otDateStr = new Date(ot.date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      timeZone: 'UTC'
+                    });
+
+                    return (
+                      <div key={idx} className="space-y-2.5 pt-2.5 first:pt-0 border-t first:border-t-0 border-slate-200/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">{otDateStr}</span>
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100">Approved</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {/* Requested Schedule Block */}
+                          <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 space-y-1.5">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
+                              Requested Schedule
+                            </p>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Requested Start Time</span>
+                              <span className="font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">{fmtTime12(ot.startTime)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Requested End Time</span>
+                              <span className="font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">{fmtTime12(ot.endTime)}</span>
+                            </div>
+                            <div className="pt-1.5 border-t border-slate-200/60 flex justify-between items-center">
+                              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100">{approvedHours} hrs approved</span>
+                            </div>
+                          </div>
+
+                          {/* Actual Attendance Block */}
+                          <div className="bg-emerald-50/40 rounded-lg border border-emerald-200/50 p-2.5 space-y-1.5">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+                              Actual Attendance
+                            </p>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Actual Time In</span>
+                              {actualIn ? (
+                                <span className="font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">{actualIn}</span>
+                              ) : (
+                                <span className="font-medium text-slate-400 italic">—</span>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Actual Time Out</span>
+                              {actualOut ? (
+                                <span className="font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">{actualOut}</span>
+                              ) : (
+                                <span className="font-medium text-slate-400 italic">—</span>
+                              )}
+                            </div>
+                            <div className="pt-1.5 border-t border-emerald-200/40 flex justify-between items-center">
+                              {actualHours ? (
+                                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full border border-emerald-200">{actualHours} hrs rendered</span>
+                              ) : (
+                                <span className="text-[9px] font-medium text-slate-400 italic">No clock-in/out recorded</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">No approved overtime requests found for this day.</p>
+              )}
             </div>
           )}
         </div>

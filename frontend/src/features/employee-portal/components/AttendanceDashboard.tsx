@@ -23,6 +23,7 @@ export function AttendanceDashboard() {
 
   const { employee } = useAuth()
   const [isOTModalOpen, setIsOTModalOpen] = useState(false)
+  const [expandedOTRecordId, setExpandedOTRecordId] = useState<number | null>(null)
 
   // ── Shift filter (Employee Portal) ────────────────────────────────────────
   // Employees only see their own shifts — no "All Shifts" option.
@@ -182,67 +183,223 @@ export function AttendanceDashboard() {
                   <th className="px-6 py-4 font-black">Status</th>
                 </tr>
               </thead>
-               <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100">
                 {filteredRecords.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-slate-800">
-                        {new Date(r.date || r.checkInTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {new Date(r.date || r.checkInTime).toLocaleDateString('en-US', { weekday: 'short' })}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {r.shiftName ? (
-                        <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
-                          {r.shiftName}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkInTime)}</td>
-                    <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkOutTime)}</td>
-                    <td className="px-6 py-4 font-semibold text-slate-700">
-                      {formatWorkedHours(r.totalHours)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-sm font-bold ${r.overtimeMinutes && r.overtimeMinutes > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
-                        {r.overtimeMinutes && r.overtimeMinutes > 0 ? `+${fmtMins(r.overtimeMinutes)}` : '—'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-sm font-bold ${r.undertimeMinutes && r.undertimeMinutes > 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                        {r.undertimeMinutes && r.undertimeMinutes > 0 ? `-${fmtMins(r.undertimeMinutes)}` : '—'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                          r.status.toLowerCase() === 'late' 
-                            ? 'bg-amber-100 text-amber-700' 
-                            : r.status.toLowerCase() === 'absent'
-                              ? 'bg-rose-100 text-rose-700'
-                              : r.status.toLowerCase() === 'rest_day'
-                                ? 'bg-slate-100 text-slate-500'
-                                : r.status.toLowerCase() === 'in_progress'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-emerald-100 text-emerald-700'
-                        }`}>
-                          {r.status === 'IN_PROGRESS' ? 'In Progress' : r.status.toLowerCase() === 'rest_day' ? 'Rest Day' : r.status}
-                        </span>
-                        {r.isEdited && (
-                          <span 
-                            title={r.notes || 'Manually adjusted'}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-violet-50 text-violet-600 border border-violet-100 cursor-help"
-                          >
-                            Edited
+                  <React.Fragment key={r.id}>
+                    <tr className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-800">
+                          {new Date(r.date || r.checkInTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {new Date(r.date || r.checkInTime).toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {r.shiftName ? (
+                          <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                            {r.shiftName}
                           </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkInTime)}</td>
+                      <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.checkOutTime)}</td>
+                      <td className="px-6 py-4 font-semibold text-slate-700">
+                        {formatWorkedHours(r.totalHours)}
+                      </td>
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if ((r.overtimeMinutes && r.overtimeMinutes > 0) || (r.approvedOts && r.approvedOts.length > 0)) {
+                            setExpandedOTRecordId(expandedOTRecordId === r.id ? null : r.id);
+                          }
+                        }}
+                        className={`px-6 py-4 ${
+                          ((r.overtimeMinutes && r.overtimeMinutes > 0) || (r.approvedOts && r.approvedOts.length > 0))
+                            ? 'cursor-pointer hover:bg-emerald-500/10 transition-colors select-none'
+                            : ''
+                        }`}
+                        title={
+                          ((r.overtimeMinutes && r.overtimeMinutes > 0) || (r.approvedOts && r.approvedOts.length > 0))
+                            ? "Click to view detailed overtime records"
+                            : undefined
+                        }
+                      >
+                        <span className={`text-sm font-bold ${((r.overtimeMinutes && r.overtimeMinutes > 0) || (r.approvedOts && r.approvedOts.length > 0)) ? 'text-emerald-600' : 'text-slate-300'}`}>
+                          {r.overtimeMinutes && r.overtimeMinutes > 0 ? `+${fmtMins(r.overtimeMinutes)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-sm font-bold ${r.undertimeMinutes && r.undertimeMinutes > 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                          {r.undertimeMinutes && r.undertimeMinutes > 0 ? `-${fmtMins(r.undertimeMinutes)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                            r.status.toLowerCase() === 'late' 
+                              ? 'bg-amber-100 text-amber-700' 
+                              : r.status.toLowerCase() === 'absent'
+                                ? 'bg-rose-100 text-rose-700'
+                                : r.status.toLowerCase() === 'rest_day'
+                                  ? 'bg-slate-100 text-slate-500'
+                                  : r.status.toLowerCase() === 'in_progress'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {r.status === 'IN_PROGRESS' ? 'In Progress' : r.status.toLowerCase() === 'rest_day' ? 'Rest Day' : r.status}
+                          </span>
+                          {r.isEdited && (
+                            <span 
+                              title={r.notes || 'Manually adjusted'}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-violet-50 text-violet-600 border border-violet-100 cursor-help"
+                            >
+                              Edited
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedOTRecordId === r.id && (
+                      <tr className="bg-slate-50/50">
+                        <td colSpan={8} className="px-6 py-4 border-b border-slate-100">
+                          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
+                                <Clock className="w-4 h-4 text-emerald-500" /> Overtime Details
+                              </h4>
+                              <button
+                                onClick={() => setExpandedOTRecordId(null)}
+                                className="text-xs text-slate-400 hover:text-slate-600 font-bold hover:underline"
+                              >
+                                Close
+                              </button>
+                            </div>
+                            
+                            {r.approvedOts && r.approvedOts.length > 0 ? (
+                              <div className="divide-y divide-slate-100">
+                                {r.approvedOts.map((ot: any, idx: number) => {
+                                  // Calculate approved duration
+                                  const [startH, startM] = ot.startTime.split(':').map(Number);
+                                  const [endH, endM] = ot.endTime.split(':').map(Number);
+                                  let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+                                  if (diffMins < 0) diffMins += 24 * 60;
+                                  const approvedHours = (diffMins / 60).toFixed(1);
+
+                                  // Calculate actual duration
+                                  let actualHours: string | null = null;
+                                  if (ot.actualStartTime && ot.actualEndTime) {
+                                    const actualStart = new Date(ot.actualStartTime);
+                                    const actualEnd = new Date(ot.actualEndTime);
+                                    const diffMs = actualEnd.getTime() - actualStart.getTime();
+                                    if (diffMs > 0) {
+                                      actualHours = (diffMs / (1000 * 60 * 60)).toFixed(1);
+                                    }
+                                  }
+
+                                  // Format requested times to 12-hour with AM/PM
+                                  const fmtTime12 = (t: string) => {
+                                    const [h, m] = t.split(':').map(Number);
+                                    const ampm = h >= 12 ? 'PM' : 'AM';
+                                    const h12 = h % 12 || 12;
+                                    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+                                  };
+
+                                  // Format actual timestamps
+                                  const fmtActual = (dt: string | null | undefined) => {
+                                    if (!dt) return null;
+                                    return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                                  };
+
+                                  const actualIn = fmtActual(ot.actualStartTime);
+                                  const actualOut = fmtActual(ot.actualEndTime);
+
+                                  // Format date
+                                  const otDateStr = new Date(ot.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    timeZone: 'UTC'
+                                  });
+
+                                  return (
+                                    <div key={idx} className="py-3 first:pt-0 last:pb-0">
+                                      {/* Date header */}
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-xs font-bold text-slate-800">{otDateStr}</span>
+                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100">Approved</span>
+                                      </div>
+
+                                      {/* Comparison grid */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {/* Left: Requested / Approved Schedule */}
+                                        <div className="bg-slate-50 rounded-lg border border-slate-200/80 p-3 space-y-2.5">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
+                                            Requested Schedule
+                                          </p>
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] text-slate-500 font-medium">Start Time</span>
+                                              <span className="text-xs font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{fmtTime12(ot.startTime)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] text-slate-500 font-medium">End Time</span>
+                                              <span className="text-xs font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{fmtTime12(ot.endTime)}</span>
+                                            </div>
+                                          </div>
+                                          <div className="pt-1.5 border-t border-slate-200/60">
+                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">{approvedHours} hrs approved</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Right: Actual Biometric Attendance */}
+                                        <div className="bg-emerald-50/50 rounded-lg border border-emerald-200/60 p-3 space-y-2.5">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+                                            Actual Attendance
+                                          </p>
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] text-slate-500 font-medium">Time In</span>
+                                              {actualIn ? (
+                                                <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">{actualIn}</span>
+                                              ) : (
+                                                <span className="text-xs font-medium text-slate-400 italic">—</span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] text-slate-500 font-medium">Time Out</span>
+                                              {actualOut ? (
+                                                <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">{actualOut}</span>
+                                              ) : (
+                                                <span className="text-xs font-medium text-slate-400 italic">—</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="pt-1.5 border-t border-emerald-200/40">
+                                            {actualHours ? (
+                                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">{actualHours} hrs rendered</span>
+                                            ) : (
+                                              <span className="text-[10px] font-medium text-slate-400 italic">No clock-in/out recorded</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500 italic">No approved overtime requests found for this day.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
