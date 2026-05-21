@@ -116,6 +116,14 @@ export function useShifts() {
       setFormError('Grace period must be between 0 and 30 minutes.')
       return
     }
+    if (form.shiftCode.trim().length > 7) {
+      setFormError('Shift Code cannot exceed 7 characters.')
+      return
+    }
+    if (form.name.trim().length > 32) {
+      setFormError('Shift Name cannot exceed 32 characters.')
+      return
+    }
     if (shiftTimingError) {
       setFormError(shiftTimingError)
       return
