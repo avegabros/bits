@@ -112,6 +112,14 @@ export function useShifts() {
       setFormError('Shift Code, Name, Start Time, and End Time are required.')
       return
     }
+    if (form.shiftCode.trim().length > 7) {
+      setFormError('Shift Code cannot exceed 7 characters.')
+      return
+    }
+    if (form.name.trim().length > 32) {
+      setFormError('Shift Name cannot exceed 32 characters.')
+      return
+    }
     if (shiftTimingError) {
       setFormError(shiftTimingError)
       return

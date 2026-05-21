@@ -239,8 +239,8 @@ model Employee {
 
 model Shift {
   id           Int        @id @default(autoincrement())
-  shiftCode    String     @unique
-  name         String     @unique
+  shiftCode    String     @unique @db.VarChar(7)
+  name         String     @unique @db.VarChar(32)
   startTime    String
   endTime      String
   graceMinutes Int        @default(0)

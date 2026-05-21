@@ -83,6 +83,20 @@ export const createShift = async (req: Request, res: Response) => {
             });
         }
 
+        if (shiftCode.trim().length > 7) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shift code cannot exceed 7 characters'
+            });
+        }
+
+        if (name.trim().length > 32) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shift name cannot exceed 32 characters'
+            });
+        }
+
         // Validate time format H:MM or HH:MM
         const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
@@ -204,6 +218,20 @@ export const updateShift = async (req: Request, res: Response) => {
         const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (startTime && !timeRegex.test(startTime)) return res.status(400).json({ success: false, message: 'startTime must be H:MM or HH:MM (24-hour)' });
         if (endTime && !timeRegex.test(endTime)) return res.status(400).json({ success: false, message: 'endTime must be H:MM or HH:MM (24-hour)' });
+
+        if (shiftCode && shiftCode.trim().length > 7) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shift code cannot exceed 7 characters'
+            });
+        }
+
+        if (name && name.trim().length > 32) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shift name cannot exceed 32 characters'
+            });
+        }
 
         // Validate shift duration and cross-midnight settings
         const effectiveStart = startTime || existing.startTime;

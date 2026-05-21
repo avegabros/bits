@@ -60,22 +60,34 @@ export function ShiftFormModal({
           {/* Shift Identification */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Shift Code</label>
+              <div className="flex justify-between items-center ml-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift Code</label>
+                <span className={`text-[10px] font-bold transition-colors duration-200 ${form.shiftCode.length >= 7 ? 'text-red-500' : 'text-slate-400'}`}>
+                  {form.shiftCode.length}/7
+                </span>
+              </div>
               <div className="relative group">
                 <input
                   type="text" placeholder="e.g. MS-01"
                   value={form.shiftCode}
+                  maxLength={7}
                   onChange={e => setForm(f => ({ ...f, shiftCode: e.target.value.toUpperCase() }))}
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 transition-all focus:bg-white focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none group-hover:border-slate-300"
                 />
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Shift Name</label>
+              <div className="flex justify-between items-center ml-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift Name</label>
+                <span className={`text-[10px] font-bold transition-colors duration-200 ${form.name.length >= 32 ? 'text-red-500' : 'text-slate-400'}`}>
+                  {form.name.length}/32
+                </span>
+              </div>
               <div className="relative group">
                 <input
                   type="text" placeholder="e.g. Morning Shift"
                   value={form.name}
+                  maxLength={32}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 transition-all focus:bg-white focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none group-hover:border-slate-300"
                 />
