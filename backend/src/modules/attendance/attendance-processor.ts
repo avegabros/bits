@@ -97,13 +97,22 @@ export async function resolveShiftForTimestamp(
             const distToEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
 
             if (!isCompleted && normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
-                if (needsCheckIn || needsCheckOut) {
-                    windowMatches.push({ shift, needsCheckIn, needsCheckOut: !!needsCheckOut, distToStart, distToEnd });
+                if (needsCheckOut) {
+                    // Check-out: the full buffer window (including post-shift) is valid.
+                    windowMatches.push({ shift, needsCheckIn: false, needsCheckOut: true, distToStart, distToEnd });
+                } else if (needsCheckIn && normalizedTimestamp <= shiftEnd) {
+                    // New check-in: only valid while the shift is still active.
+                    // The post-shift buffer (shiftEnd → windowEnd) is exclusively for check-outs;
+                    // a missed shift whose end time has passed must NOT capture future scans.
+                    windowMatches.push({ shift, needsCheckIn: true, needsCheckOut: false, distToStart, distToEnd });
                 }
             }
 
             const minDist = Math.min(distToStart, distToEnd);
-            if (minDist < fallbackMinDist) {
+            // For the fallback: same rule — don't propose an already-ended shift as the
+            // target for a brand-new check-in. The buffer tail is check-out territory only.
+            const isEligibleFallback = needsCheckOut || (needsCheckIn && normalizedTimestamp <= shiftEnd);
+            if (isEligibleFallback && minDist < fallbackMinDist) {
                 fallbackMinDist = minDist;
                 fallbackMatch = shift;
                 fallbackIsNew = needsCheckIn;
@@ -154,6 +163,10 @@ export async function resolveShiftForTimestamp(
     let bestMatch: Shift | null = null;
     let minDistance = Infinity;
     for (const { shift } of filteredAssignments) {
+        const record = recordMap.get(shift.id);
+        const needsCheckIn = !record;
+        const needsCheckOut = record && !record.checkOutTime;
+
         const [startH, startM] = shift.startTime.split(':').map(Number);
         const [endH, endM] = shift.endTime.split(':').map(Number);
 
@@ -163,6 +176,10 @@ export async function resolveShiftForTimestamp(
         if (shiftEnd <= shiftStart) {
             shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
         }
+
+        // Don't use an already-ended shift as the last-resort fallback for a fresh check-in.
+        // Only allow it if there's a pending check-out or the shift is still active.
+        if (needsCheckIn && normalizedTimestamp > shiftEnd) continue;
 
         const distStart = Math.abs(normalizedTimestamp.getTime() - shiftStart.getTime());
         const distEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
@@ -273,6 +290,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
         const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
         const minCheckoutMins = syncConfig?.globalMinCheckoutMinutes ?? 120;
         const minCheckoutHours = minCheckoutMins / 60;
+        const bufferMins = syncConfig?.shiftBufferMinutes ?? 120;
 
         const employeeIds = [...new Set(logs.map(l => l.employeeId))];
         
@@ -333,6 +351,57 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             });
 
             if (!existingAttendance) {
+                // ── OT-FIRST GATE ─────────────────────────────────────────────────────────
+                // If the shift has already ended (or no shift matched) and there is an
+                // approved OT for today that hasn't been started yet, route this biometric
+                // scan as an OT check-in instead of creating an erroneous shift record.
+                //
+                // Scenario: shift 08:00–12:00, OT 13:00–14:00, scan at 12:32.
+                // Without this guard, the scan would open a new attendance row for the
+                // already-ended shift; with it, the scan becomes the OT actualStartTime.
+                if (recordOts.length > 0) {
+                    const shiftHasEnded = resolvedShift === null || (() => {
+                        const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                        const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
+                        return log.timestamp.getTime() > shiftEndMs;
+                    })();
+
+                    if (shiftHasEnded) {
+                        // Convert scan timestamp to PHT minutes-of-day for OT window comparison.
+                        const phtScanMin = (() => {
+                            const pht = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
+                            return pht.getUTCHours() * 60 + pht.getUTCMinutes();
+                        })();
+
+                        const pendingOt = recordOts.find(ot => {
+                            if (ot.actualStartTime) return false; // already started
+                            const [sH, sM] = ot.startTime.split(':').map(Number);
+                            const otStartMin = sH * 60 + sM;
+                            // Accept the scan if it falls within [otStart - buffer, otStart + buffer].
+                            // This handles employees who arrive slightly early or late for their OT.
+                            return phtScanMin >= otStartMin - bufferMins && phtScanMin <= otStartMin + bufferMins;
+                        });
+
+                        if (pendingOt) {
+                            await prisma.overtimeRequest.update({
+                                where: { id: pendingOt.id },
+                                data: { actualStartTime: log.timestamp }
+                            });
+                            void audit({
+                                action: 'CHECK_IN',
+                                entityType: 'OvertimeRequest',
+                                entityId: pendingOt.id,
+                                performedBy: log.employeeId,
+                                source: 'device-sync',
+                                details: `Employee biometric OT check-in (shift had ended or was not worked)`
+                            });
+                            await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                            continue;
+                        }
+                    }
+                }
+                // ── END OT-FIRST GATE ─────────────────────────────────────────────────────
+
                 const empShift = resolvedShift ?? log.employee?.Shift ?? null;
                 const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
                 const isLate = calculatedStatus === 'late';
