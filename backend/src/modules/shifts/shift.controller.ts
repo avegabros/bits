@@ -110,6 +110,17 @@ export const createShift = async (req: Request, res: Response) => {
             }
         }
 
+        // Validate grace period (0 - 30 minutes)
+        if (graceMinutes != null) {
+            const grace = parseInt(String(graceMinutes));
+            if (isNaN(grace) || grace < 0 || grace > 30) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Grace period must be between 0 and 30 minutes.'
+                });
+            }
+        }
+
         const existingCode = await prisma.shift.findFirst({ where: { shiftCode: shiftCode.trim().toUpperCase() } });
         if (existingCode) return res.status(409).json({ success: false, message: 'Shift code already exists' });
 
@@ -227,6 +238,17 @@ export const updateShift = async (req: Request, res: Response) => {
                         message: breakError
                     });
                 }
+            }
+        }
+
+        // Validate grace period (0 - 30 minutes)
+        if (graceMinutes != null) {
+            const grace = parseInt(String(graceMinutes));
+            if (isNaN(grace) || grace < 0 || grace > 30) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Grace period must be between 0 and 30 minutes.'
+                });
             }
         }
 

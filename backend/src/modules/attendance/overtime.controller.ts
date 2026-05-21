@@ -66,7 +66,7 @@ export const getOvertimeRequests = async (req: Request, res: Response) => {
                 skip,
                 take: limit,
                 include: {
-                    employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, Department: { select: { name: true } } } },
+                    employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, profilePicture: true, Department: { select: { name: true } } } },
                     reviewedBy: { select: { id: true, firstName: true, lastName: true } }
                 },
                 orderBy: { submittedAt: 'desc' }

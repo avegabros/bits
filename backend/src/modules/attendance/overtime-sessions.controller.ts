@@ -117,7 +117,7 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
                 skip,
                 take: limit,
                 include: {
-                    employee: { select: { id: true, firstName: true, lastName: true, departmentId: true, Department: { select: { name: true } }, Branch: { select: { name: true } } } }
+                    employee: { select: { id: true, firstName: true, lastName: true, departmentId: true, profilePicture: true, Department: { select: { name: true } }, Branch: { select: { name: true } } } }
                 },
                 orderBy: { date: 'desc' }
             })
@@ -184,7 +184,8 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
                     firstName: req.employee.firstName,
                     lastName: req.employee.lastName,
                     department: req.employee.Department?.name || 'No Dept',
-                    branch: req.employee.Branch?.name || 'No Branch'
+                    branch: req.employee.Branch?.name || 'No Branch',
+                    profilePicture: req.employee.profilePicture
                 },
                 date: reqDateStr,
                 approved: { startTime: req.startTime, endTime: req.endTime },

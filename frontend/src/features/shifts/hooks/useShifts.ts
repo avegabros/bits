@@ -112,6 +112,10 @@ export function useShifts() {
       setFormError('Shift Code, Name, Start Time, and End Time are required.')
       return
     }
+    if (form.graceMinutes < 0 || form.graceMinutes > 30) {
+      setFormError('Grace period must be between 0 and 30 minutes.')
+      return
+    }
     if (shiftTimingError) {
       setFormError(shiftTimingError)
       return

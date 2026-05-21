@@ -135,7 +135,7 @@ export function ShiftFormModal({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Grace Period (mins)</label>
                 <input
-                  type="number" min={0} max={60} placeholder="0"
+                  type="number" min={0} max={30} placeholder="0"
                   value={form.graceMinutes}
                   onChange={e => setForm(f => ({ ...f, graceMinutes: parseInt(e.target.value) || 0 }))}
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all"

@@ -16,6 +16,7 @@ export interface OvertimeRequest {
     lastName: string;
     employeeNumber?: string;
     Department?: { name: string } | null;
+    profilePicture?: string | null;
   };
   reviewedBy?: {
     id: number;
@@ -26,7 +27,7 @@ export interface OvertimeRequest {
 
 export interface OTSession {
   id: number;
-  employee: { id: number; firstName: string; lastName: string; department: string; branch: string };
+  employee: { id: number; firstName: string; lastName: string; department: string; branch: string; profilePicture?: string | null };
   date: string;
   approved: { startTime: string; endTime: string };
   actual: { startTime: string | null; endTime: string | null };

@@ -441,9 +441,17 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
                   {/* Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600 font-bold text-[10px] uppercase tracking-tight border border-rose-500/20">
-                        {row.employee.firstName.charAt(0)}
-                      </div>
+                      {row.employee.profilePicture ? (
+                        <img 
+                          src={row.employee.profilePicture} 
+                          alt={`${row.employee.firstName} ${row.employee.lastName}`} 
+                          className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" 
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600 font-bold text-[10px] uppercase tracking-tight border border-rose-500/20">
+                          {row.employee.firstName.charAt(0)}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="font-black text-foreground text-sm truncate uppercase tracking-tight">
                           {row.employee.firstName} {row.employee.lastName}
@@ -595,9 +603,17 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
                   <tr key={row.id} className="hover:bg-primary/5 transition-colors duration-200 group cursor-default">
                     {/* Employee */}
                     <td className="px-4 py-3.5 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600 font-bold text-[10px] uppercase tracking-tight border border-rose-500/20 shrink-0">
-                        {row.employee.firstName.charAt(0)}
-                      </div>
+                      {row.employee.profilePicture ? (
+                        <img 
+                          src={row.employee.profilePicture} 
+                          alt={`${row.employee.firstName} ${row.employee.lastName}`} 
+                          className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" 
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600 font-bold text-[10px] uppercase tracking-tight border border-rose-500/20 shrink-0">
+                          {row.employee.firstName.charAt(0)}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-foreground leading-tight uppercase tracking-tight">
                           {row.employee.firstName} {row.employee.lastName}

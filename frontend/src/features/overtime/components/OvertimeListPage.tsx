@@ -122,9 +122,17 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       {/* Avatar Initials + Name */}
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-500/10 to-rose-500/10 text-red-600 border border-red-500/10 flex items-center justify-center font-bold text-sm shrink-0">
-                          {getInitials(req.employee.firstName, req.employee.lastName)}
-                        </div>
+                        {req.employee.profilePicture ? (
+                          <img 
+                            src={req.employee.profilePicture} 
+                            alt={`${req.employee.firstName} ${req.employee.lastName}`} 
+                            className="w-10 h-10 rounded-2xl object-cover shadow-sm shrink-0 border border-slate-200" 
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-500/10 to-rose-500/10 text-red-600 border border-red-500/10 flex items-center justify-center font-bold text-sm shrink-0">
+                            {getInitials(req.employee.firstName, req.employee.lastName)}
+                          </div>
+                        )}
                         <div>
                           <span className="block text-sm font-black text-slate-800 tracking-tight leading-tight">
                             {req.employee.firstName} {req.employee.lastName}
