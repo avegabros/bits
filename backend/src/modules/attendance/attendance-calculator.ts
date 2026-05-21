@@ -21,8 +21,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
 
     if (!shift) {
         // No shift assigned – mostly OT-only logic or generic fallbacks
-        const checkIn = new Date(record.checkInTime);
-        const checkOut = record.checkOutTime ? new Date(record.checkOutTime) : null;
+        const checkIn = normalizeTime(new Date(record.checkInTime));
+        const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
         const totalMs = checkOut ? checkOut.getTime() - checkIn.getTime() : 0;
         const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
         
@@ -244,8 +244,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
 
                 // Intersection of actual OT execution [actualStartTime, actualEndTime] and approved OT [otStart, otEnd]
                 if (ot.actualStartTime && ot.actualEndTime) {
-                    const actualCheckIn = new Date(ot.actualStartTime).getTime();
-                    const actualCheckOut = new Date(ot.actualEndTime).getTime();
+                    const actualCheckIn = normalizeTime(new Date(ot.actualStartTime)).getTime();
+                    const actualCheckOut = normalizeTime(new Date(ot.actualEndTime)).getTime();
 
                     const overlapStart = Math.max(actualCheckIn, otStartMs);
                     const overlapEnd = Math.min(actualCheckOut, otEndMs);
