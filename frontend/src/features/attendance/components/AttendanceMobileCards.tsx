@@ -246,10 +246,10 @@ export function AttendanceMobileCards({
               </p>
             </div>
           </div>
-          {(row.lateMinutes > 0 || row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0) || row.undertimeMinutes > 0) && (
+          {(row.lateMinutes > 0 || (isAllShifts && (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0))) || row.undertimeMinutes > 0) && (
             <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/50">
               {row.lateMinutes > 0 && <span className="text-[10px] font-bold text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase tracking-widest">Late {formatLate(row.lateMinutes)}</span>}
-              {(row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0)) && (
+              {isAllShifts && (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0)) && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

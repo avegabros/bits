@@ -35,7 +35,7 @@ export function AttendanceDesktopTable({
 
   const isAllShifts = !shiftFilter || shiftFilter === 'All Shifts'
   const showActions = !!(handleEditClick || handleDeleteClick)
-  const totalColumns = 10 - (showActions ? 0 : 1)
+  const totalColumns = (10 - (showActions ? 0 : 1)) - (isAllShifts ? 0 : 1)
 
   return (
     <table className="w-full text-left border-collapse min-w-[800px] bg-card">
@@ -47,7 +47,9 @@ export function AttendanceDesktopTable({
           <SortableHeader label="Clock Out"   sortKey="checkOut"         currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
           <SortableHeader label="Late"        sortKey="lateMinutes"      currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-yellow-500" />
           <SortableHeader label="Reg Hrs"     sortKey="totalHours"       currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
-          <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
+          {isAllShifts && (
+            <SortableHeader label="OT"          sortKey="overtimeMinutes"  currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-emerald-500" />
+          )}
           <SortableHeader label="UT"          sortKey="undertimeMinutes" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center text-red-500" />
           <SortableHeader label="Status"      sortKey="status"           currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-2 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight text-center" />
           {showActions && (
@@ -269,28 +271,30 @@ export function AttendanceDesktopTable({
                   {row.isShiftActive ? <span className="text-slate-400 text-xs italic">Live</span> : fmtHours(Math.max(0, row.totalHours))}
                 </td>
                 {/* OT */}
-                <td
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0)) {
-                      setExpandedOTRecordId(expandedOTRecordId === row.id ? null : row.id);
+                {isAllShifts && (
+                  <td
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0)) {
+                        setExpandedOTRecordId(expandedOTRecordId === row.id ? null : row.id);
+                      }
+                    }}
+                    className={`px-2 py-3 text-center ${
+                      (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0))
+                        ? 'cursor-pointer hover:bg-emerald-500/10 transition-colors select-none'
+                        : ''
+                    }`}
+                    title={
+                      (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0))
+                        ? "Click to view detailed overtime records"
+                        : undefined
                     }
-                  }}
-                  className={`px-2 py-3 text-center ${
-                    (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0))
-                      ? 'cursor-pointer hover:bg-emerald-500/10 transition-colors select-none'
-                      : ''
-                  }`}
-                  title={
-                    (row.overtimeMinutes > 0 || (row.approvedOts && row.approvedOts.length > 0))
-                      ? "Click to view detailed overtime records"
-                      : undefined
-                  }
-                >
-                  <span className={`text-sm font-bold ${row.overtimeMinutes > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
-                    {row.overtimeMinutes > 0 ? `+${fmtMins(row.overtimeMinutes)}` : '—'}
-                  </span>
-                </td>
+                  >
+                    <span className={`text-sm font-bold ${row.overtimeMinutes > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                      {row.overtimeMinutes > 0 ? `+${fmtMins(row.overtimeMinutes)}` : '—'}
+                    </span>
+                  </td>
+                )}
                 {/* UT */}
                 <td className="px-2 py-3 text-center">
                   <span className={`text-sm font-bold ${row.undertimeMinutes > 0 ? 'text-red-500' : 'text-slate-300'}`}>

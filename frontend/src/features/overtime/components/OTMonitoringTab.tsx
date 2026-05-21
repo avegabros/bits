@@ -523,18 +523,33 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
                   </div>
 
                   {/* Actions */}
-                  {role && (role === 'admin' || role === 'manager') && (row.sessionState === 'ACTIVE' || row.sessionState === 'SCHEDULED') && (
-                    <button
-                      onClick={() => {
-                        setExtendingSession(row);
-                        setNewEndTime(row.approved.endTime);
-                        setExtendReason('');
-                        setExtendError(null);
-                      }}
-                      className="w-full py-2.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-                    >
-                      <Clock size={14} /> Extend OT
-                    </button>
+                  {role && (role === 'admin' || role === 'manager') && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {(row.sessionState === 'ACTIVE' || row.sessionState === 'SCHEDULED') && (
+                        <button
+                          onClick={() => {
+                            setExtendingSession(row);
+                            setNewEndTime(row.approved.endTime);
+                            setExtendReason('');
+                            setExtendError(null);
+                          }}
+                          className="w-full py-2.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                        >
+                          <Clock size={14} /> Extend OT
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setEditingSession(row);
+                          setEditActualStart(toLocalDatetimeLocal(row.actual.startTime));
+                          setEditActualEnd(toLocalDatetimeLocal(row.actual.endTime));
+                          setEditError(null);
+                        }}
+                        className="w-full py-2.5 bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Clock size={14} /> Edit Actual Times (Testing Only)
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -675,23 +690,36 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
                     {/* Actions */}
                     {role && (role === 'admin' || role === 'manager') && (
                       <td className="px-4 py-3.5 text-center">
-                        {(row.sessionState === 'ACTIVE' || row.sessionState === 'SCHEDULED') ? (
+                        <div className="flex items-center justify-center gap-2">
+                          {(row.sessionState === 'ACTIVE' || row.sessionState === 'SCHEDULED') && (
+                            <button
+                              onClick={() => {
+                                setExtendingSession(row);
+                                setNewEndTime(row.approved.endTime);
+                                setExtendReason('');
+                                setExtendError(null);
+                              }}
+                              className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                              title="Extend Overtime"
+                            >
+                              <Clock size={12} />
+                              <span>Extend</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => {
-                              setExtendingSession(row);
-                              setNewEndTime(row.approved.endTime);
-                              setExtendReason('');
-                              setExtendError(null);
+                              setEditingSession(row);
+                              setEditActualStart(toLocalDatetimeLocal(row.actual.startTime));
+                              setEditActualEnd(toLocalDatetimeLocal(row.actual.endTime));
+                              setEditError(null);
                             }}
-                            className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
-                            title="Extend Overtime"
+                            className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                            title="Edit Actual Times (Testing Only)"
                           >
                             <Clock size={12} />
-                            <span>Extend</span>
+                            <span>Edit Actual</span>
                           </button>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic font-medium">—</span>
-                        )}
+                        </div>
                       </td>
                     )}
                   </tr>
