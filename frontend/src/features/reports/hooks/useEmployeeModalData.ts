@@ -21,6 +21,9 @@ export interface TableRowData {
     otMinsVal: number;
     utMinsVal: number;
     holidayName: string | null;
+    shift: EmployeeShift | null;
+    shiftChanged: boolean;
+    previousShift: EmployeeShift | null;
 }
 
 export interface HRTableRowData {
@@ -61,7 +64,7 @@ function buildTableRows(
     employee: ReportRow,
     holidayMap?: Map<string, Holiday>
 ): TableRowData[] {
-    return calendarDates.map(loopDate => {
+    const rows = calendarDates.map(loopDate => {
         const loopDateStr = loopDate.toISOString().split('T')[0];
         const dayRecords = records.filter(r => {
             const rDateStr = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -156,8 +159,76 @@ function buildTableRows(
             otMinsVal,
             utMinsVal,
             holidayName: holiday?.name ?? null,
+            shift: null,
+            shiftChanged: false,
+            previousShift: null,
         };
     });
+
+    return populateShiftDetails(rows, records, employee);
+}
+
+function populateShiftDetails(
+    rows: TableRowData[],
+    records: AttendanceRecord[],
+    employee: ReportRow
+): TableRowData[] {
+    const chronologicalRows = [...rows].sort((a, b) => a.loopDate.getTime() - b.loopDate.getTime());
+    const sortedRecords = [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const recordShiftMap = new Map<string, EmployeeShift>();
+    for (const record of sortedRecords) {
+        if (record.shift) {
+            const rDateStr = new Date(record.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            if (!recordShiftMap.has(rDateStr)) {
+                recordShiftMap.set(rDateStr, record.shift);
+            }
+        }
+    }
+
+    const firstRecordWithShift = sortedRecords.find(r => r.shift);
+    const initialShift = firstRecordWithShift?.shift ?? employee.shift ?? null;
+
+    let currentShift = initialShift;
+    const populatedChronologicalRows: TableRowData[] = [];
+
+    for (let i = 0; i < chronologicalRows.length; i++) {
+        const row = chronologicalRows[i];
+
+        if (row.record?.shift) {
+            currentShift = row.record.shift;
+        } else {
+            const mappedShift = recordShiftMap.get(row.loopDateStr);
+            if (mappedShift) {
+                currentShift = mappedShift;
+            }
+        }
+
+        let shiftChanged = false;
+        let previousShift: EmployeeShift | null = null;
+
+        if (i > 0) {
+            const prevRow = populatedChronologicalRows[i - 1];
+            if (currentShift?.id !== prevRow.shift?.id) {
+                shiftChanged = true;
+                previousShift = prevRow.shift;
+            }
+        }
+
+        populatedChronologicalRows.push({
+            ...row,
+            shift: currentShift,
+            shiftChanged,
+            previousShift,
+        });
+    }
+
+    const rowMap = new Map<string, TableRowData>();
+    for (const row of populatedChronologicalRows) {
+        rowMap.set(row.loopDateStr, row);
+    }
+
+    return rows.map(originalRow => rowMap.get(originalRow.loopDateStr) ?? originalRow);
 }
 
 function buildHRTableRows(

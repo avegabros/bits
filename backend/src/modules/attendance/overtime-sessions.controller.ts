@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { Prisma, AttendanceLog, Attendance } from '@prisma/client';
 import { getPhtDateStr } from '../../shared/utils/date.utils';
+import { normalizeTime } from './attendance-utils';
 
 function computeSessionState(otRequest: { date: Date, actualStartTime: Date | null, actualEndTime: Date | null }, now: Date) {
     const otDateStr = getPhtDateStr(otRequest.date);
@@ -158,8 +159,16 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
             const reqLogs = attendanceLogs.filter(log => 
                 log.employeeId === req.employeeId && getPhtDateStr(log.timestamp) === reqDateStr
             );
-            const checkInLog = reqLogs.find(l => l.status === 0 || l.status === 4);
-            const checkOutLog = reqLogs.find(l => l.status === 1 || l.status === 5);
+            // Match device logs by timestamp proximity (within 1s) for accurate device name resolution,
+            // then fall back to status codes as a secondary signal.
+            const checkInLog = req.actualStartTime
+                ? (reqLogs.find(l => Math.abs(l.timestamp.getTime() - new Date(req.actualStartTime!).getTime()) < 1000)
+                    || reqLogs.find(l => l.status === 0 || l.status === 4))
+                : null;
+            const checkOutLog = req.actualEndTime
+                ? (reqLogs.find(l => Math.abs(l.timestamp.getTime() - new Date(req.actualEndTime!).getTime()) < 1000)
+                    || reqLogs.find(l => l.status === 1 || l.status === 5))
+                : null;
             const linkedAtt = attendanceRecords.find(a => a.employeeId === req.employeeId && getPhtDateStr(a.date) === reqDateStr);
 
             const approvedStartMin = timeStringToMinutes(req.startTime);
@@ -167,12 +176,28 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
             let approvedDurationMinutes = approvedEndMin - approvedStartMin;
             if (approvedDurationMinutes < 0) approvedDurationMinutes += 24 * 60;
 
-            const actualStartMin = dateToMinutes(req.actualStartTime);
-            const actualEndMin = dateToMinutes(req.actualEndTime);
+            // Calculate actual OT duration as the intersection of actual times and the approved OT window.
+            // Normalise to minute precision (zero out seconds/ms) to match attendance calculator behaviour.
             let actualDurationMinutes = 0;
             if (req.actualStartTime && req.actualEndTime) {
-                actualDurationMinutes = actualEndMin - actualStartMin;
-                if (actualDurationMinutes < 0) actualDurationMinutes += 24 * 60;
+                const dateMs = new Date(req.date).getTime() + 8 * 60 * 60 * 1000; // PHT midnight in ms
+                const [otStartH, otStartM] = req.startTime.split(':').map(Number);
+                const [otEndH, otEndM] = req.endTime.split(':').map(Number);
+
+                const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+                // Handle OT that wraps past midnight
+                if (otEndMs <= otStartMs) otEndMs += 24 * 60 * 60 * 1000;
+
+                const actualCheckIn = normalizeTime(new Date(req.actualStartTime)).getTime();
+                const actualCheckOut = normalizeTime(new Date(req.actualEndTime)).getTime();
+
+                const overlapStart = Math.max(actualCheckIn, otStartMs);
+                const overlapEnd = Math.min(actualCheckOut, otEndMs);
+
+                if (overlapEnd > overlapStart) {
+                    actualDurationMinutes = Math.round((overlapEnd - overlapStart) / 60000);
+                }
             }
 
             const now = new Date();
