@@ -177,13 +177,17 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
             if (approvedDurationMinutes < 0) approvedDurationMinutes += 24 * 60;
 
             // Calculate actual OT duration as the intersection of actual times and the approved OT window.
-            // Normalise to minute precision (zero out seconds/ms) to match attendance calculator behaviour.
+            // Clamps to only count time worked inside the approved OT window (e.g. employee arrived early
+            // or left late — only the overlap with approved hours is credited).
+            // NOTE: req.date from Prisma is stored as UTC midnight (e.g. 2026-05-21T00:00:00Z).
+            // We must NOT add +8h here — that would shift the OT window 8 hours forward.
             let actualDurationMinutes = 0;
             if (req.actualStartTime && req.actualEndTime) {
-                const dateMs = new Date(req.date).getTime() + 8 * 60 * 60 * 1000; // PHT midnight in ms
+                const dateMs = new Date(req.date).getTime(); // UTC midnight — use as-is
                 const [otStartH, otStartM] = req.startTime.split(':').map(Number);
                 const [otEndH, otEndM] = req.endTime.split(':').map(Number);
 
+                // Convert HH:MM (PHT) to UTC ms: PHT = UTC+8, so subtract 8h
                 const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
                 let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
                 // Handle OT that wraps past midnight
