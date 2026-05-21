@@ -302,6 +302,25 @@ export function AdminDetailView({
                                                     {record.gracePeriodApplied && (
                                                         <span className="text-[9px] text-slate-400 mt-0.5 font-bold uppercase">Grace Period</span>
                                                     )}
+                                                    {(() => {
+                                                        const historicalShift = record.shift;
+                                                        const currentShift = employee.shift;
+                                                        const hasShiftMismatch = !!(
+                                                            historicalShift &&
+                                                            currentShift &&
+                                                            historicalShift.id !== currentShift.id
+                                                        );
+                                                        if (!hasShiftMismatch) return null;
+                                                        return (
+                                                            <span
+                                                                title={`Historical shift was "${historicalShift.name}", but employee's current active shift is "${currentShift.name}"`}
+                                                                className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 uppercase tracking-tight cursor-help w-max hover:bg-amber-100 transition-colors"
+                                                            >
+                                                                <AlertTriangle className="w-2.5 h-2.5 shrink-0 text-amber-600" />
+                                                                Shift Mismatch
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
                                             <td className="px-5 py-3.5">

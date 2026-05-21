@@ -2,6 +2,7 @@ import { prisma } from '../../shared/lib/prisma';
 import { auditBatch } from '../../shared/lib/auditHelpers';
 import { ATTENDANCE_LIMITS } from '../system/system.constants';
 import { getTodayPHT } from './attendance-utils';
+import { recalculateAndPersistAttendanceMetrics } from './attendance-processor';
 
 /**
  * Auto-close incomplete attendance records from previous days
@@ -146,6 +147,9 @@ export const autoCheckoutEmployees = async (): Promise<number> => {
                     updatedAt: new Date()
                 }
             });
+
+            // Persist metrics locked to the record's assigned shift
+            await recalculateAndPersistAttendanceMetrics(record.employeeId, record.date);
 
             count++;
             console.log(

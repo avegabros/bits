@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { audit } from '../../shared/lib/auditLogger';
 import { sendOvertimeStatusEmail, sendOvertimeAssignedEmail } from '../../shared/services/email.service';
 import { validateOvertimeRequest, OTValidationError } from './overtime-validation.service';
+import { recalculateAndPersistAttendanceMetrics } from './attendance.service';
 
 // GET /api/attendance/overtime
 export const getOvertimeRequests = async (req: Request, res: Response) => {
@@ -156,6 +157,10 @@ export const createOvertimeRequest = async (req: Request, res: Response) => {
             details: `Created overtime request for ${request.employee.firstName} ${request.employee.lastName} on ${date}`
         });
 
+        if (status === 'APPROVED') {
+            await recalculateAndPersistAttendanceMetrics(targetEmployeeId, requestDate);
+        }
+
         res.status(201).json({ success: true, message: 'Overtime request created successfully', request });
     } catch (error) {
         console.error('Error creating overtime request:', error);
@@ -261,6 +266,11 @@ export const batchCreateOvertimeRequests = async (req: Request, res: Response) =
                 );
             }
         }
+
+        // Recalculate metrics for all employees since assigned OT is auto-approved
+        await Promise.all(
+            employees.map(emp => recalculateAndPersistAttendanceMetrics(emp.id, requestDate))
+        );
 
         res.status(201).json({ success: true, message: 'Overtime assigned successfully', created: createdRequests.length, results: createdRequests });
     } catch (error) {
@@ -429,6 +439,9 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
             }
         }
 
+        // Recalculate metrics for the employee on the request's date
+        await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
+
         res.json({ success: true, message: 'Overtime request updated', request: updated });
     } catch (error) {
         console.error('Error updating overtime request:', error);
@@ -452,6 +465,9 @@ export const deleteOvertimeRequest = async (req: Request, res: Response) => {
             where: { id },
             data: { status: 'DELETED' }
         });
+
+        // Recalculate metrics for the employee on the request's date
+        await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
 
         void audit({
             action: 'DELETE',

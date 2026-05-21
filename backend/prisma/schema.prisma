@@ -21,6 +21,13 @@ model Attendance {
   checkInDeviceId      Int?
   checkOutDeviceId     Int?
   checkoutSource       String?
+  lateMinutes          Int                    @default(0)
+  undertimeMinutes     Int                    @default(0)
+  overtimeMinutes      Float                  @default(0.0)
+  totalHours           Float                  @default(0.0)
+  isAnomaly            Boolean                @default(false)
+  isEarlyOut           Boolean                @default(false)
+  gracePeriodApplied   Boolean                @default(false)
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   checkInDevice        Device?                @relation("AttCheckIn", fields: [checkInDeviceId], references: [id])

@@ -1,7 +1,6 @@
 import { prisma } from '../../shared/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getTodayPHT, formatToPhilippineTime } from './attendance-utils';
-import { calculateAttendanceMetrics } from './attendance-calculator';
 import { AttendanceFilters } from './attendance.types';
 
 /**
@@ -61,7 +60,6 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
                             select: { name: true }
                         },
                         Branch: { select: { name: true } },
-                        Shift: true
                     }
                 },
                 AttendanceAdjustment: {
@@ -121,11 +119,10 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
     }
 
     // --- OT De-duplication ---
-    // When an employee has multiple shifts on the same day (e.g. Half Morning + Half Afternoon),
-    // each shift produces a separate attendance record with the same PHT date. Without de-duplication,
-    // every record fetches the same approved OT list and computes overtime independently, causing
-    // the OT minutes to be multiplied by the number of shifts. To fix this, we identify the
-    // chronologically latest record per employee per day and only assign approved OTs to that record.
+    // When an employee has multiple shifts on the same day, we identify the
+    // latest record per employee per day and only assign approved OTs to that record
+    // in the returned approvedOts field (for UI display). Metric persistence
+    // already handles de-duplication at write-time via recalculateAndPersistAttendanceMetrics.
     const latestRecordIdMap = new Map<string, number>();
     const latestRecordTimeMap = new Map<string, number>();
 
@@ -140,17 +137,18 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
         }
     });
 
-    // Enrich each record with shift-based calculations
+    // Enrich each record — read stored metrics directly from DB columns
     const data = records.map((record) => {
-        const shift = record.shift ?? record.employee?.Shift ?? null;
-        const finalStatus = record.status;
-
         const dateKey = `${record.employeeId}_${getPhtDateStr(record.date)}`;
-        // Only the latest record for this employee+date gets approved OTs for calculation to prevent duplication
-        const isLatestForDay = latestRecordIdMap.get(dateKey) === record.id;
-        const recordOtsForCalc = isLatestForDay ? (otsByEmpAndDate.get(dateKey) || []) : [];
 
-        const metrics = calculateAttendanceMetrics({ ...record, status: finalStatus }, shift, recordOtsForCalc);
+        // Dynamic UI-only fields: these depend on the current clock and cannot be stored.
+        const today = getTodayPHT();
+        const recordDateStr = new Date(record.date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const todayStr = new Date(today.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const isToday = recordDateStr === todayStr;
+        const isShiftActive = !!record.checkInTime && !record.checkOutTime && isToday && record.status !== 'pending';
+        const status = isShiftActive ? 'IN_PROGRESS' : record.status;
+
         return {
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,
@@ -161,7 +159,20 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             isMissingCheckout: (record.notes ?? '').includes('No checkout recorded'),
             isEdited: !!(record.checkin_updated || record.checkout_updated),
             isPending: record.AttendanceAdjustment && record.AttendanceAdjustment.length > 0,
-            ...metrics,
+            // Read stored metrics directly from DB — immutable once written
+            lateMinutes: record.lateMinutes,
+            undertimeMinutes: record.undertimeMinutes,
+            overtimeMinutes: record.overtimeMinutes,
+            totalHours: record.totalHours,
+            isAnomaly: record.isAnomaly,
+            isEarlyOut: record.isEarlyOut,
+            gracePeriodApplied: record.gracePeriodApplied,
+            shiftCode: record.shift?.shiftCode ?? null,
+            // Dynamic UI fields
+            isShiftActive,
+            status,
+            latePenaltyMinutes: record.lateMinutes,
+            workedHours: record.totalHours,
             approvedOts: otsByEmpAndDate.get(dateKey) || [],
         };
     });

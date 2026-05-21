@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useRef } from 'react';
-import { ReportRow, AttendanceRecord } from '@/types/reports';
+import { ReportRow, AttendanceRecord, EmployeeShift } from '@/types/reports';
 import { getRecordStatusFromBackend } from '@/features/reports/lib/formatters';
 import { useTableSort } from '@/hooks/useTableSort';
 import type { Holiday } from '@/features/holidays/hooks/useHolidays';
@@ -39,6 +39,9 @@ export interface HRTableRowData {
     statusLabel: string;
     isShiftActive: boolean;
     gracePeriodApplied: boolean;
+    hasShiftMismatch: boolean;
+    historicalShift: EmployeeShift | null;
+    currentShift: EmployeeShift | null;
 }
 
 function getDatesInRange(start: string, end: string): Date[] {
@@ -193,6 +196,20 @@ function buildHRTableRows(
         const checkInStr = row.checkInVal ? row.checkInVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-";
         const checkOutStr = row.record?.isShiftActive ? "Active" : (row.checkOutVal ? row.checkOutVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-");
 
+        const historicalShift = row.record?.shift ?? null;
+        const currentShift = employee.shift ?? null;
+        
+        // If there's a record, show its historical shift, otherwise fall back to employee's current shift
+        if (historicalShift) {
+            shiftLabel = historicalShift.name;
+        }
+
+        const hasShiftMismatch = !!(
+            historicalShift && 
+            currentShift && 
+            historicalShift.id !== currentShift.id
+        );
+
         return {
             date: row.loopDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
             shift: shiftLabel,
@@ -209,6 +226,9 @@ function buildHRTableRows(
             statusLabel: row.statusType,
             isShiftActive: row.record?.isShiftActive ?? false,
             gracePeriodApplied: row.record?.gracePeriodApplied ?? false,
+            hasShiftMismatch,
+            historicalShift,
+            currentShift,
         };
     }).sort((a, b) => new Date(b._rawDate).getTime() - new Date(a._rawDate).getTime());
 }

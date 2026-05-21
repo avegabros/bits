@@ -10,7 +10,8 @@ import {
     toPHTDate,
     calculateAttendanceStatus,
     resolveShiftForTimestamp,
-    validateAttendanceConflicts
+    validateAttendanceConflicts,
+    recalculateAndPersistAttendanceMetrics
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -360,6 +361,9 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             }
         });
 
+        // Persist calculated metrics for the newly created record
+        await recalculateAndPersistAttendanceMetrics(Number(employeeId), recordDate);
+
         attendanceEmitter.emit('new-record', { type: 'update', record: adminRecord });
 
         void audit({
@@ -608,6 +612,9 @@ export const updateAttendance = async (req: Request, res: Response) => {
             where: { id: recordId },
             data: updateData
         });
+
+        // Persist updated metrics after admin edit
+        await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
 
         if (auditEntries.length > 0) {
             void audit({
@@ -1171,13 +1178,21 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       auditEntries.push({ field: 'record', oldValue: 'missing', newValue: 'created' });
     }
 
-    // Centralized status recalculation
+    // Centralized status recalculation — use the shift linked to the attendance record,
+    // NOT the employee's current shift, to keep historical metrics locked to original context.
     if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
       const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
       const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
-      const shift = existing.employee?.Shift ?? null;
 
-      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+      let recordShift: any = null;
+      if (existing.shiftId) {
+          recordShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
+      }
+      if (!recordShift) {
+          recordShift = existing.employee?.Shift ?? null;
+      }
+
+      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, recordShift);
       if (newStatus !== existing.status || isManualCreation) {
         updateData.status = newStatus;
         const oldStatusVal = isManualCreation ? 'missing' : existing.status;
@@ -1200,6 +1215,9 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       where: { id: existing.id },
       data: updateData
     });
+
+    // Persist updated metrics after adjustment approval
+    await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
 
     // Removed the legacy AttendanceAuditLog.createMany write
     // Update adjustment status
