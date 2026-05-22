@@ -106,6 +106,14 @@ export function LoginForm({ loginState }: LoginFormProps) {
       <p className="mt-8 text-center text-xs text-gray-600">
         Biometric Integrated Timekeeping System Web Portal
       </p>
+
+      <a
+        href="/BITS-User-Manual.pdf"
+        download="BITS-User-Manual.pdf"
+        className="mt-4 block text-xs text-center text-muted-foreground underline hover:text-primary transition-colors"
+      >
+        Download User Manual
+      </a>
     </>
   )
 }
