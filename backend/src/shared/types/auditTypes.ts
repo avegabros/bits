@@ -40,7 +40,9 @@ export type AuditAction =
     | 'BULK_IMPORT'
     | 'EMAIL_SENT'
     | 'EMAIL_FAILED'
-    | 'MANAGER_DEPARTMENT_UPDATE';
+    | 'MANAGER_DEPARTMENT_UPDATE'
+    | 'BIOMETRIC_EXCLUSION_ADD'
+    | 'BIOMETRIC_EXCLUSION_REMOVE';
 
 // ── Entity Types ─────────────────────────────────────────────────────────
 export type AuditEntity =
@@ -53,7 +55,8 @@ export type AuditEntity =
     | 'Company'
     | 'Holiday'
     | 'Account'
-    | 'System';
+    | 'System'
+    | 'OvertimeRequest';
 
 // ── Categories ───────────────────────────────────────────────────────────
 export type AuditCategory =

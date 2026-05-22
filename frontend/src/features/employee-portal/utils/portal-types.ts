@@ -31,9 +31,12 @@ export interface PortalAttendanceRecord {
   overtimeMinutes?: number // Found in detailed view
   undertimeMinutes?: number // Found in detailed view
   shiftCode?: string | null // Found in detailed view
+  shiftName?: string | null // Found in detailed view
+  shiftId?: number | null // Found in detailed view
   isShiftActive?: boolean // Found in detailed view
   gracePeriodApplied?: boolean // Found in detailed view
   isEdited?: boolean // True when checkin/checkout was manually adjusted
+  approvedOts?: any[]
 }
 
 export interface PortalShiftData {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useRef } from 'react';
-import { ReportRow, AttendanceRecord } from '@/types/reports';
+import { ReportRow, AttendanceRecord, EmployeeShift } from '@/types/reports';
 import { getRecordStatusFromBackend } from '@/features/reports/lib/formatters';
 import { useTableSort } from '@/hooks/useTableSort';
 import type { Holiday } from '@/features/holidays/hooks/useHolidays';
@@ -21,6 +21,9 @@ export interface TableRowData {
     otMinsVal: number;
     utMinsVal: number;
     holidayName: string | null;
+    shift: EmployeeShift | null;
+    shiftChanged: boolean;
+    previousShift: EmployeeShift | null;
 }
 
 export interface HRTableRowData {
@@ -39,6 +42,9 @@ export interface HRTableRowData {
     statusLabel: string;
     isShiftActive: boolean;
     gracePeriodApplied: boolean;
+    hasShiftMismatch: boolean;
+    historicalShift: EmployeeShift | null;
+    currentShift: EmployeeShift | null;
 }
 
 function getDatesInRange(start: string, end: string): Date[] {
@@ -58,9 +64,9 @@ function buildTableRows(
     employee: ReportRow,
     holidayMap?: Map<string, Holiday>
 ): TableRowData[] {
-    return calendarDates.map(loopDate => {
+    const rows = calendarDates.map(loopDate => {
         const loopDateStr = loopDate.toISOString().split('T')[0];
-        const record = records.find(r => {
+        const dayRecords = records.filter(r => {
             const rDateStr = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             return rDateStr === loopDateStr;
         });
@@ -77,8 +83,9 @@ function buildTableRows(
         let isWorkingDay = true;
         let missingStatus = '';
         const holiday = holidayMap?.get(loopDateStr) ?? null;
+        let recordToPass: AttendanceRecord | undefined = undefined;
 
-        if (!record) {
+        if (dayRecords.length === 0) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
             isFuture = loopDateStr > todayStr;
             const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
@@ -102,19 +109,45 @@ function buildTableRows(
             }
             statusType = missingStatus;
         } else {
-            checkInVal = new Date(record.checkInTime);
-            checkOutVal = record.checkOutTime ? new Date(record.checkOutTime) : null;
-            workedHrsVal = record.totalHours ?? 0;
-            lateMinsVal = record.lateMinutes ?? 0;
-            otMinsVal = record.overtimeMinutes ?? 0;
-            utMinsVal = record.undertimeMinutes ?? 0;
-            statusType = getRecordStatusFromBackend(record);
+            // Sort day records chronologically by check-in time
+            const sortedDayRecords = [...dayRecords].sort((a, b) => 
+                new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+            );
+
+            const firstRecord = sortedDayRecords[0];
+            const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+            const isShiftActive = dayRecords.some(r => r.isShiftActive);
+
+            workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+            lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+            otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+            utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+            // Construct representative merged record
+            const mergedRecord: AttendanceRecord = {
+                ...firstRecord,
+                isShiftActive,
+                checkOutTime: lastRecord.checkOutTime,
+                gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+                checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+                checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+                notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+                isEarlyOut: lastRecord.isEarlyOut,
+                isAnomaly: dayRecords.some(r => r.isAnomaly),
+                lateMinutes: lateMinsVal,
+                status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+            };
+
+            recordToPass = mergedRecord;
+            checkInVal = new Date(firstRecord.checkInTime);
+            checkOutVal = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+            statusType = getRecordStatusFromBackend(mergedRecord);
         }
 
         return {
             loopDate,
             loopDateStr,
-            record,
+            record: recordToPass,
             statusType,
             missingStatus,
             isFuture,
@@ -126,8 +159,76 @@ function buildTableRows(
             otMinsVal,
             utMinsVal,
             holidayName: holiday?.name ?? null,
+            shift: null,
+            shiftChanged: false,
+            previousShift: null,
         };
     });
+
+    return populateShiftDetails(rows, records, employee);
+}
+
+function populateShiftDetails(
+    rows: TableRowData[],
+    records: AttendanceRecord[],
+    employee: ReportRow
+): TableRowData[] {
+    const chronologicalRows = [...rows].sort((a, b) => a.loopDate.getTime() - b.loopDate.getTime());
+    const sortedRecords = [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const recordShiftMap = new Map<string, EmployeeShift>();
+    for (const record of sortedRecords) {
+        if (record.shift) {
+            const rDateStr = new Date(record.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            if (!recordShiftMap.has(rDateStr)) {
+                recordShiftMap.set(rDateStr, record.shift);
+            }
+        }
+    }
+
+    const firstRecordWithShift = sortedRecords.find(r => r.shift);
+    const initialShift = firstRecordWithShift?.shift ?? employee.shift ?? null;
+
+    let currentShift = initialShift;
+    const populatedChronologicalRows: TableRowData[] = [];
+
+    for (let i = 0; i < chronologicalRows.length; i++) {
+        const row = chronologicalRows[i];
+
+        if (row.record?.shift) {
+            currentShift = row.record.shift;
+        } else {
+            const mappedShift = recordShiftMap.get(row.loopDateStr);
+            if (mappedShift) {
+                currentShift = mappedShift;
+            }
+        }
+
+        let shiftChanged = false;
+        let previousShift: EmployeeShift | null = null;
+
+        if (i > 0) {
+            const prevRow = populatedChronologicalRows[i - 1];
+            if (currentShift?.id !== prevRow.shift?.id) {
+                shiftChanged = true;
+                previousShift = prevRow.shift;
+            }
+        }
+
+        populatedChronologicalRows.push({
+            ...row,
+            shift: currentShift,
+            shiftChanged,
+            previousShift,
+        });
+    }
+
+    const rowMap = new Map<string, TableRowData>();
+    for (const row of populatedChronologicalRows) {
+        rowMap.set(row.loopDateStr, row);
+    }
+
+    return rows.map(originalRow => rowMap.get(originalRow.loopDateStr) ?? originalRow);
 }
 
 function buildHRTableRows(
@@ -166,6 +267,20 @@ function buildHRTableRows(
         const checkInStr = row.checkInVal ? row.checkInVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-";
         const checkOutStr = row.record?.isShiftActive ? "Active" : (row.checkOutVal ? row.checkOutVal.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "-");
 
+        const historicalShift = row.record?.shift ?? null;
+        const currentShift = employee.shift ?? null;
+        
+        // If there's a record, show its historical shift, otherwise fall back to employee's current shift
+        if (historicalShift) {
+            shiftLabel = historicalShift.name;
+        }
+
+        const hasShiftMismatch = !!(
+            historicalShift && 
+            currentShift && 
+            historicalShift.id !== currentShift.id
+        );
+
         return {
             date: row.loopDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
             shift: shiftLabel,
@@ -182,6 +297,9 @@ function buildHRTableRows(
             statusLabel: row.statusType,
             isShiftActive: row.record?.isShiftActive ?? false,
             gracePeriodApplied: row.record?.gracePeriodApplied ?? false,
+            hasShiftMismatch,
+            historicalShift,
+            currentShift,
         };
     }).sort((a, b) => new Date(b._rawDate).getTime() - new Date(a._rawDate).getTime());
 }

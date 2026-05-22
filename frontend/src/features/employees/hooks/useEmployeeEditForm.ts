@@ -34,10 +34,10 @@ export function useEmployeeEditForm({ editForm, onSave }: UseEmployeeEditFormOpt
     setFormErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  // ── Save gate ───────────────────────────────────────────────────────────────
-
   const handleSaveWrapper = () => {
-    if (validateForm()) onSave()
+    if (validateForm()) {
+      onSave()
+    }
   }
 
   return {

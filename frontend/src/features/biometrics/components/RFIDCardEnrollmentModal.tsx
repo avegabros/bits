@@ -160,6 +160,7 @@ export default function RFIDCardEnrollmentModal({
                   onManualSync={actions.handleManualSync}
                   onPushToDevice={actions.handlePushToDevice}
                   onDeleteFromDevice={actions.handleDeleteFromDevice}
+                  onToggleExclusion={(deviceId, exclude) => actions.handleToggleExclusion(deviceId, 'CARD', exclude)}
                 />
               )}
 

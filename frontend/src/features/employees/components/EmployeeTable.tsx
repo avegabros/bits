@@ -6,6 +6,7 @@ import { Edit2, Fingerprint, CreditCard, Key, RotateCcw, UserX, Eye } from 'luci
 import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { Avatar } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { Employee, formatFullName, formatTime } from '../utils/employee-types'
 
 interface EmployeeTableProps {
@@ -67,7 +68,11 @@ export function EmployeeTable({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs">Loading employees...</td></tr>
+              <>
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton.TableRow key={i} cols={8} />
+                ))}
+              </>
             ) : employees.length > 0 ? (
               employees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-red-50/50 transition-colors duration-200 group">
@@ -92,9 +97,24 @@ export function EmployeeTable({
                   </td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono">{employee.employeeNumber ?? '—'}</td>
                   <td className="px-4 py-2.5">
-                    {employee.Shift ? (
+                    {employee.EmployeeShift && employee.EmployeeShift.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {[...employee.EmployeeShift]
+                          .map((es, idx) => (
+                          <div key={es.id || idx}>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-slate-700 leading-tight" title={es.shift.name}>{es.shift.shiftCode || es.shift.name}</p>
+                              {es.isPrimary && (
+                                <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold">PRIMARY</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(es.shift.startTime)} – {formatTime(es.shift.endTime)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : employee.Shift ? (
                       <div>
-                        <p className="text-xs font-bold text-slate-700 leading-tight">{employee.Shift.name}</p>
+                        <p className="text-xs font-bold text-slate-700 leading-tight" title={employee.Shift.name}>{employee.Shift.shiftCode || employee.Shift.name}</p>
                         <p className="text-[10px] font-medium text-slate-400 mt-0.5">{formatTime(employee.Shift.startTime)} – {formatTime(employee.Shift.endTime)}</p>
                       </div>
                     ) : (<span className="text-[10px] text-slate-300 font-bold">Unassigned</span>)}
@@ -159,18 +179,20 @@ export function EmployeeTable({
                               <button onClick={() => onEdit(employee)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Edit employee">
                                 <Edit2 className="w-4 h-4" />
                               </button>
-                              {(() => {
-                                const status = enrollStatus[employee.id] || 'idle'
-                                if (status === 'loading') {
-                                  return (<button disabled className="p-2 rounded-lg bg-blue-50 text-blue-400 cursor-wait" title="Enrolling..."><Fingerprint className="w-4 h-4 animate-pulse" /></button>)
-                                }
-                                return (
-                                  <button onClick={() => { onFingerprintOpen(employee.id, `${employee.firstName} ${employee.lastName}`) }}
-                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-all active:scale-90" title="Manage Fingerprints">
-                                    <Fingerprint className="w-4 h-4" />
-                                  </button>
-                                )
-                              })()}
+                                  {(() => {
+                                    const status = enrollStatus[employee.id] || 'idle'
+                                    const hasFingerprints = (employee.EmployeeFingerprintEnrollment?.length ?? 0) > 0
+                                    if (status === 'loading') {
+                                      return (<button disabled className="p-2 rounded-lg bg-blue-50 text-blue-400 cursor-wait" title="Enrolling..."><Fingerprint className="w-4 h-4 animate-pulse" /></button>)
+                                    }
+                                    return (
+                                      <button onClick={() => { onFingerprintOpen(employee.id, `${employee.firstName} ${employee.lastName}`) }}
+                                        className={`p-2 rounded-lg transition-all active:scale-90 ${hasFingerprints ? 'text-red-600 hover:text-red-700 hover:bg-red-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-100'}`} 
+                                        title={hasFingerprints ? "Fingerprints Enrolled" : "Manage Fingerprints"}>
+                                        <Fingerprint className="w-4 h-4" />
+                                      </button>
+                                    )
+                                  })()}
                               <button onClick={() => { onCardEnrollOpen(employee.id, `${employee.firstName} ${employee.lastName}`, employee.cardNumber || null) }}
                                 className={`p-2 rounded-lg transition-all active:scale-90 ${employee.cardNumber ? 'text-blue-500 hover:text-blue-700 hover:bg-blue-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
                                 title={employee.cardNumber ? `Badge #${employee.cardNumber}` : 'Enroll RFID Badge'}>

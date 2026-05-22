@@ -25,7 +25,7 @@ router.use(authenticate);
  * @swagger
  * /api/holidays:
  *   get:
- *     summary: Get all holidays (optional ?month= and ?year= filters)
+ *     summary: Get all holidays (optional ?month=, ?year=, ?branchId= filters)
  *     tags: [Holidays]
  *     security:
  *       - bearerAuth: []
@@ -40,9 +40,14 @@ router.use(authenticate);
  *         schema:
  *           type: integer
  *         description: Filter by month (1-12, requires year)
+ *       - in: query
+ *         name: branchId
+ *         schema:
+ *           type: integer
+ *         description: Filter holidays applicable to a specific branch (returns national + branch-specific)
  *     responses:
  *       200:
- *         description: List of holidays
+ *         description: List of holidays with branch scope info
  */
 router.get('/', getHolidays);
 
@@ -62,7 +67,7 @@ router.get('/', getHolidays);
  *           type: integer
  *     responses:
  *       200:
- *         description: Holiday details
+ *         description: Holiday details with branch scope info
  *       404:
  *         description: Holiday not found
  */
@@ -72,7 +77,7 @@ router.get('/:id', getHolidayById);
  * @swagger
  * /api/holidays:
  *   post:
- *     summary: Create a new holiday (Admin only)
+ *     summary: Create a new holiday (Admin/HR only)
  *     tags: [Holidays]
  *     security:
  *       - bearerAuth: []
@@ -96,6 +101,11 @@ router.get('/:id', getHolidayById);
  *               type:
  *                 type: string
  *                 enum: [REGULAR, SPECIAL]
+ *               branchIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Branch IDs to scope the holiday to. Empty or omitted = national (all branches).
  *     responses:
  *       201:
  *         description: Holiday created
@@ -108,7 +118,7 @@ router.post('/', adminOrHR, createHoliday);
  * @swagger
  * /api/holidays/{id}:
  *   put:
- *     summary: Update a holiday (Admin only)
+ *     summary: Update a holiday (Admin/HR only)
  *     tags: [Holidays]
  *     security:
  *       - bearerAuth: []
@@ -135,6 +145,11 @@ router.post('/', adminOrHR, createHoliday);
  *               type:
  *                 type: string
  *                 enum: [REGULAR, SPECIAL]
+ *               branchIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Branch IDs to scope the holiday to. Empty array = national. Omitted = no change.
  *     responses:
  *       200:
  *         description: Holiday updated
@@ -149,7 +164,7 @@ router.put('/:id', adminOrHR, updateHoliday);
  * @swagger
  * /api/holidays/{id}:
  *   delete:
- *     summary: Delete a holiday (Admin only)
+ *     summary: Delete a holiday (Admin/HR only)
  *     tags: [Holidays]
  *     security:
  *       - bearerAuth: []

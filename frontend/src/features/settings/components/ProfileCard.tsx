@@ -108,28 +108,6 @@ export function ProfileCard({
               </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Branch</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-red-400" size={16} />
-                <input
-                  disabled
-                  value={userData.branch || 'Not assigned'}
-                  className="w-full pl-10 p-3 bg-red-50/30 border border-red-100 rounded-xl text-sm font-bold text-slate-700 outline-none disabled:opacity-60"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Department</label>
-              <input
-                disabled
-                value={userData.department || 'Not assigned'}
-                className="w-full p-3 bg-red-50/30 border border-red-100 rounded-xl text-sm font-bold text-slate-700 outline-none disabled:opacity-60"
-              />
-            </div>
-          </div>
         </div>
       </div>
     </div>

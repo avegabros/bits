@@ -20,11 +20,13 @@ export interface AttendanceStreamPayload {
             id: number
             firstName: string
             lastName: string
+            middleName?: string
+            suffix?: string
             departmentId: number | null
             Department?: { name: string } | null
             branchId: number | null
             Branch?: { name: string } | null
-            Shift?: any
+            Shift?: { name?: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string } | null
         }
     }
 }

@@ -5,6 +5,7 @@ import { PortalShiftData } from '../utils/portal-types'
 export function useEmployeeShift() {
   const [loading, setLoading] = useState(true)
   const [shift, setShift] = useState<PortalShiftData | null>(null)
+  const [shifts, setShifts] = useState<PortalShiftData[]>([])
 
   useEffect(() => {
     const loadShift = async () => {
@@ -12,6 +13,7 @@ export function useEmployeeShift() {
         const res = await employeeSelfApi.getShift()
         if (res.success) {
           setShift(res.shift as PortalShiftData)
+          setShifts((res as any).shifts as PortalShiftData[] || [])
         }
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -26,5 +28,5 @@ export function useEmployeeShift() {
     loadShift()
   }, [])
 
-  return { loading, shift }
+  return { loading, shift, shifts }
 }

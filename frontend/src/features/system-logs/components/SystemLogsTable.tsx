@@ -75,11 +75,19 @@ export function SystemLogsTable({ logs }: SystemLogsTableProps) {
 
                                 {/* Employee */}
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm ${getAvatarBg(log.employeeRole)}`}>
-                                        <span className="text-white text-[9px] font-black">
-                                            {log.employeeName === 'System' ? 'SY' : log.employeeName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
-                                        </span>
-                                    </div>
+                                    {log.employeePhoto ? (
+                                        <img 
+                                            src={log.employeePhoto} 
+                                            alt={log.employeeName} 
+                                            className="w-7 h-7 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" 
+                                        />
+                                    ) : (
+                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm ${getAvatarBg(log.employeeRole)}`}>
+                                            <span className="text-white text-[9px] font-black">
+                                                {log.employeeName === 'System' ? 'SY' : log.employeeName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                                            </span>
+                                        </div>
+                                    )}
                                     <span className="text-xs font-bold text-slate-800 truncate">{log.employeeName}</span>
                                 </div>
 
@@ -119,11 +127,19 @@ export function SystemLogsTable({ logs }: SystemLogsTableProps) {
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${getAvatarBg(log.employeeRole)}`}>
-                                            <span className="text-white text-[10px] font-black">
-                                                {log.employeeName === 'System' ? 'SY' : log.employeeName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
-                                            </span>
-                                        </div>
+                                        {log.employeePhoto ? (
+                                            <img 
+                                                src={log.employeePhoto} 
+                                                alt={log.employeeName} 
+                                                className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" 
+                                            />
+                                        ) : (
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${getAvatarBg(log.employeeRole)}`}>
+                                                <span className="text-white text-[10px] font-black">
+                                                    {log.employeeName === 'System' ? 'SY' : log.employeeName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="min-w-0">
                                             <p className="text-sm font-bold text-slate-800 truncate">{log.employeeName}</p>
                                             <p className="text-[10px] text-slate-400 font-medium">{date} · {time}</p>

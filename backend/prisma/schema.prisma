@@ -11,6 +11,7 @@ model Attendance {
   id                   Int                    @id @default(autoincrement())
   employeeId           Int
   date                 DateTime
+  shiftId              Int?
   checkInTime          DateTime
   checkOutTime         DateTime?
   checkin_updated      DateTime?
@@ -20,17 +21,26 @@ model Attendance {
   checkInDeviceId      Int?
   checkOutDeviceId     Int?
   checkoutSource       String?
+  lateMinutes          Int                    @default(0)
+  undertimeMinutes     Int                    @default(0)
+  overtimeMinutes      Float                  @default(0.0)
+  totalHours           Float                  @default(0.0)
+  isAnomaly            Boolean                @default(false)
+  isEarlyOut           Boolean                @default(false)
+  gracePeriodApplied   Boolean                @default(false)
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   checkInDevice        Device?                @relation("AttCheckIn", fields: [checkInDeviceId], references: [id])
   checkOutDevice       Device?                @relation("AttCheckOut", fields: [checkOutDeviceId], references: [id])
   employee             Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift                Shift?                 @relation("AttendanceShift", fields: [shiftId], references: [id])
   AttendanceAdjustment AttendanceAdjustment[]
 
-  @@unique([employeeId, date])
+  @@unique([employeeId, date, shiftId])
   @@index([date])
   @@index([employeeId])
   @@index([status])
+  @@index([shiftId])
 }
 
 model AttendanceAdjustment {
@@ -134,6 +144,7 @@ model Branch {
   updatedAt DateTime
   Employee  Employee[]
   companies CompanyBranch[]
+  holidays  HolidayBranch[]
 }
 
 model CompanyBranch {
@@ -167,6 +178,7 @@ model Device {
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
+  DeviceBiometricExclusion      DeviceBiometricExclusion[]
 
   @@index([isActive])
   @@index([syncEnabled])
@@ -205,6 +217,8 @@ model Employee {
   Attendance                    Attendance[]
   AdjustmentsReviewed           AttendanceAdjustment[]          @relation("AdjustmentReviewedBy")
   AdjustmentsSubmitted          AttendanceAdjustment[]          @relation("AdjustmentSubmittedBy")
+  OvertimeReviewed              OvertimeRequest[]               @relation("OvertimeReviewedBy")
+  OvertimeSubmitted             OvertimeRequest[]               @relation("OvertimeSubmittedBy")
   AttendanceLog                 AttendanceLog[]
   AuditLogs                     AuditLog[]
   Branch                        Branch?                         @relation(fields: [branchId], references: [id])
@@ -213,9 +227,11 @@ model Employee {
   ManagerDepartments            ManagerDepartment[]             @relation("ManagerDepartments")
   ManagerDeptAssignments        ManagerDepartment[]             @relation("ManagerDeptAssignedBy")
   Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
+  EmployeeShift                 EmployeeShift[]
   EmployeeCardEnrollment        EmployeeCardEnrollment[]
   EmployeeDeviceEnrollment      EmployeeDeviceEnrollment[]
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
+  DeviceBiometricExclusion      DeviceBiometricExclusion[]
   RefreshToken                  RefreshToken[]
 
   @@index([departmentId])
@@ -230,8 +246,8 @@ model Employee {
 
 model Shift {
   id           Int        @id @default(autoincrement())
-  shiftCode    String     @unique
-  name         String     @unique
+  shiftCode    String     @unique @db.VarChar(7)
+  name         String     @unique @db.VarChar(32)
   startTime    String
   endTime      String
   graceMinutes Int        @default(0)
@@ -246,8 +262,26 @@ model Shift {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   Employee     Employee[]
+  EmployeeShift EmployeeShift[]
+  Attendance    Attendance[]    @relation("AttendanceShift")
 
   @@index([isActive])
+}
+
+model EmployeeShift {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  shiftId    Int
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, shiftId])
+  @@index([employeeId])
+  @@index([shiftId])
 }
 
 model RefreshToken {
@@ -261,6 +295,24 @@ model RefreshToken {
   @@index([employeeId])
   @@index([token])
   @@index([expiresAt])
+}
+
+model DeviceBiometricExclusion {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  deviceId   Int
+  type       String   // 'FINGERPRINT' | 'CARD'
+  excludedAt DateTime @default(now())
+  excludedBy Int?
+  reason     String?
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, deviceId, type])
+  @@index([employeeId])
+  @@index([deviceId])
+  @@index([type])
 }
 
 model EmployeeDeviceEnrollment {
@@ -329,15 +381,26 @@ model AuditLog {
 }
 
 model Holiday {
-  id          Int         @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   name        String
-  date        DateTime    @unique
+  date        DateTime        @unique
   description String?
-  type        HolidayType @default(REGULAR)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  type        HolidayType     @default(REGULAR)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  branches    HolidayBranch[]
 
   @@index([date])
+}
+
+model HolidayBranch {
+  holidayId Int
+  branchId  Int
+  holiday   Holiday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([holidayId, branchId])
+  @@index([branchId])
 }
 
 model SyncConfig {
@@ -351,6 +414,7 @@ model SyncConfig {
   autoTimeSyncEnabled          Boolean  @default(true)
   timeSyncIntervalSec          Int      @default(3600)
   globalMinCheckoutMinutes     Int      @default(120)
+  minShiftGapMinutes           Int      @default(30)
   healthCheckEnabled           Boolean  @default(true)
   healthCheckIntervalSec       Int      @default(60)
   logBufferMaintenanceEnabled  Boolean  @default(true)
@@ -393,4 +457,28 @@ enum Role {
 enum HolidayType {
   REGULAR
   SPECIAL
+}
+
+model OvertimeRequest {
+  id              Int       @id @default(autoincrement())
+  employeeId      Int
+  date            DateTime
+  startTime       String
+  endTime         String
+  reason          String
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  source          String    @default("REQUESTED") // REQUESTED, ASSIGNED
+  reviewedById    Int?
+  rejectionReason String?
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+
+  employee        Employee  @relation("OvertimeSubmittedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy      Employee? @relation("OvertimeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
 }

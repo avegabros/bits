@@ -20,7 +20,10 @@ import {
     deleteEmployeeFingerprint,
     syncEmployeeFingerprintsController,
     exportEmployees,
-    exportTemplate
+    exportTemplate,
+    addExclusionController,
+    removeExclusionController,
+    deleteDeviceFingerprintController
 } from './index';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR, adminOrHR } from '../../shared/middleware/role.middleware';
@@ -363,6 +366,15 @@ router.delete('/:id/fingerprint/:fingerIndex', adminOrHR, deleteEmployeeFingerpr
 
 /**
  * @swagger
+ * /api/employees/{id}/fingerprint/{fingerIndex}/device/{deviceId}:
+ *   delete:
+ *     summary: Delete a specific fingerprint from a specific device
+ *     tags: [Employees]
+ */
+router.delete('/:id/fingerprint/:fingerIndex/device/:deviceId', adminOrHR, deleteDeviceFingerprintController);
+
+/**
+ * @swagger
  * /api/employees/{id}/sync-fingerprints:
  *   post:
  *     summary: Sync employee fingerprints across all active devices
@@ -453,6 +465,24 @@ router.get('/:id/card-status', getEmployeeCardStatus);
  */
 router.delete('/:id/card', adminOrHR, deleteEmployeeCardController);
 router.delete('/:id/card/device/:deviceId', adminOrHR, deleteEmployeeCardController);
+
+/**
+ * @swagger
+ * /api/employees/{id}/device-exclusions/{deviceId}:
+ *   post:
+ *     summary: Exclude an employee from syncing biometrics to a device
+ *     tags: [Employees]
+ */
+router.post('/:id/device-exclusions/:deviceId', adminOrHR, addExclusionController);
+
+/**
+ * @swagger
+ * /api/employees/{id}/device-exclusions/{deviceId}:
+ *   delete:
+ *     summary: Remove a biometric sync exclusion
+ *     tags: [Employees]
+ */
+router.delete('/:id/device-exclusions/:deviceId', adminOrHR, removeExclusionController);
 
 /**
  * @swagger

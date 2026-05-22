@@ -1,9 +1,44 @@
 /**
  * Parses a string "HH:MM" into total minutes from midnight.
  */
-function parseTimeStr(timeStr: string): number {
+export function parseTimeStr(timeStr: string): number {
     const [h, m] = timeStr.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Validates shift timing configuration.
+ * Returns null if valid, or an error message if invalid.
+ */
+export function validateShiftTimes(
+    startTime: string,
+    endTime: string,
+    isNightShift: boolean
+): string | null {
+    if (!startTime || !endTime) return 'Start time and end time are required.';
+    
+    const startMin = parseTimeStr(startTime);
+    const endMin = parseTimeStr(endTime);
+
+    if (startMin === endMin) {
+        return 'Shift duration cannot be zero (start and end times are identical).';
+    }
+
+    const isCrossMidnight = endMin < startMin;
+
+    if (isCrossMidnight && !isNightShift) {
+        return 'This shift schedule crosses midnight. Please enable the "Overnight Shift" option to support next-day checkout.';
+    }
+
+    if (!isCrossMidnight && isNightShift) {
+        // While technically possible to have a night shift that doesn't cross midnight 
+        // (e.g., 8 PM to 11 PM), in this system "isNightShift" is the toggle for 
+        // cross-midnight handling. We should warn or just allow it if it's harmless.
+        // However, to keep it simple and avoid confusion:
+        // return 'Overnight Shift should only be enabled for schedules that cross midnight.';
+    }
+
+    return null;
 }
 
 /**

@@ -28,6 +28,7 @@ export interface SyncConfig {
     autoTimeSyncEnabled: boolean;
     timeSyncIntervalSec: number;
     globalMinCheckoutMinutes: number;
+    minShiftGapMinutes: number;
     healthCheckEnabled: boolean;
     healthCheckIntervalSec: number;
     logBufferMaintenanceEnabled: boolean;

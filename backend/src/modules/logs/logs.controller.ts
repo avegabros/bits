@@ -129,6 +129,7 @@ export const getLogs = async (req: Request, res: Response) => {
                             lastName: true,
                             Department: { select: { name: true } },
                             role: true,
+                            profilePicture: true,
                         }
                     }
                 },
@@ -164,6 +165,7 @@ export const getLogs = async (req: Request, res: Response) => {
                 category: logCategory,
                 timestamp: log.timestamp.toISOString(),
                 employeeName: empName,
+                employeePhoto: log.performer?.profilePicture || null,
                 employeeRole: log.performer?.role || 'SYSTEM',
                 action: log.action,
                 details: log.details || `${log.action} on ${log.entityType}`,

@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/useToast'
-import type { Shift, ShiftFormData } from '../types'
+import type { Shift, ShiftFormData, ShiftConflictReport } from '../types'
 import { emptyForm } from '../types'
-import { toMinutes } from '../utils/shift-formatters'
+import { toMinutes, validateShiftConfig } from '../utils/shift-formatters'
 
 export function useShifts() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
 
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -21,6 +20,9 @@ export function useShifts() {
 
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const [conflictReport, setConflictReport] = useState<ShiftConflictReport | null>(null)
+  const [showConflictModal, setShowConflictModal] = useState(false)
 
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 10
@@ -44,14 +46,10 @@ export function useShifts() {
   const filtered = shifts.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.shiftCode.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchStatus = filterActive === 'all' ? true : filterActive === 'active' ? s.isActive : !s.isActive
-    return matchSearch && matchStatus
+    return matchSearch
   })
 
-  // Reset page on filter change
-  useEffect(() => { setCurrentPage(1) }, [searchTerm, filterActive])
-
-  const activeCount = shifts.filter(s => s.isActive).length
+  useEffect(() => { setCurrentPage(1) }, [searchTerm])
 
   // Break validation helper
   const hasInvalidBreaks = form.breaks.some(b => {
@@ -62,7 +60,7 @@ export function useShifts() {
       const shiftEndMins = toMinutes(form.endTime)
       const breakStartMins = toMinutes(b.start)
       const breakEndMins = toMinutes(b.end)
-      const isOvernight = shiftEndMins <= shiftStartMins
+      const isOvernight = form.isNightShift
       if (isOvernight) {
         const validStart = breakStartMins >= shiftStartMins || breakStartMins < shiftEndMins
         const validEnd = breakEndMins > shiftStartMins || breakEndMins <= shiftEndMins
@@ -73,6 +71,8 @@ export function useShifts() {
     }
     return false
   })
+
+  const shiftTimingError = validateShiftConfig(form.startTime, form.endTime, form.isNightShift)
 
   const openCreate = () => {
     setEditingShift(null)
@@ -112,6 +112,22 @@ export function useShifts() {
       setFormError('Shift Code, Name, Start Time, and End Time are required.')
       return
     }
+    if (form.graceMinutes < 0 || form.graceMinutes > 30) {
+      setFormError('Grace period must be between 0 and 30 minutes.')
+      return
+    }
+    if (form.shiftCode.trim().length > 7) {
+      setFormError('Shift Code cannot exceed 7 characters.')
+      return
+    }
+    if (form.name.trim().length > 32) {
+      setFormError('Shift Name cannot exceed 32 characters.')
+      return
+    }
+    if (shiftTimingError) {
+      setFormError(shiftTimingError)
+      return
+    }
     if (hasInvalidBreaks) {
       setFormError('Please fix invalid break time ranges before saving.')
       return
@@ -121,11 +137,42 @@ export function useShifts() {
     try {
       const url = editingShift ? `/api/shifts/${editingShift.id}` : '/api/shifts'
       const method = editingShift ? 'PUT' : 'POST'
+      
+      const calculatedBreakMinutes = form.breaks.reduce((acc, b) => {
+        if (!b.start || !b.end) return acc
+        const [startH, startM] = b.start.split(':').map(Number)
+        const [endH, endM] = b.end.split(':').map(Number)
+        let diff = (endH * 60 + endM) - (startH * 60 + startM)
+        if (diff < 0) diff += 24 * 60
+        return acc + diff
+      }, 0)
+
+      const payload = {
+        ...form,
+        breakMinutes: calculatedBreakMinutes
+      }
+
+      if (editingShift) {
+        const valRes = await fetch(`/api/shifts/${editingShift.id}/validate-edit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        })
+        const valData = await valRes.json()
+        if (valData.success && valData.hasConflicts) {
+          setConflictReport(valData)
+          setShowConflictModal(true)
+          setFormLoading(false)
+          return
+        }
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (!data.success) { setFormError(data.message || 'An error occurred'); return }
@@ -134,16 +181,6 @@ export function useShifts() {
       fetchShifts()
     } catch { setFormError('Failed to save shift. Please try again.') }
     finally { setFormLoading(false) }
-  }
-
-  const handleToggle = async (s: Shift) => {
-    try {
-      const res = await fetch(`/api/shifts/${s.id}/toggle`, {
-        method: 'PATCH', credentials: 'include'
-      })
-      const data = await res.json()
-      if (data.success) { showToast('success', 'Shift Toggled', data.message); fetchShifts() }
-    } catch { showToast('error', 'Toggle Failed', 'Failed to toggle shift') }
   }
 
   const handleDelete = async () => {
@@ -162,18 +199,18 @@ export function useShifts() {
 
   return {
     shifts, loading, searchTerm, setSearchTerm,
-    filterActive, setFilterActive,
-    filtered, activeCount,
+    filtered,
     // Modal
     isFormOpen, setIsFormOpen, editingShift,
     form, setForm, formLoading, formError, setFormError,
-    hasInvalidBreaks,
+    hasInvalidBreaks, shiftTimingError,
+    conflictReport, showConflictModal, setShowConflictModal,
     // Delete
     deleteTarget, setDeleteTarget, deleteLoading,
     // Pagination
     currentPage, setCurrentPage, rowsPerPage,
     // Actions
-    openCreate, openEdit, handleSubmit, handleToggle, handleDelete,
+    openCreate, openEdit, handleSubmit, handleDelete,
     // Toast
     toasts, showToast, dismissToast,
   }

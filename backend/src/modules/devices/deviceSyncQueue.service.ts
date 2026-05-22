@@ -8,6 +8,7 @@ import {
     tryAcquireDeviceLock
 } from './zk';
 import { audit } from '../../shared/lib/auditLogger';
+import deviceEmitter from '../../shared/events/deviceEmitter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
@@ -488,6 +489,16 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
                     });
                     
                     deadLetterCount++;
+
+                    // Emit SSE event for admin dashboard
+                    deviceEmitter.emit('dead-letter', {
+                        deviceId,
+                        taskId: task.id,
+                        actionType: task.actionType,
+                        entityId: task.entityId,
+                        error: errorStr,
+                        retryCount: newRetryCount,
+                    });
                 } else {
                     // Queue for retry
                     await prisma.deviceSyncTask.update({
@@ -521,3 +532,118 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
 }
 
 
+// ── Queue Health ──────────────────────────────────────────────
+
+export interface QueueHealthReport {
+    totalPending: number;
+    totalDeadLetter: number;
+    staleTasks: number;
+    perDevice: {
+        deviceId: number;
+        deviceName: string;
+        pending: number;
+        deadLetter: number;
+    }[];
+}
+
+const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+
+export async function getQueueHealth(): Promise<QueueHealthReport> {
+    const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+
+    const tasks = await prisma.deviceSyncTask.findMany({
+        where: { status: { in: ['PENDING', 'DEAD_LETTER'] } },
+        include: { device: { select: { name: true } } },
+    });
+
+    const perDeviceMap = new Map<number, { deviceName: string; pending: number; deadLetter: number }>();
+
+    let totalPending = 0;
+    let totalDeadLetter = 0;
+    let staleTasks = 0;
+
+    for (const task of tasks) {
+        if (task.status === 'PENDING') totalPending++;
+        if (task.status === 'DEAD_LETTER') totalDeadLetter++;
+        if (task.status === 'PENDING' && task.createdAt < staleThreshold) staleTasks++;
+
+        const entry = perDeviceMap.get(task.deviceId) ?? {
+            deviceName: task.device.name,
+            pending: 0,
+            deadLetter: 0,
+        };
+        if (task.status === 'PENDING') entry.pending++;
+        if (task.status === 'DEAD_LETTER') entry.deadLetter++;
+        perDeviceMap.set(task.deviceId, entry);
+    }
+
+    return {
+        totalPending,
+        totalDeadLetter,
+        staleTasks,
+        perDevice: Array.from(perDeviceMap.entries()).map(([deviceId, data]) => ({
+            deviceId,
+            ...data,
+        })),
+    };
+}
+
+// ── Queue Drain ──────────────────────────────────────────────
+
+export interface DrainResult {
+    devicesProcessed: number;
+    totalTasksAttempted: number;
+    errors: string[];
+}
+
+export async function drainAllPendingQueues(): Promise<DrainResult> {
+    const devicesWithPending = await prisma.deviceSyncTask.findMany({
+        where: { status: 'PENDING' },
+        select: { deviceId: true },
+        distinct: ['deviceId'],
+    });
+
+    const errors: string[] = [];
+    let totalTasksAttempted = 0;
+
+    for (const { deviceId } of devicesWithPending) {
+        try {
+            await processDeviceSyncQueue(deviceId);
+            const remaining = await prisma.deviceSyncTask.count({
+                where: { deviceId, status: 'PENDING' },
+            });
+            totalTasksAttempted += remaining === 0 ? 1 : remaining;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            errors.push(`Device ${deviceId}: ${msg}`);
+        }
+    }
+
+    if (devicesWithPending.length > 0) {
+        console.log(`[SyncQueue] Drain completed: ${devicesWithPending.length} device(s), ${errors.length} error(s)`);
+    }
+
+    return {
+        devicesProcessed: devicesWithPending.length,
+        totalTasksAttempted,
+        errors,
+    };
+}
+
+// ── Dead-Letter Recovery ────────────────────────────────────────
+
+export async function retryDeadLetterTasks(deviceId?: number): Promise<number> {
+    const where: { status: string; deviceId?: number } = { status: 'DEAD_LETTER' };
+    if (deviceId) where.deviceId = deviceId;
+
+    const result = await prisma.deviceSyncTask.updateMany({
+        where,
+        data: { status: 'PENDING', retryCount: 0, updatedAt: new Date() },
+    });
+
+    if (result.count > 0) {
+        console.log(`[SyncQueue] Reset ${result.count} dead-letter task(s) to PENDING`);
+    }
+
+    return result.count;
+}

@@ -9,7 +9,6 @@ interface ShiftData {
     startTime: string;
     endTime: string;
     workDays: string;
-    isActive: boolean;
 }
 
 interface PeakWindow {
@@ -64,7 +63,7 @@ export function ShiftTimelineViz({ bufferMinutes, enabled }: ShiftTimelineVizPro
                 const res = await fetch('/api/shifts', { credentials: 'include' });
                 const data = await res.json();
                 if (data.success) {
-                    setShifts((data.shifts || data.data || []).filter((s: ShiftData) => s.isActive));
+                    setShifts(data.shifts || data.data || []);
                 }
             } catch (err) {
                 console.error('Failed to fetch shifts for timeline:', err);

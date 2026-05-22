@@ -94,10 +94,23 @@ export function useManagerDashboardData() {
                 setMyDepartments(dd.departments || []);
             }
 
-            const holidayList: { date: string; name: string }[] = hd.success ? (hd.holidays || []) : [];
+            const holidayList: { date: string; name: string; branches?: { branchId: number }[] }[] = hd.success ? (hd.holidays || []) : [];
             const holidayDateSet = new Set(holidayList.map(h => new Date(h.date).toISOString().split('T')[0]));
             const todayHoliday = holidayList.find(h => new Date(h.date).toISOString().split('T')[0] === todayStr);
             setHolidayName(todayHoliday?.name ?? null);
+
+            // Build a map of date -> holiday for branch-aware lookups
+            const holidayByDate = new Map<string, typeof holidayList[0]>();
+            for (const h of holidayList) {
+                holidayByDate.set(new Date(h.date).toISOString().split('T')[0], h);
+            }
+
+            // Helper: does a holiday apply to a given branchId?
+            const holidayApplies = (h: { branches?: { branchId: number }[] }, branchId?: number | null) => {
+                if (!h.branches || h.branches.length === 0) return true; // National
+                if (!branchId) return true; // No branch = treat as affected
+                return h.branches.some(b => b.branchId === branchId);
+            };
 
             const allEmps: any[] = ed.success ? (ed.employees || ed.data || []) : [];
             const emps = allEmps.filter((e: any) => {
@@ -137,7 +150,21 @@ export function useManagerDashboardData() {
                     if (!e.hireDate) return true;
                     return phtStr(new Date(e.hireDate)) <= dateStr;
                 }).length;
-                const absent = isDateHoliday ? 0 : (dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0);
+                const dayHoliday = holidayByDate.get(dateStr);
+                let absent: number;
+                if (dayHoliday) {
+                    const nonHolidayEmps = activeEmps.filter((e: any) => {
+                        if (e.hireDate && phtStr(new Date(e.hireDate)) > dateStr) return false;
+                        return !holidayApplies(dayHoliday, e.branchId);
+                    });
+                    const nonHolidayCheckedIn = dayAtts.filter(a => {
+                        const emp = a.employee || a.Employee || {};
+                        return !holidayApplies(dayHoliday, emp.branchId) && a.checkInTime;
+                    }).length;
+                    absent = dateStr <= todayPHTStr ? Math.max(0, nonHolidayEmps.length - nonHolidayCheckedIn) : 0;
+                } else {
+                    absent = dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0;
+                }
                 return { day, present: onTime, late, absent };
             });
             const weekly = weeklyAll.filter(d => {
@@ -157,8 +184,20 @@ export function useManagerDashboardData() {
             }).length;
             const missingCount = Math.max(0, todayEligible - todayPresent);
             if (todayHoliday) {
-                setTotalAbsent(0);
-                setTotalHoliday(missingCount);
+                const holidayAffected = activeEmps.filter((e: any) => {
+                    if (e.hireDate && phtStr(new Date(e.hireDate)) > todayPHTStr) return false;
+                    return holidayApplies(todayHoliday, e.branchId);
+                });
+                const holidayAffectedPresent = atts.filter(a => {
+                    const emp = a.employee || a.Employee || {};
+                    return holidayApplies(todayHoliday, emp.branchId) && a.checkInTime;
+                }).length;
+                const holidayMissing = Math.max(0, holidayAffected.length - holidayAffectedPresent);
+                const nonHolidayEligible = todayEligible - holidayAffected.length;
+                const nonHolidayPresent = todayPresent - holidayAffectedPresent;
+                const nonHolidayAbsent = Math.max(0, nonHolidayEligible - nonHolidayPresent);
+                setTotalAbsent(nonHolidayAbsent);
+                setTotalHoliday(holidayMissing);
             } else {
                 setTotalAbsent(missingCount);
                 setTotalHoliday(0);

@@ -6,6 +6,7 @@ export interface LogEntry {
     category: string
     timestamp: string
     employeeName: string
+    employeePhoto?: string | null
     action: string
     details: string
     source: string

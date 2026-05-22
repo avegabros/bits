@@ -1,7 +1,8 @@
 'use client';
 
 import React, { Suspense } from 'react';
-import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle } from 'lucide-react';
+import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle, Clock } from 'lucide-react';
+import Link from 'next/link';
 import { useAttendanceDashboard } from '@/features/attendance/hooks/useAttendanceDashboard';
 import { AttendanceStats } from './AttendanceStats';
 import { AttendanceFilters } from './AttendanceFilters';
@@ -18,15 +19,20 @@ function ManagerAttendanceContent() {
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
     companyFilter, setCompanyFilter,
+    shiftFilter, setShiftFilter,
     dateInputRef,
     records, loading, error, stats,
-    branches, companies, departments, statuses,
+    branches, companies, departments, statuses, shifts,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     exportToCSV,
     toasts, dismissToast,
     getTodayDate,
   } = useAttendanceDashboard('manager');
+
+  const handleShiftQuickNav = (shiftName: string, _row: any) => {
+    setShiftFilter(shiftName);
+  };
 
   return (
     <div className="space-y-5">
@@ -74,6 +80,12 @@ function ManagerAttendanceContent() {
           >
             <Download className="w-4 h-4" /> Export
           </button>
+          <Link
+            href="/manager/overtime?tab=pending"
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+          >
+            <Clock className="w-4 h-4" /> Manage OT
+          </Link>
         </div>
       </div>
 
@@ -116,6 +128,9 @@ function ManagerAttendanceContent() {
             branches={branches}
             departments={departments}
             statuses={statuses}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
           />
         </div>
 
@@ -139,6 +154,10 @@ function ManagerAttendanceContent() {
               absent: stats.absent,
               total: stats.total,
             }}
+            shiftFilter={shiftFilter}
+            setShiftFilter={setShiftFilter}
+            shifts={shifts}
+            onShiftClick={handleShiftQuickNav}
           />
         </div>
       </div>

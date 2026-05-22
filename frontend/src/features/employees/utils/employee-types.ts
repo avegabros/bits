@@ -26,6 +26,23 @@ export type Employee = {
   profilePicture: string | null
   shiftId?: number | null
   Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string; workDays?: string; halfDays?: string; graceMinutes?: number; breakMinutes?: number; isNightShift?: boolean } | null
+  EmployeeShift?: {
+    id: number
+    sortOrder: number
+    isPrimary: boolean
+    shift: {
+      id: number
+      name: string
+      shiftCode: string
+      startTime: string
+      endTime: string
+      workDays?: string
+      halfDays?: string
+      graceMinutes?: number
+      breakMinutes?: number
+      isNightShift?: boolean
+    }
+  }[]
   createdAt: string
   updatedAt?: string
   EmployeeDeviceEnrollment?: {
@@ -57,6 +74,7 @@ export type ShiftOption = {
   name: string
   startTime: string
   endTime: string
+  workDays?: string
 }
 
 export type ImportRow = {

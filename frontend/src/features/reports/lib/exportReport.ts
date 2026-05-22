@@ -6,6 +6,7 @@ import {
   formatShiftTime,
   formatLateHrs,
   formatHrsMins,
+  formatTotalLate,
   getRecordStatusFromBackend,
 } from './formatters';
 import type { Holiday } from '@/features/holidays/hooks/useHolidays';
@@ -57,26 +58,45 @@ export const handleExport = (
     'Employee',
     'Shift',
     'Late (Duration)',
+    'Total Late',
     'Overtime',
     'Undertime',
     'Reg Hrs',
   ]);
 
+  let sumLateDays = 0;
+  let sumLateMinutes = 0;
+
   filteredData.forEach((e) => {
     const shiftLabel = e.shift
       ? `${e.shift.name} (${formatShiftTime(
-          e.shift.startTime
-        )}–${formatShiftTime(e.shift.endTime)})`
+        e.shift.startTime
+      )}–${formatShiftTime(e.shift.endTime)})`
       : 'No Shift';
     allRows.push([
       e.name,
       shiftLabel,
       formatLateHrs(e.lateMinutes),
-      e.overtime > 0 ? formatHrsMins(e.overtime) : '—', // Removed + sign
-      e.undertime > 0 ? formatHrsMins(e.undertime) : '—', // Removed - sign
-      Math.max(0, e.totalHours - e.overtime).toFixed(2),
+      formatTotalLate(e.lateMinutes),
+      e.overtime > 0 ? formatHrsMins(e.overtime) : '—',
+      e.undertime > 0 ? formatHrsMins(e.undertime) : '—',
+      Math.max(0, e.totalHours).toFixed(2),
     ]);
+    sumLateDays += e.late;
+    sumLateMinutes += e.lateMinutes;
   });
+
+  // Summary / totals row
+  allRows.push([]);
+  allRows.push([
+    `TOTAL (${filteredData.length} employees)`,
+    '',
+    `${sumLateDays} late day(s)`,
+    formatTotalLate(sumLateMinutes),
+    '',
+    '',
+    '',
+  ]);
 
   const worksheet = XLSX.utils.aoa_to_sheet(allRows);
   worksheet['!cols'] = [
@@ -86,7 +106,17 @@ export const handleExport = (
     { wch: 12 },
     { wch: 12 },
     { wch: 12 },
+    { wch: 12 },
   ];
+
+  // Bold the totals row
+  const totalsRowIdx = allRows.length - 1;
+  for (let c = 0; c < 7; c++) {
+    const addr = XLSX.utils.encode_cell({ r: totalsRowIdx, c });
+    if (worksheet[addr]) {
+      worksheet[addr].s = { font: { bold: true } };
+    }
+  }
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
   const fileName = `Attendance_Report_${formatDateShort(startDate)}_${formatDateShort(
@@ -109,7 +139,7 @@ export const handleExport = (
       fileFormat: 'xlsx',
       fileName,
     }),
-  }).catch(() => {});
+  }).catch(() => { });
 };
 
 export const handleExportIndividual = (
@@ -127,8 +157,8 @@ export const handleExportIndividual = (
     'Shift',
     emp.shift
       ? `${emp.shift.name} · ${formatShiftTime(
-          emp.shift.startTime
-        )}–${formatShiftTime(emp.shift.endTime)}`
+        emp.shift.startTime
+      )}–${formatShiftTime(emp.shift.endTime)}`
       : 'No shift assigned',
   ]);
   allRows.push([]);
@@ -147,7 +177,7 @@ export const handleExportIndividual = (
     emp.present,
     emp.late,
     formatLateHrs(emp.lateMinutes),
-    Math.max(0, emp.totalHours - emp.overtime).toFixed(2),
+    Math.max(0, emp.totalHours).toFixed(2),
   ]);
   allRows.push([]);
 
@@ -169,12 +199,13 @@ export const handleExportIndividual = (
     'Note',
   ]);
   // Build a lookup map keyed by YYYY-MM-DD (same logic as EmployeeModal)
-  const recordsByDate = new Map<string, AttendanceRecord>();
+  const recordsByDate = new Map<string, AttendanceRecord[]>();
   records.forEach((r) => {
     const key = new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     if (!recordsByDate.has(key)) {
-      recordsByDate.set(key, r);
+      recordsByDate.set(key, []);
     }
+    recordsByDate.get(key)!.push(r);
   });
 
   // Determine which short-day names are working days (mirrors EmployeeModal)
@@ -187,7 +218,7 @@ export const handleExportIndividual = (
           ? JSON.parse(emp.shift.workDays)
           : emp.shift.workDays;
       if (Array.isArray(parsed)) workDayNames = parsed;
-    } catch (_e) {}
+    } catch (_e) { }
   }
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -207,17 +238,45 @@ export const handleExportIndividual = (
     const dayOfWeek = cursor.getUTCDay();
     const dateKey = cursor.toISOString().split('T')[0];
     const dayShort = cursor.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
-    const r = recordsByDate.get(dateKey);
+    const dayRecords = recordsByDate.get(dateKey) || [];
 
-    if (r) {
-      // Record exists — mirrors EmployeeModal record branch
-      const checkIn = new Date(r.checkInTime);
-      const checkOut = r.checkOutTime ? new Date(r.checkOutTime) : null;
-      const hoursWorked = r.totalHours ? Math.max(0, r.totalHours - ((r.overtimeMinutes ?? 0) / 60)).toFixed(2) : '—';
-      const statusLabel = getRecordStatusFromBackend(r);
-      const lateMins = r.lateMinutes ?? 0;
-      const otMins = r.overtimeMinutes ?? 0;
-      const utMins = r.undertimeMinutes ?? 0;
+    if (dayRecords.length > 0) {
+      // Sort day records chronologically by check-in time
+      const sortedDayRecords = [...dayRecords].sort((a, b) => 
+        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+      );
+
+      const firstRecord = sortedDayRecords[0];
+      const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+      const isShiftActive = dayRecords.some(r => r.isShiftActive);
+
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+      // Construct representative merged record
+      const mergedRecord: AttendanceRecord = {
+        ...firstRecord,
+        isShiftActive,
+        checkOutTime: lastRecord.checkOutTime,
+        gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+        checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+        checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+        notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+        isEarlyOut: lastRecord.isEarlyOut,
+        isAnomaly: dayRecords.some(r => r.isAnomaly),
+        lateMinutes: lateMinsVal,
+        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+      };
+
+      const checkIn = new Date(firstRecord.checkInTime);
+      const checkOut = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+      const hoursWorked = workedHrsVal > 0 ? workedHrsVal.toFixed(2) : '—';
+      const statusLabel = getRecordStatusFromBackend(mergedRecord);
+      const lateMins = lateMinsVal;
+      const otMins = otMinsVal;
+      const utMins = utMinsVal;
 
       // Status mapping — exact match with UI
       let displayStatus: string;
@@ -234,20 +293,20 @@ export const handleExportIndividual = (
       }
 
       // Check Out column — mirrors UI "Active" indicator
-      const checkOutLabel = r.isShiftActive
+      const checkOutLabel = isShiftActive
         ? 'Active'
         : checkOut
-        ? checkOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        : '—';
+          ? checkOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : '—';
 
       // Hours column — mirrors UI "Live" indicator
-      const hoursLabel = r.isShiftActive ? 'Live' : hoursWorked;
+      const hoursLabel = isShiftActive ? 'Live' : hoursWorked;
 
       // Late column — mirrors UI "0m (Grace)" notation
       let lateLabel: string | number;
       if (lateMins > 0) {
         lateLabel = formatLateHrs(lateMins);
-      } else if (r.gracePeriodApplied) {
+      } else if (mergedRecord.gracePeriodApplied) {
         lateLabel = '0m (Grace)';
       } else {
         lateLabel = '—';
@@ -294,8 +353,7 @@ export const handleExportIndividual = (
 
   allRows.push([]);
   allRows.push([
-    `${records.length} record${records.length !== 1 ? 's' : ''} · ${totalCalendarDays} calendar days · ${
-      emp.totalDays
+    `${records.length} record${records.length !== 1 ? 's' : ''} · ${totalCalendarDays} calendar days · ${emp.totalDays
     } working days`,
   ]);
 
@@ -332,7 +390,7 @@ export const handleExportIndividual = (
       fileFormat: 'xlsx',
       fileName,
     }),
-  }).catch(() => {});
+  }).catch(() => { });
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -360,38 +418,70 @@ const COLS_PER_EMP = 6;
 const SEPARATOR_COLS = 1;
 const HEADER_ROWS = 3;
 
+/** Merge two style objects (fill + alignment, etc.) */
+function mergeStyle(...styles: Record<string, unknown>[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const s of styles) {
+    for (const [k, v] of Object.entries(s)) {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
+const ALIGN_CENTER: Record<string, unknown> = { alignment: { horizontal: 'center' as const } };
+const ALIGN_RIGHT: Record<string, unknown> = { alignment: { horizontal: 'right' as const } };
+
 const STYLE_BOLD: Record<string, unknown> = { font: { bold: true } };
 
-// Header row 0-1: light blue-gray background, bold
+// Thin border for all data cells
+const THIN_BORDER = {
+  top: { style: 'thin', color: { rgb: 'FF000000' } },
+  bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+  left: { style: 'thin', color: { rgb: 'FF000000' } },
+  right: { style: 'thin', color: { rgb: 'FF000000' } },
+};
+
+// Header row 0-1: light blue-gray background, bold, centered, bordered
 const STYLE_INFO_HEADER: Record<string, unknown> = {
   font: { bold: true },
+  alignment: { horizontal: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
+  border: THIN_BORDER,
 };
 const STYLE_INFO_VALUE: Record<string, unknown> = {
+  alignment: { horizontal: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
+  border: THIN_BORDER,
 };
-// Header row 2 (DATE, DAY, IN, OUT, REMARKS): gray, bold, centered
+// Header row 2 (DATE, DAY, IN, OUT, REMARKS): gray, bold, centered, bordered
 const STYLE_COL_HEADER: Record<string, unknown> = {
   font: { bold: true },
   alignment: { horizontal: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
+  border: THIN_BORDER,
 };
 
 // Data row fills — use full 8-char ARGB hex for xlsx-js-style compatibility
 const FILL_REST_DAY: Record<string, unknown> = {
   fill: { patternType: 'solid', fgColor: { rgb: 'FFFFD700' } },
+  border: THIN_BORDER,
 };
 const FILL_HOLIDAY: Record<string, unknown> = {
   fill: { patternType: 'solid', fgColor: { rgb: 'FF92D050' } },
+  border: THIN_BORDER,
 };
 const FILL_ABSENT: Record<string, unknown> = {
   fill: { patternType: 'solid', fgColor: { rgb: 'FFFF9999' } },
+  border: THIN_BORDER,
 };
 const FILL_LATE: Record<string, unknown> = {
   fill: { patternType: 'solid', fgColor: { rgb: 'FFFFD966' } },
+  border: THIN_BORDER,
 };
 const FILL_ON_TIME: Record<string, unknown> = {
   fill: { patternType: 'solid', fgColor: { rgb: 'FFC6EFCE' } },
+  border: THIN_BORDER,
 };
 const FILL_NONE: Record<string, unknown> = {};
 
@@ -450,16 +540,54 @@ export const handleExportAllCompanies = async (
   }
 
   // Attendance: employeeId → dateStr → record
-  const attByEmployee = new Map<number, Map<string, any>>();
+  const attByEmployeeTemp = new Map<number, Map<string, any[]>>();
   for (const r of records) {
     const empId = r.employeeId;
-    if (!attByEmployee.has(empId)) attByEmployee.set(empId, new Map());
+    if (!attByEmployeeTemp.has(empId)) attByEmployeeTemp.set(empId, new Map());
     const dateStr = new Date(r.date).toLocaleDateString('en-CA', {
       timeZone: 'Asia/Manila',
     });
-    if (!attByEmployee.get(empId)!.has(dateStr)) {
-      attByEmployee.get(empId)!.set(dateStr, r);
+    if (!attByEmployeeTemp.get(empId)!.has(dateStr)) {
+      attByEmployeeTemp.get(empId)!.set(dateStr, []);
     }
+    attByEmployeeTemp.get(empId)!.get(dateStr)!.push(r);
+  }
+
+  const attByEmployee = new Map<number, Map<string, any>>();
+  for (const [empId, dateMap] of attByEmployeeTemp.entries()) {
+    const mergedDateMap = new Map<string, any>();
+    for (const [dateStr, dayRecords] of dateMap.entries()) {
+      const sortedDayRecords = [...dayRecords].sort((a, b) => 
+        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+      );
+      const firstRecord = sortedDayRecords[0];
+      const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+      const isShiftActive = dayRecords.some(r => r.isShiftActive);
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+
+      const mergedRecord = {
+        ...firstRecord,
+        isShiftActive,
+        checkInTime: firstRecord.checkInTime,
+        checkOutTime: lastRecord.checkOutTime,
+        gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
+        checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
+        checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
+        notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
+        isEarlyOut: lastRecord.isEarlyOut,
+        isAnomaly: dayRecords.some(r => r.isAnomaly),
+        lateMinutes: lateMinsVal,
+        undertimeMinutes: utMinsVal,
+        overtimeMinutes: otMinsVal,
+        totalHours: workedHrsVal,
+        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+      };
+      mergedDateMap.set(dateStr, mergedRecord);
+    }
+    attByEmployee.set(empId, mergedDateMap);
   }
 
   // ── 5. Group employees by company (direct companyId) ────────────────
@@ -530,29 +658,41 @@ export const handleExportAllCompanies = async (
       const branchName = emp.Branch?.name || '—';
       const position = emp.position || '—';
 
-      // Row 0: [EmpNumber] | [FullName] | (empty) | DEPARTMENT | [DeptName] | (empty)
+      // Compute total late minutes for this employee across the entire period
+      const empRecordsMap = attByEmployee.get(emp.id) || new Map();
+      let empTotalLateMinutes = 0;
+      for (const rec of empRecordsMap.values()) {
+        empTotalLateMinutes += rec.lateMinutes ?? 0;
+      }
+
+      // Row 0: [EmpNumber] | [FullName (merged B+C)] | DEPARTMENT | [DeptName] | [TotalLate]
       setStyledCell(ws, 0, c0, empNumber, STYLE_INFO_HEADER);
-      setStyledCell(ws, 0, c0 + 1, fullName, STYLE_INFO_HEADER);
+      setStyledCell(ws, 0, c0 + 1, fullName.toUpperCase(), STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 2, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 0, c0 + 3, 'DEPARTMENT', STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 4, deptName, STYLE_INFO_VALUE);
-      setStyledCell(ws, 0, c0 + 5, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 0, c0 + 5, formatTotalLate(empTotalLateMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
 
-      // Row 1: POSITION | [Position] | (empty) | SITE | [Branch] | (empty)
+      // Row 1: POSITION | [Position (merged B+C)] | SITE | [Branch] | (empty)
       setStyledCell(ws, 1, c0, 'POSITION', STYLE_INFO_HEADER);
-      setStyledCell(ws, 1, c0 + 1, position, STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 1, position.toUpperCase(), STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 2, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 3, 'SITE', STYLE_INFO_HEADER);
       setStyledCell(ws, 1, c0 + 4, branchName, STYLE_INFO_VALUE);
-      setStyledCell(ws, 1, c0 + 5, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 5, '', FILL_NONE);
+
+      // Merge cells B+C for name (row 0) and position (row 1)
+      if (!ws['!merges']) ws['!merges'] = [];
+      ws['!merges'].push({ s: { r: 0, c: c0 + 1 }, e: { r: 0, c: c0 + 2 } });
+      ws['!merges'].push({ s: { r: 1, c: c0 + 1 }, e: { r: 1, c: c0 + 2 } });
 
       // Row 2: DATE | DAY | IN | OUT | REMARKS | (empty)
-      setStyledCell(ws, 2, c0, 'DATE', STYLE_COL_HEADER);
-      setStyledCell(ws, 2, c0 + 1, 'DAY', STYLE_COL_HEADER);
-      setStyledCell(ws, 2, c0 + 2, 'IN', STYLE_COL_HEADER);
-      setStyledCell(ws, 2, c0 + 3, 'OUT', STYLE_COL_HEADER);
-      setStyledCell(ws, 2, c0 + 4, 'REMARKS', STYLE_COL_HEADER);
-      setStyledCell(ws, 2, c0 + 5, '', STYLE_COL_HEADER);
+      setStyledCell(ws, 2, c0, 'DATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 1, 'DAY', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 2, 'IN', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 3, 'OUT', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 4, 'REMARKS', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 5, '', FILL_NONE);
 
       // Parse employee work days from shift
       let workDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -571,8 +711,8 @@ export const handleExportAllCompanies = async (
       const empRecords = attByEmployee.get(emp.id) || new Map();
       const empHireDate = emp.hireDate
         ? new Date(emp.hireDate).toLocaleDateString('en-CA', {
-            timeZone: 'Asia/Manila',
-          })
+          timeZone: 'Asia/Manila',
+        })
         : null;
 
       // ── Walk every calendar date ───────────────────────────────
@@ -597,12 +737,12 @@ export const handleExportAllCompanies = async (
 
         if (isBeforeHire || isFuture) {
           // Blank row — before hire or future — no fill
-          setStyledCell(ws, rowIdx, c0, formattedDate, FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 2, '', FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 3, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(FILL_NONE, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(FILL_NONE, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
           setStyledCell(ws, rowIdx, c0 + 4, '', FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 5, '', ALIGN_CENTER);
         } else if (record) {
           // Has attendance record
           const checkIn = new Date(record.checkInTime);
@@ -617,18 +757,28 @@ export const handleExportAllCompanies = async (
           });
           const checkOutStr = checkOut
             ? checkOut.toLocaleTimeString('en-US', {
-                hour12: false,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              })
+              hour12: false,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })
             : '';
 
-          let remarks = '';
           const lateMins = record.lateMinutes ?? 0;
           const utMins = record.undertimeMinutes ?? 0;
-          if (lateMins > 0) remarks = `Late ${formatLateHrs(lateMins)}`;
-          else if (utMins > 0) remarks = `UT ${formatLateHrs(utMins)}`;
+
+          // Remarks: show late H:MM, or keep other labels
+          let remarks = '';
+          if (isHoliday) {
+            const hName = holidayNameMap.get(dateStr);
+            remarks = hName || 'Holiday';
+          } else if (isRestDay) {
+            remarks = 'Rest Day';
+          } else if (lateMins > 0) {
+            remarks = formatTotalLate(lateMins);
+          } else if (utMins > 0) {
+            remarks = `UT ${formatLateHrs(utMins)}`;
+          }
 
           // Priority: Holiday > Rest Day > Late > On Time
           let rowFill: Record<string, unknown>;
@@ -637,12 +787,12 @@ export const handleExportAllCompanies = async (
           else if (lateMins > 0) rowFill = FILL_LATE;
           else rowFill = FILL_ON_TIME;
 
-          setStyledCell(ws, rowIdx, c0, formattedDate, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 2, checkInStr, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 4, remarks, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 2, checkInStr, mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
         } else {
           // No record — determine status & fill
           // Priority: Holiday > Rest Day > Absent
@@ -650,7 +800,7 @@ export const handleExportAllCompanies = async (
           let rowFill: Record<string, unknown>;
           if (isHoliday) {
             const hName = holidayNameMap.get(dateStr);
-            remarks = hName ? `Holiday — ${hName}` : 'Holiday';
+            remarks = hName || 'Holiday';
             rowFill = FILL_HOLIDAY;
           } else if (isRestDay) {
             remarks = 'Rest Day';
@@ -660,12 +810,12 @@ export const handleExportAllCompanies = async (
             rowFill = FILL_ABSENT;
           }
 
-          setStyledCell(ws, rowIdx, c0, formattedDate, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 2, '', rowFill);
-          setStyledCell(ws, rowIdx, c0 + 3, '', rowFill);
-          setStyledCell(ws, rowIdx, c0 + 4, remarks, rowFill);
-          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_RIGHT));
+          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
         }
       }
     }
@@ -682,14 +832,14 @@ export const handleExportAllCompanies = async (
     const cols: any[] = [];
     for (let i = 0; i < emps.length; i++) {
       const base = i * (COLS_PER_EMP + SEPARATOR_COLS);
-      cols[base] = { wch: 20 }; // DATE / EmpNum
+      cols[base] = { wch: 18 }; // DATE / EmpNum
       cols[base + 1] = { wch: 16 }; // DAY / Name
-      cols[base + 2] = { wch: 12 }; // IN / label
-      cols[base + 3] = { wch: 14 }; // OUT / value
-      cols[base + 4] = { wch: 18 }; // REMARKS
-      cols[base + 5] = { wch: 6 }; // Extra
+      cols[base + 2] = { wch: 14 }; // IN
+      cols[base + 3] = { wch: 14 }; // OUT
+      cols[base + 4] = { wch: 16 }; // REMARKS
+      cols[base + 5] = { wch: 10 }; // Late H:MM
       if (i < emps.length - 1) {
-        cols[base + 6] = { wch: 2 }; // Separator
+        cols[base + 6] = { wch: 18 }; // Separator (wide gap)
       }
     }
     ws['!cols'] = cols;
@@ -716,7 +866,7 @@ export const handleExportAllCompanies = async (
       fileFormat: 'xlsx',
       fileName,
     }),
-  }).catch(() => {});
+  }).catch(() => { });
 
   return { excludedCount, truncationWarning };
 };

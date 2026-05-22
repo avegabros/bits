@@ -2,6 +2,7 @@ import { prisma } from '../../../shared/lib/prisma';
 import { ZKDriver } from '../../../shared/lib/zk-driver';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { acquireDeviceLock, releaseDeviceLock, acquireInteractiveDeviceLock } from './zk-lock.service';
+import { getExcludedDeviceIds } from '../biometric-exclusion.service';
 
 const FINGER_MAP: { [key: number]: string } = { 5: 'Right Thumb', 6: 'Right Index', 7: 'Right Middle', 8: 'Right Ring', 9: 'Right Little', 4: 'Left Thumb', 3: 'Left Index', 2: 'Left Middle', 1: 'Left Ring', 0: 'Left Little' };
 import { audit } from '../../../shared/lib/auditLogger';
@@ -81,7 +82,8 @@ export const enrollEmployeeFingerprint = async (
         const { findNextSafeZkId } = require('./zk-user.service');
         const release = await acquireRegistrationMutex();
         try {
-            currentZkId = await findNextSafeZkId();
+            const safeResult = await findNextSafeZkId();
+            currentZkId = safeResult.zkId;
             await prisma.employee.update({
                 where: { id: employeeId },
                 data: { zkId: currentZkId }
@@ -270,9 +272,12 @@ export const propagateFingerprintToAllDevices = async (
     }
 
     // 1. Find all other active, sync-enabled devices.
-    const targetDevices = await prisma.device.findMany({
+    const allTargetDevices = await prisma.device.findMany({
         where: { isActive: true, syncEnabled: true, id: { not: sourceDeviceId } }
     });
+
+    const excludedIds = await getExcludedDeviceIds(employeeId, 'FINGERPRINT');
+    const targetDevices = allTargetDevices.filter(d => !excludedIds.has(d.id));
 
     if (targetDevices.length === 0) {
         console.log('[Propagate] No other active devices — nothing to propagate.');
@@ -512,7 +517,8 @@ export const deleteFingerprintFromDevice = async (
 };
 
 export const syncEmployeeFingerprints = async (
-    employeeId: number
+    employeeId: number,
+    targetDeviceId?: number
 ): Promise<{
     success: boolean;
     message: string;
@@ -530,13 +536,20 @@ export const syncEmployeeFingerprints = async (
     const fullName = `${employee.firstName} ${employee.lastName}`;
 
     // ── STEP 1: DB-driven gap analysis ─────────────────────────────────────
-    const allDevices = await prisma.device.findMany({
+    const rawDevices = await prisma.device.findMany({
         where: { isActive: true, syncEnabled: true },
         orderBy: { id: 'asc' },
     });
 
+    const excludedIds = await getExcludedDeviceIds(employeeId, 'FINGERPRINT');
+    let allDevices = rawDevices.filter(d => !excludedIds.has(d.id));
+
+    if (targetDeviceId) {
+        allDevices = allDevices.filter(d => d.id === targetDeviceId);
+    }
+
     if (allDevices.length === 0) {
-        return { success: false, message: 'No active devices configured', results: [] };
+        return { success: false, message: 'No active/eligible devices configured for sync', results: [] };
     }
 
     const enrollments = await prisma.employeeFingerprintEnrollment.findMany({

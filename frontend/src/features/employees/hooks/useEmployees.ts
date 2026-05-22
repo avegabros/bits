@@ -102,6 +102,7 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
         (emp.contactNumber || '').replace(/\s/g, '').toLowerCase().includes(searchStr.replace(/\s/g, '')) ||
         (emp.Shift?.name || '').toLowerCase().includes(searchStr) ||
         (emp.Shift?.shiftCode || '').toLowerCase().includes(searchStr) ||
+        (emp.EmployeeShift?.some(es => es.shift?.name?.toLowerCase().includes(searchStr) || es.shift?.shiftCode?.toLowerCase().includes(searchStr)) || false) ||
         // Only compare zkId if the query is purely numeric (it's an Int)
         (isNumericSearch && emp.zkId === Number(searchStr));
 
@@ -109,7 +110,7 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
       const matchesCompany = selectedCompany === 'All Companies' || emp.Company?.name === selectedCompany;
       const matchesDept = selectedDept === 'all' || emp.Department?.name === selectedDept;
       const matchesBranch = selectedBranch === 'all' || emp.Branch?.name === selectedBranch;
-      const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift;
+      const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift || (emp.EmployeeShift?.some(es => es.shift?.name === selectedShift) || false);
       const matchesStatus = selectedStatus === 'all' || emp.employmentStatus === selectedStatus;
       return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift && matchesStatus;
     });

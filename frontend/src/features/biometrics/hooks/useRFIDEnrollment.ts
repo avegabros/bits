@@ -10,6 +10,7 @@ export interface DeviceSyncStatus {
   isActive: boolean
   syncEnabled: boolean
   pendingDeletion: boolean
+  excluded: boolean
 }
 
 interface CardStatusResponse {
@@ -53,6 +54,7 @@ export interface RFIDEnrollmentActions {
   handleGlobalDelete: () => Promise<void>
   handlePushToDevice: (deviceId: number) => Promise<void>
   handleDeleteFromDevice: (deviceId: number) => Promise<void>
+  handleToggleExclusion: (deviceId: number, type: 'CARD', exclude: boolean) => Promise<void>
 }
 
 export function useRFIDEnrollment(
@@ -271,6 +273,26 @@ export function useRFIDEnrollment(
     }
   }, [employeeId, fetchStatus])
 
+  const handleToggleExclusion = useCallback(async (deviceId: number, type: 'CARD', exclude: boolean) => {
+    setSyncResult(null)
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/device-exclusions/${deviceId}`, {
+        method: exclude ? 'POST' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setSyncResult({ success: true, message: data.message })
+        await fetchStatus()
+      } else {
+        setSyncResult({ success: false, message: data.message || 'Failed to update exclusion.' })
+      }
+    } catch {
+      setSyncResult({ success: false, message: 'Network error while updating exclusion' })
+    }
+  }, [employeeId, fetchStatus])
+
   const state: RFIDEnrollmentState = {
     loading,
     cardNumber,
@@ -291,6 +313,7 @@ export function useRFIDEnrollment(
     handleGlobalDelete,
     handlePushToDevice,
     handleDeleteFromDevice,
+    handleToggleExclusion,
   }
 
   return { state, actions }

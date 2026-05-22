@@ -29,6 +29,7 @@ export type AttendanceRecord = {
   gracePeriodApplied?: boolean;
   checkin_updated?: string | null;
   checkout_updated?: string | null;
+  shift?: EmployeeShift | null;
   employee: {
     id: number;
     firstName: string;

@@ -8,7 +8,10 @@ import {
     getTodayAttendance,
     getEmployeeAttendanceHistory,
     toPHTDate,
-    calculateAttendanceStatus
+    calculateAttendanceStatus,
+    resolveShiftForTimestamp,
+    validateAttendanceConflicts,
+    recalculateAndPersistAttendanceMetrics
 } from './attendance.service';
 import { prisma } from '../../shared/lib/prisma';
 import attendanceEmitter from '../../shared/events/attendanceEmitter';
@@ -228,15 +231,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             }
         }
 
-        // Check if an attendance record already exists for this date to prevent duplicates
         const recordDate = toPHTDate(new Date(`${date}T00:00:00+08:00`));
-        const existingRecord = await prisma.attendance.findFirst({
-            where: { employeeId: Number(employeeId), date: recordDate }
-        });
-
-        if (existingRecord) {
-             return res.status(400).json({ success: false, message: `An attendance record already exists for this date. (ID: ${existingRecord.id})` });
-        }
 
         const employee = await prisma.employee.findUnique({
              where: { id: Number(employeeId) },
@@ -247,12 +242,23 @@ export const createManualAttendance = async (req: Request, res: Response) => {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
+        const { shift: resolvedShift } = await resolveShiftForTimestamp(Number(employeeId), effectiveCheckIn, recordDate);
+
+        // Check if an attendance record already exists for this date and shift to prevent duplicates
+        const existingRecord = await prisma.attendance.findFirst({
+            where: { employeeId: Number(employeeId), date: recordDate, shiftId: resolvedShift?.id ?? null }
+        });
+
+        if (existingRecord) {
+             return res.status(400).json({ success: false, message: `An attendance record already exists for this date${resolvedShift ? ` and shift (${resolvedShift.name})` : ''}. (ID: ${existingRecord.id})` });
+        }
+
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
         // so we only block future DATES for them. Day-shift employees keep strict validation.
-        const isNightShift = employee.Shift?.isNightShift ?? false;
+        const isNightShift = resolvedShift?.isNightShift ?? false;
         
-        console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${employee.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
         console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
@@ -266,6 +272,22 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             }
         }
 
+        // ── Cross-Shift Conflict Validation ──────────────────────────────────
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: Number(employeeId),
+            date: recordDate,
+            checkInTime: effectiveCheckIn,
+            checkOutTime: effectiveCheckOut,
+        });
+
+        if (conflictReport.hasConflicts) {
+            return res.status(409).json({
+                success: false,
+                message: conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+        }
+
         // If HR User (or Admin acting as HR): Create a pending record + Adjustment Request
         if (isHRWorkflow) {
              const newRecord = await prisma.attendance.create({
@@ -276,7 +298,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                      checkOutTime: effectiveCheckOut,
                      status: 'pending',
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
-                     checkoutSource: null
+                     checkoutSource: null,
+                     shiftId: resolvedShift?.id ?? null
                  }
              });
 
@@ -320,7 +343,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             effectiveCheckIn,
             effectiveCheckOut,
             recordDate,
-            employee.Shift ?? null
+            resolvedShift ?? null
         );
 
         const adminRecord = await prisma.attendance.create({
@@ -333,9 +356,13 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                 checkout_updated: effectiveCheckOut ? new Date() : null,
                 status: calculatedStatus,
                 notes: `Manual Edit: ${String(reason).trim()}`,
-                checkoutSource: effectiveCheckOut ? 'manual' : null
+                checkoutSource: effectiveCheckOut ? 'manual' : null,
+                shiftId: resolvedShift?.id ?? null
             }
         });
+
+        // Persist calculated metrics for the newly created record
+        await recalculateAndPersistAttendanceMetrics(Number(employeeId), recordDate);
 
         attendanceEmitter.emit('new-record', { type: 'update', record: adminRecord });
 
@@ -422,12 +449,21 @@ export const updateAttendance = async (req: Request, res: Response) => {
             return;
         }
 
+        let resolvedShift: any = null;
+        if (existing.shiftId) {
+            resolvedShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
+        }
+        if (!resolvedShift) {
+            const { shift } = await resolveShiftForTimestamp(existing.employeeId, effectiveCheckIn, existing.date);
+            resolvedShift = shift;
+        }
+
         // Future check-in validation (night-shift aware)
         // Night-shift employees may need same-day future check-ins (e.g. 22:00 at 10 AM),
         // so we only block future DATES for them. Day-shift employees keep strict validation.
-        const isNightShift = existing.employee?.Shift?.isNightShift ?? false;
+        const isNightShift = resolvedShift?.isNightShift ?? false;
         
-        console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${existing.employee?.Shift?.name}, isNightShift: ${isNightShift}`);
+        console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
         console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
@@ -456,6 +492,24 @@ export const updateAttendance = async (req: Request, res: Response) => {
                 res.status(400).json({ success: false, message: `Total work hours cannot exceed 16 hours. Currently: ${diffHours.toFixed(1)} hours.` });
                 return;
             }
+        }
+
+        // ── Cross-Shift Conflict Validation ──────────────────────────────────
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: existing.employeeId,
+            date: existing.date,
+            checkInTime: effectiveCheckIn,
+            checkOutTime: effectiveCheckOut,
+            excludeAttendanceId: recordId,
+        });
+
+        if (conflictReport.hasConflicts) {
+            res.status(409).json({
+                success: false,
+                message: conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+            return;
         }
 
         // ── HR users (or Admin acting as HR): create a pending adjustment (do NOT apply immediately) ──
@@ -531,12 +585,15 @@ export const updateAttendance = async (req: Request, res: Response) => {
         if (updateData.checkInTime || updateData.checkOutTime !== undefined) {
             const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
             const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
-            const shift = existing.employee?.Shift ?? null;
 
-            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+            const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, resolvedShift ?? null);
             if (newStatus !== existing.status) {
                 updateData.status = newStatus;
                 auditEntries.push({ field: 'status', oldValue: existing.status, newValue: newStatus });
+            }
+            if (resolvedShift?.id && existing.shiftId !== resolvedShift.id) {
+                updateData.shift = { connect: { id: resolvedShift.id } };
+                auditEntries.push({ field: 'shiftId', oldValue: existing.shiftId ? String(existing.shiftId) : null, newValue: String(resolvedShift.id) });
             }
         }
 
@@ -555,6 +612,9 @@ export const updateAttendance = async (req: Request, res: Response) => {
             where: { id: recordId },
             data: updateData
         });
+
+        // Persist updated metrics after admin edit
+        await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
 
         if (auditEntries.length > 0) {
             void audit({
@@ -1068,6 +1128,30 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Attendance record no longer exists.' });
     }
 
+    // ── Conflict check before applying approved adjustment ────────────
+    if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
+        const finalCheckIn = adjustment.requestedCheckIn ?? existing.checkInTime;
+        const finalCheckOut = adjustment.requestedCheckOut !== undefined
+            ? adjustment.requestedCheckOut
+            : existing.checkOutTime;
+
+        const conflictReport = await validateAttendanceConflicts({
+            employeeId: existing.employeeId,
+            date: existing.date,
+            checkInTime: finalCheckIn,
+            checkOutTime: finalCheckOut,
+            excludeAttendanceId: existing.id,
+        });
+
+        if (conflictReport.hasConflicts) {
+            return res.status(409).json({
+                success: false,
+                message: 'Cannot approve: ' + conflictReport.conflicts[0].message,
+                conflicts: conflictReport.conflicts,
+            });
+        }
+    }
+
     const isManualCreation = adjustment.originalCheckIn === null;
 
     if (adjustment.requestedCheckIn) {
@@ -1094,13 +1178,21 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       auditEntries.push({ field: 'record', oldValue: 'missing', newValue: 'created' });
     }
 
-    // Centralized status recalculation
+    // Centralized status recalculation — use the shift linked to the attendance record,
+    // NOT the employee's current shift, to keep historical metrics locked to original context.
     if (adjustment.requestedCheckIn || adjustment.requestedCheckOut) {
       const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
       const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
-      const shift = existing.employee?.Shift ?? null;
 
-      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, shift);
+      let recordShift: any = null;
+      if (existing.shiftId) {
+          recordShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
+      }
+      if (!recordShift) {
+          recordShift = existing.employee?.Shift ?? null;
+      }
+
+      const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, recordShift);
       if (newStatus !== existing.status || isManualCreation) {
         updateData.status = newStatus;
         const oldStatusVal = isManualCreation ? 'missing' : existing.status;
@@ -1123,6 +1215,9 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       where: { id: existing.id },
       data: updateData
     });
+
+    // Persist updated metrics after adjustment approval
+    await recalculateAndPersistAttendanceMetrics(existing.employeeId, existing.date);
 
     // Removed the legacy AttendanceAuditLog.createMany write
     // Update adjustment status

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { LucideIcon } from 'lucide-react'
 import { CSSProperties, ReactNode } from 'react'
+import { useNavigation } from '@/context/NavigationContext'
 
 interface SidebarNavItemProps {
   href: string
@@ -17,18 +18,29 @@ interface SidebarNavItemProps {
 export function SidebarNavItem({
   href, label, icon: Icon, active, collapsed, labelStyle, onClick, badge,
 }: SidebarNavItemProps) {
+  const { navigate } = useNavigation()
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault()
+    onClick?.()
+    navigate(href)
+  }
+
   return (
     <li className="relative group" style={{ padding: '0 0 0 16px', overflow: 'visible' }}>
       <Link
         href={href}
-        onClick={onClick}
-        className={`flex items-center gap-4 py-2.5 relative z-10 cursor-pointer ${active ? 'text-brand' : 'text-white/70 hover:text-white'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:bg-white/5 rounded-l-xl transition-colors duration-200`}
+        onClick={handleClick}
+        className={`flex items-center gap-4 py-2.5 relative z-10 cursor-pointer transition-colors duration-200
+          ${active ? 'text-brand' : 'text-white/70 hover:text-white'}
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:bg-white/5 rounded-l-xl`}
         style={{ paddingLeft: '12px', paddingRight: collapsed ? '12px' : '24px' }}
       >
-        <Icon size={22} className={`shrink-0 ${active ? 'text-brand' : 'text-white/70'}`} />
+        <Icon size={22} className={`shrink-0 transition-colors duration-200 ${active ? 'text-brand' : 'text-white/70'}`} />
         <span className="font-bold text-[15px] whitespace-nowrap motion-reduce:transition-none" style={labelStyle}>{label}</span>
         {badge}
       </Link>
+
       {collapsed && (
         <span
           role="tooltip"

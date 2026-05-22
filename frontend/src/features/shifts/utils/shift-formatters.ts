@@ -11,39 +11,66 @@ export function formatTime(t: string) {
 
 export function calcDuration(start: string, end: string, isNight: boolean) {
   if (!start || !end) return '--'
-  const [sh, sm] = start.split(':').map(Number)
-  const [eh, em] = end.split(':').map(Number)
-  let mins = (eh * 60 + em) - (sh * 60 + sm)
-  if (isNight && mins <= 0) mins += 24 * 60
+  const sh = toMinutes(start)
+  const eh = toMinutes(end)
+
+  if (sh === eh) return 'Invalid (0h)'
+  
+  let mins = eh - sh
+  if (mins < 0) {
+    if (isNight) {
+      mins += 24 * 60
+    } else {
+      return 'Negative Duration'
+    }
+  } else if (isNight && mins > 0) {
+     // If it's marked as night but doesn't cross midnight, 
+     // it's still a positive duration. 
+  }
+  
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return `${h}h${m > 0 ? ` ${m}m` : ''}`
 }
 
+export function validateShiftConfig(start: string, end: string, isNight: boolean): string | null {
+  if (!start || !end) return null
+  const sh = toMinutes(start)
+  const eh = toMinutes(end)
+
+  if (sh === eh) return 'Shift start and end times cannot be the same.'
+  
+  if (eh < sh && !isNight) {
+    return 'End time is earlier than start time. Did you mean to enable "Overnight Shift"?'
+  }
+
+  return null
+}
+
 export function calcBreaksDuration(breaksJson: string, breakMinutes: number) {
   try {
     const arr = JSON.parse(breaksJson || '[]')
-    if (arr.length === 0) return breakMinutes
+    if (arr.length === 0) return 0 // Do not fallback to legacy breakMinutes, treat empty as 0
     return arr.reduce((acc: number, b: any) => {
       if (!b.start || !b.end) return acc
-      const [sh, sm] = b.start.split(':').map(Number)
-      const [eh, em] = b.end.split(':').map(Number)
-      let diff = (eh * 60 + em) - (sh * 60 + sm)
+      const sh = toMinutes(b.start)
+      const eh = toMinutes(b.end)
+      let diff = eh - sh
       if (diff < 0) diff += 24 * 60
       return acc + diff
     }, 0)
   } catch {
-    return breakMinutes
+    return 0
   }
 }
 
 export function calcFormBreaks(breaksArr: any[], fallback: number) {
-  if (!breaksArr || breaksArr.length === 0) return fallback
+  if (!breaksArr || breaksArr.length === 0) return 0 // Do not fallback to legacy breakMinutes
   return breaksArr.reduce((acc: number, b: any) => {
     if (!b.start || !b.end) return acc
-    const [sh, sm] = b.start.split(':').map(Number)
-    const [eh, em] = b.end.split(':').map(Number)
-    let diff = (eh * 60 + em) - (sh * 60 + sm)
+    const sh = toMinutes(b.start)
+    const eh = toMinutes(b.end)
+    let diff = eh - sh
     if (diff < 0) diff += 24 * 60
     return acc + diff
   }, 0)
@@ -58,17 +85,21 @@ export function toMinutes(t: string) {
 export function getBreakError(
   b: { start: string; end: string },
   shiftStart?: string,
-  shiftEnd?: string
+  shiftEnd?: string,
+  isNight?: boolean
 ): string | null {
   if (!b.start || !b.end) return null
   if (toMinutes(b.end) <= toMinutes(b.start)) return '"To" time must be later than "From" time.'
+  
   if (shiftStart && shiftEnd) {
     const shiftStartMins = toMinutes(shiftStart)
     const shiftEndMins = toMinutes(shiftEnd)
     const breakStartMins = toMinutes(b.start)
     const breakEndMins = toMinutes(b.end)
-    // Handle overnight shifts where endTime < startTime
-    const isOvernight = shiftEndMins <= shiftStartMins
+    
+    // Use isNight flag if provided, otherwise fallback to inference
+    const isOvernight = isNight ?? (shiftEndMins <= shiftStartMins)
+    
     if (isOvernight) {
       // Break must start after shift start OR end before shift end (wraps midnight)
       const validStart = breakStartMins >= shiftStartMins || breakStartMins < shiftEndMins

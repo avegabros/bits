@@ -1,5 +1,5 @@
 import {
-  Edit2, Trash2, ToggleLeft, ToggleRight,
+  Edit2, Trash2,
   Moon, Sun, Users, Coffee
 } from 'lucide-react'
 import { SortableHeader } from '@/components/ui/SortableHeader'
@@ -12,7 +12,6 @@ interface ShiftTableProps {
   sortKey: string | null
   sortOrder: 'asc' | 'desc' | null
   handleSort: (key: any) => void
-  onToggle: (s: Shift) => void
   onEdit: (s: Shift) => void
   onDelete: (s: Shift) => void
   isReadOnly?: boolean
@@ -21,7 +20,7 @@ interface ShiftTableProps {
 export function ShiftTable({
   paginatedShifts, loading,
   sortKey, sortOrder, handleSort,
-  onToggle, onEdit, onDelete, isReadOnly,
+  onEdit, onDelete, isReadOnly,
 }: ShiftTableProps) {
   return (
     <>
@@ -40,13 +39,12 @@ export function ShiftTable({
               <th className="px-6 py-5">Work Days</th>
               <th className="px-6 py-5">Grace / Break</th>
               <th className="px-6 py-5">Employees</th>
-              <SortableHeader label="Status" sortKey="isActive" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort} className="px-6 py-5 text-center" />
               {!isReadOnly && <th className="px-6 py-5">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={7} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">Loading shifts…</td></tr>
+              <tr><td colSpan={6} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">Loading shifts…</td></tr>
             ) : paginatedShifts.length > 0 ? paginatedShifts.map(s => (
               <tr key={s.id} className="hover:bg-red-50/30 transition-colors duration-200">
                 <td className="px-6 py-4">
@@ -103,21 +101,12 @@ export function ShiftTable({
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-1.5">
                     <Users size={13} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-600">{s._count.Employee}</span>
+                    <span className="text-xs font-bold text-slate-600">{s._count.EmployeeShift}</span>
                   </div>
-                </td>
-                <td className="px-6 py-4 text-center">
-                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${s.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                    {s.isActive ? 'Active' : 'Inactive'}
-                  </span>
                 </td>
                 {!isReadOnly && (
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
-                        className={`p-2.5 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
-                        {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                      </button>
                       <button onClick={() => onEdit(s)} title="Edit" className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
                         <Edit2 size={16} />
                       </button>
@@ -129,7 +118,7 @@ export function ShiftTable({
                 )}
               </tr>
             )) : (
-              <tr><td colSpan={7} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">No shifts found</td></tr>
+              <tr><td colSpan={6} className="px-6 py-24 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">No shifts found</td></tr>
             )}
           </tbody>
         </table>
@@ -148,7 +137,7 @@ export function ShiftTable({
               try { halfs = JSON.parse(s.halfDays || '[]') } catch { }
               return (
                 <div key={s.id} className="p-4 hover:bg-red-50/30 transition-colors">
-                  {/* Top row: Shift name + Status */}
+                  {/* Top row: Shift name */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${s.isNightShift ? 'bg-indigo-100' : 'bg-amber-100'}`}>
@@ -159,9 +148,6 @@ export function ShiftTable({
                         <p className="text-[10px] font-black text-slate-400 tracking-wider">{s.shiftCode}</p>
                       </div>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shrink-0 ${s.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                      {s.isActive ? 'Active' : 'Inactive'}
-                    </span>
                   </div>
 
                   {/* Schedule + Meta */}
@@ -198,15 +184,11 @@ export function ShiftTable({
                   <div className="mt-3 flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                       <Users size={13} className="text-slate-400" />
-                      <span className="font-bold">{s._count.Employee}</span>
+                      <span className="font-bold">{s._count.EmployeeShift}</span>
                       <span className="text-slate-400">assigned</span>
                     </div>
                     {!isReadOnly && (
                       <div className="flex items-center gap-0.5">
-                        <button onClick={() => onToggle(s)} title={s.isActive ? 'Deactivate' : 'Activate'}
-                          className={`p-2 rounded-xl transition-all active:scale-90 ${s.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}>
-                          {s.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                        </button>
                         <button onClick={() => onEdit(s)} title="Edit" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90">
                           <Edit2 size={16} />
                         </button>

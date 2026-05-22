@@ -9,6 +9,8 @@ import { auditUpdate, auditCreate, auditDelete, buildChanges } from '../../share
 import bcrypt from 'bcryptjs';
 import { generateRandomPassword } from '../../shared/utils/password.utils';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
+import { validateShiftGap } from '../shifts/shift-conflict.service';
+import { getChronologicalShiftIds } from '../shifts/shift-ordering.service';
 
 // GET /api/employees/:id - Get a single employee by ID (for profile view)
 export const getEmployeeById = async (req: Request, res: Response) => {
@@ -51,6 +53,15 @@ export const getEmployeeById = async (req: Request, res: Response) => {
                 profilePicture: true,
                 shiftId: true,
                 Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+                EmployeeShift: {
+                    select: {
+                        id: true,
+                        sortOrder: true,
+                        isPrimary: true,
+                        shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
+                    },
+                    orderBy: { sortOrder: 'asc' }
+                },
                 createdAt: true,
                 updatedAt: true,
                 EmployeeDeviceEnrollment: {
@@ -121,64 +132,118 @@ export const getEmployeeById = async (req: Request, res: Response) => {
 // GET /api/employees - Get all employees
 export const getAllEmployees = async (req: Request, res: Response) => {
     try {
+        const { search, page: queryPage, limit: queryLimit, fields } = req.query;
+
+        const page = parseInt(queryPage as string, 10) || 1;
+        // Default to 9999 if no limit specified to preserve backward compatibility
+        const limit = queryLimit ? parseInt(queryLimit as string, 10) : 9999;
+        const skip = (page - 1) * limit;
+
         const where: Prisma.EmployeeWhereInput = {};
         if (req.managerDepartmentIds && req.query.scope !== 'company') {
             where.departmentId = { in: req.managerDepartmentIds };
         }
 
-        const employees = await prisma.employee.findMany({
-            where,
-            select: {
-                id: true,
-                zkId: true,
-                cardNumber: true,
-                employeeNumber: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                suffix: true,
-                gender: true,
-                dateOfBirth: true,
-                email: true,
-                role: true,
-                departmentId: true,
-                Department: { select: { name: true } },
-                branchId: true,
-                Branch: { select: { name: true } },
-                companyId: true,
-                Company: { select: { id: true, name: true } },
-                position: true,
-                contactNumber: true,
-                hireDate: true,
-                employmentStatus: true,
-                profilePicture: true,
-                shiftId: true,
-                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
-                createdAt: true, EmployeeDeviceEnrollment: {
-                    select: {
-                        enrolledAt: true,
-                        device: {
-                            select: {
-                                id: true,
-                                name: true,
-                                location: true,
-                                isActive: true,
-                            },
+        if (search) {
+            const searchTerms = (search as string).trim().split(/\s+/);
+            const nameConditions = searchTerms.map(term => ({
+                OR: [
+                    { firstName: { contains: term, mode: 'insensitive' as const } },
+                    { lastName: { contains: term, mode: 'insensitive' as const } },
+                ]
+            }));
+            where.AND = nameConditions;
+        }
+
+        const isMinimal = fields === 'minimal';
+
+        const selectConfig: Prisma.EmployeeSelect = isMinimal ? {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeNumber: true,
+            departmentId: true,
+            Department: { select: { name: true } },
+            Branch: { select: { name: true } },
+        } : {
+            id: true,
+            zkId: true,
+            cardNumber: true,
+            employeeNumber: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            suffix: true,
+            gender: true,
+            dateOfBirth: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            Department: { select: { name: true } },
+            branchId: true,
+            Branch: { select: { name: true } },
+            companyId: true,
+            Company: { select: { id: true, name: true } },
+            position: true,
+            contactNumber: true,
+            hireDate: true,
+            employmentStatus: true,
+            profilePicture: true,
+            shiftId: true,
+            Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } },
+            EmployeeShift: {
+                select: {
+                    id: true,
+                    sortOrder: true,
+                    isPrimary: true,
+                    shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true, isNightShift: true } }
+                },
+                orderBy: { sortOrder: 'asc' }
+            },
+            createdAt: true,
+            EmployeeDeviceEnrollment: {
+                select: {
+                    enrolledAt: true,
+                    device: {
+                        select: {
+                            id: true,
+                            name: true,
+                            location: true,
+                            isActive: true,
                         },
                     },
                 },
             },
-            orderBy: [
-                { role: 'asc' },
-                { zkId: 'asc' },
-            ],
-        });
+            EmployeeFingerprintEnrollment: {
+                select: {
+                    id: true,
+                },
+            },
+        };
 
-
+        const [total, employees] = await Promise.all([
+            prisma.employee.count({ where }),
+            prisma.employee.findMany({
+                where,
+                select: selectConfig,
+                orderBy: [
+                    { role: 'asc' },
+                    { zkId: 'asc' },
+                ],
+                skip,
+                take: limit,
+            })
+        ]);
 
         res.json({
             success: true,
-            employees: employees,
+            employees,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
         console.error('Error fetching employees:', error);
@@ -361,6 +426,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             hireDate,
             employmentStatus,
             shiftId,
+            shiftIds,
             companyId
         } = req.body;
 
@@ -450,61 +516,95 @@ export const createEmployee = async (req: Request, res: Response) => {
         // same integer, and one of the prisma.employee.create() calls fails with a
         // P2002 unique constraint violation on Employee.zkId.
         const release = await acquireRegistrationMutex();
-        let newEmployee;
+        // Validate min gap
+        const gapError = await validateShiftGap(shiftIds);
+        if (gapError) {
+            release();
+            return res.status(400).json({ success: false, message: gapError });
+        }
+
+        // Chronologically sort shift assignments to prevent selection-order bugs
+        const sortedShiftIds = await getChronologicalShiftIds(shiftIds || []);
+
+        type NewEmployeeResult = Prisma.EmployeeGetPayload<{
+            select: {
+                id: true; zkId: true; employeeNumber: true; firstName: true; lastName: true;
+                middleName: true; suffix: true; gender: true; dateOfBirth: true; email: true;
+                role: true; departmentId: true; Department: { select: { name: true } };
+                position: true; branchId: true; Branch: { select: { name: true } };
+                companyId: true; Company: { select: { id: true; name: true } };
+                contactNumber: true; hireDate: true; employmentStatus: true; createdAt: true;
+            }
+        }>;
+        let newEmployee: NewEmployeeResult | undefined;
         const generatedPassword = generateRandomPassword(10);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
         try {
-            const nextZkId = await findNextSafeZkId();
+            const safeResult = await findNextSafeZkId();
+            const nextZkId = safeResult.zkId;
 
-            newEmployee = await prisma.employee.create({
-                data: {
-                    employeeNumber: employeeNumber.trim(),
-                    firstName,
-                    lastName,
-                    middleName: middleName || null,
-                    suffix: suffix || null,
-                    gender: gender || null,
-                    dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                    email,
-                    password: hashedPassword,
-                    role: 'USER',
-                    departmentId: departmentId ? parseInt(departmentId, 10) : null,
-                    position,
-                    branchId: branchId ? parseInt(branchId, 10) : null,
-                    companyId: companyId ? parseInt(companyId, 10) : null,
-                    contactNumber,
-                    hireDate: hireDate ? new Date(hireDate) : undefined,
-                    employmentStatus: employmentStatus || 'ACTIVE',
-                    zkId: nextZkId,
-                    shiftId: shiftId ? parseInt(shiftId, 10) : null,
-                    needsPasswordChange: true,
-                    updatedAt: new Date()
-                },
-                select: {
-                    id: true,
-                    zkId: true,
-                    employeeNumber: true,
-                    firstName: true,
-                    lastName: true,
-                    middleName: true,
-                    suffix: true,
-                    gender: true,
-                    dateOfBirth: true,
-                    email: true,
-                    role: true,
-                    departmentId: true,
-                    Department: { select: { name: true } },
-                    position: true,
-                    branchId: true,
-                    Branch: { select: { name: true } },
-                    companyId: true,
-                    Company: { select: { id: true, name: true } },
-                    contactNumber: true,
-                    hireDate: true,
-                    employmentStatus: true,
-                    createdAt: true,
+            newEmployee = await prisma.$transaction(async (tx) => {
+                const emp = await tx.employee.create({
+                    data: {
+                        employeeNumber: employeeNumber.trim(),
+                        firstName,
+                        lastName,
+                        middleName: middleName || null,
+                        suffix: suffix || null,
+                        gender: gender || null,
+                        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+                        email,
+                        password: hashedPassword,
+                        role: 'USER',
+                        departmentId: departmentId ? parseInt(departmentId, 10) : null,
+                        position,
+                        branchId: branchId ? parseInt(branchId, 10) : null,
+                        companyId: companyId ? parseInt(companyId, 10) : null,
+                        contactNumber,
+                        hireDate: hireDate ? new Date(hireDate) : undefined,
+                        employmentStatus: employmentStatus || 'ACTIVE',
+                        zkId: nextZkId,
+                        shiftId: sortedShiftIds.length > 0 ? sortedShiftIds[0] : (shiftId ? parseInt(shiftId, 10) : null),
+                        needsPasswordChange: true,
+                        updatedAt: new Date()
+                    },
+                    select: {
+                        id: true,
+                        zkId: true,
+                        employeeNumber: true,
+                        firstName: true,
+                        lastName: true,
+                        middleName: true,
+                        suffix: true,
+                        gender: true,
+                        dateOfBirth: true,
+                        email: true,
+                        role: true,
+                        departmentId: true,
+                        Department: { select: { name: true } },
+                        position: true,
+                        branchId: true,
+                        Branch: { select: { name: true } },
+                        companyId: true,
+                        Company: { select: { id: true, name: true } },
+                        contactNumber: true,
+                        hireDate: true,
+                        employmentStatus: true, createdAt: true }
+                });
+
+                if (sortedShiftIds.length > 0) {
+                    await tx.employeeShift.createMany({
+                        data: sortedShiftIds.map((sid: number, i: number) => ({
+                            employeeId: emp.id,
+                            shiftId: sid,
+                            sortOrder: i,
+                            isPrimary: i === 0
+                        }))
+                    });
                 }
+
+                return emp;
             });
         } finally {
             // Always release — even on error — to prevent deadlocking future registrations
@@ -619,6 +719,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             branchId,
             hireDate,
             shiftId,
+            shiftIds,
             companyId,
             employmentStatus
         } = req.body;
@@ -721,43 +822,84 @@ export const updateEmployee = async (req: Request, res: Response) => {
             updateData.employmentStatus = employmentStatus;
         }
 
+        // Validate multi-shift gap
+        const gapError = await validateShiftGap(shiftIds);
+        if (gapError) {
+            return res.status(400).json({ success: false, message: gapError });
+        }
+
+        // Chronologically sort shift assignments to prevent selection-order bugs
+        const sortedShiftIds = await getChronologicalShiftIds(shiftIds || []);
+
         updateData.updatedAt = new Date();
 
-        // Update the employee
-        const updatedEmployee = await prisma.employee.update({
-            where: { id: employeeId },
-            data: updateData,
-            select: {
-                id: true,
-                zkId: true,
-                employeeNumber: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                suffix: true,
-                gender: true,
-                dateOfBirth: true,
-                email: true,
-                role: true,
-                departmentId: true,
-                Department: { select: { name: true } },
-                position: true,
-                branchId: true,
-                Branch: { select: { name: true } },
-                companyId: true,
-                Company: { select: { id: true, name: true } },
-                contactNumber: true,
-                hireDate: true,
-                employmentStatus: true,
-                shiftId: true,
-                Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true } },
-                createdAt: true,
-                updatedAt: true
-            },
+        // Update the employee and shifts in a single transaction
+        const updatedEmployee = await prisma.$transaction(async (tx) => {
+            const emp = await tx.employee.update({
+                where: { id: employeeId },
+                data: updateData,
+                select: {
+                    id: true,
+                    zkId: true,
+                    employeeNumber: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    suffix: true,
+                    gender: true,
+                    dateOfBirth: true,
+                    email: true,
+                    role: true,
+                    departmentId: true,
+                    Department: { select: { name: true } },
+                    position: true,
+                    branchId: true,
+                    Branch: { select: { name: true } },
+                    companyId: true,
+                    Company: { select: { id: true, name: true } },
+                    contactNumber: true,
+                    hireDate: true,
+                    employmentStatus: true,
+                    shiftId: true,
+                    Shift: { select: { id: true, name: true, shiftCode: true, startTime: true, endTime: true, workDays: true, halfDays: true, graceMinutes: true, breakMinutes: true } },
+                    createdAt: true,
+                    updatedAt: true
+                },
+            });
+
+            if (shiftIds && Array.isArray(shiftIds)) {
+                // Delete existing shift assignments
+                await tx.employeeShift.deleteMany({ where: { employeeId } });
+
+                // Create new assignments (if any)
+                if (sortedShiftIds.length > 0) {
+                    await tx.employeeShift.createMany({
+                        data: sortedShiftIds.map((sid: number, i: number) => ({
+                            employeeId,
+                            shiftId: sid,
+                            sortOrder: i,
+                            isPrimary: i === 0
+                        }))
+                    });
+                }
+
+                // Also update legacy shiftId to the primary shift for backward compatibility
+                // (Though it might have been in updateData, we ensure it here)
+                await tx.employee.update({
+                    where: { id: employeeId },
+                    data: { shiftId: sortedShiftIds[0] || null }
+                });
+            }
+
+            return emp;
         });
 
         const trackedFields = Object.keys(updateData).filter(k => k !== 'updatedAt' && k !== 'password');
         const changes = buildChanges(existingEmployee as Record<string, unknown>, updateData, trackedFields);
+
+        if (shiftIds && Array.isArray(shiftIds)) {
+            changes.push({ field: 'shiftIds', oldValue: undefined, newValue: shiftIds });
+        }
 
         void auditUpdate({
             entityType: 'Employee',

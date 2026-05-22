@@ -12,28 +12,12 @@ export interface DashboardPageProps {
     role: 'admin' | 'hr';
 }
 
-function Skeleton({ className }: { className?: string }) {
-    return <div className={`animate-pulse bg-slate-200 rounded-lg ${className ?? ''}`} />;
-}
+import DashboardLoading from '@/components/ui/DashboardLoading';
 
 export function DashboardPage({ role }: DashboardPageProps) {
     const { state, loading } = useDashboardData(role);
 
-    if (loading) return (
-        <div className="flex flex-col gap-3 min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]">
-            <div className="h-7 w-44 animate-pulse bg-slate-200 rounded-lg" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[68px] rounded-xl" />)}
-            </div>
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-3 min-h-0">
-                <div className="lg:col-span-2 space-y-3">
-                    <Skeleton className="h-56 lg:h-48 rounded-xl" />
-                    <Skeleton className="h-24 rounded-xl" />
-                </div>
-                <Skeleton className="h-64 lg:h-auto rounded-xl" />
-            </div>
-        </div>
-    );
+    if (loading) return <DashboardLoading />;
 
     return (
         <div className="flex flex-col gap-2.5 min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] lg:overflow-hidden">

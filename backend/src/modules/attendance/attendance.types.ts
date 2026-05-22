@@ -7,6 +7,7 @@ export interface AttendanceFilters {
     departmentId?: number;
     departmentName?: string;
     managerDepartmentIds?: number[];
+    shiftId?: number;
 }
 
 export interface AttendanceQueryParams {
@@ -19,6 +20,7 @@ export interface AttendanceQueryParams {
     departmentName?: string;
     page?: string;
     limit?: string;
+    shiftId?: string;
 }
 
 export interface AddUserPayload {
@@ -31,4 +33,33 @@ export interface UpdateAttendancePayload {
     checkOutTime?: string;
     status?: string;
     reason: string;
+}
+
+export interface ProcessResult {
+    success: boolean;
+    processed: number;
+    created: number;
+    updated: number;
+}
+
+export interface BasicAttendanceRecord {
+    date: Date;
+    checkInTime: Date | null;
+    checkOutTime: Date | null;
+    status: string | null;
+}
+
+export interface AttendanceConflict {
+    type: 'overlap' | 'boundary_violation';
+    conflictingRecordId?: number;
+    conflictingShiftName?: string;
+    conflictingTimeRange?: string;
+    editedTimeRange: string;
+    shiftBoundary?: string;
+    message: string;
+}
+
+export interface AttendanceConflictReport {
+    hasConflicts: boolean;
+    conflicts: AttendanceConflict[];
 }
