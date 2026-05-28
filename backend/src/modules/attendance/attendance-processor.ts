@@ -385,7 +385,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             recordOts
                         );
 
-                        await prisma.attendance.create({
+                        const createdOtRecord = await prisma.attendance.create({
                             data: {
                                 employeeId: log.employeeId,
                                 date: dateOnly,
@@ -400,9 +400,74 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 isAnomaly: checkInMetrics.isAnomaly,
                                 isEarlyOut: checkInMetrics.isEarlyOut,
                                 gracePeriodApplied: checkInMetrics.gracePeriodApplied
+                            },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
                             }
                         });
                         created++;
+
+                        const otCheckInShift = createdOtRecord.employee?.Shift ?? null;
+                        const otCheckInMetrics = calculateAttendanceMetrics(createdOtRecord, otCheckInShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-in',
+                            record: {
+                                ...createdOtRecord,
+                                checkInDeviceName: createdOtRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: createdOtRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(createdOtRecord.checkInTime),
+                                checkOutTimePH: null,
+                                ...otCheckInMetrics,
+                            },
+                        });
+                    } else {
+                        const fullAtt = await prisma.attendance.findUnique({
+                            where: { id: existingAtt.id },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
+                        });
+
+                        if (fullAtt) {
+                            const otCheckInShift = fullAtt.employee?.Shift ?? null;
+                            const otCheckInMetrics = calculateAttendanceMetrics(fullAtt, otCheckInShift, recordOts);
+
+                            attendanceEmitter.emit('new-record', {
+                                type: 'check-in',
+                                record: {
+                                    ...fullAtt,
+                                    checkInTime: log.timestamp,
+                                    checkInDeviceName: fullAtt.checkInDevice?.name || null,
+                                    checkOutDeviceName: fullAtt.checkOutDevice?.name || null,
+                                    checkInTimePH: formatToPhilippineTime(log.timestamp),
+                                    checkOutTimePH: fullAtt.checkOutTime ? formatToPhilippineTime(fullAtt.checkOutTime) : null,
+                                    ...otCheckInMetrics,
+                                },
+                            });
+                        }
                     }
 
                     await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
@@ -470,11 +535,40 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             }
                         }
 
-                        await prisma.attendance.update({
+                        const updatedOtRecord = await prisma.attendance.update({
                             where: { id: existingAtt.id },
-                            data: updateData
+                            data: updateData,
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
                         });
                         updated++;
+
+                        const otCoShift = updatedOtRecord.employee?.Shift ?? null;
+                        const otCoMetrics = calculateAttendanceMetrics(updatedOtRecord, otCoShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-out',
+                            record: {
+                                ...updatedOtRecord,
+                                checkInDeviceName: updatedOtRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: updatedOtRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(updatedOtRecord.checkInTime),
+                                checkOutTimePH: updatedOtRecord.checkOutTime ? formatToPhilippineTime(updatedOtRecord.checkOutTime) : null,
+                                ...otCoMetrics,
+                            },
+                        });
 
                         await recalculateAndPersistAttendanceMetrics(log.employeeId, dateOnly);
                     } else {
@@ -488,7 +582,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             recordOts
                         );
 
-                        await prisma.attendance.create({
+                        const createdOtCoRecord = await prisma.attendance.create({
                             data: {
                                 employeeId: log.employeeId,
                                 date: dateOnly,
@@ -506,9 +600,38 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 isAnomaly: checkMetrics.isAnomaly,
                                 isEarlyOut: checkMetrics.isEarlyOut,
                                 gracePeriodApplied: checkMetrics.gracePeriodApplied
+                            },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
                             }
                         });
                         created++;
+
+                        const otNewCoShift = createdOtCoRecord.employee?.Shift ?? null;
+                        const otNewCoMetrics = calculateAttendanceMetrics(createdOtCoRecord, otNewCoShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-out',
+                            record: {
+                                ...createdOtCoRecord,
+                                checkInDeviceName: createdOtCoRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: createdOtCoRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(createdOtCoRecord.checkInTime),
+                                checkOutTimePH: createdOtCoRecord.checkOutTime ? formatToPhilippineTime(createdOtCoRecord.checkOutTime) : null,
+                                ...otNewCoMetrics,
+                            },
+                        });
                     }
 
                     await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
