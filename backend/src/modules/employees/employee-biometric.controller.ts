@@ -310,6 +310,30 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
         });
         const fpExcludedIds = new Set(exclusions.map(e => e.deviceId));
 
+        // Fetch all fingerprint device enrollments for this employee
+        const deviceEnrollments = await prisma.employeeDeviceEnrollment.findMany({
+            where: { employeeId },
+            include: {
+                device: {
+                    select: { id: true, name: true, isActive: true, syncEnabled: true },
+                },
+            },
+        });
+
+        const devicesResult = activeDevices.map(device => {
+            const enroll = deviceEnrollments.find(e => e.deviceId === device.id);
+            return {
+                deviceId: device.id,
+                deviceName: device.name,
+                enrolled: !!enroll,
+                enrolledAt: enroll ? enroll.enrolledAt.toISOString() : undefined,
+                isActive: device.isActive,
+                syncEnabled: device.syncEnabled,
+                pendingDeletion: false,
+                excluded: fpExcludedIds.has(device.id),
+            };
+        });
+
         // Group enrollments by fingerIndex → collect device info per finger
         const fingerMap = new Map<number, {
             fingerIndex: number;
@@ -401,6 +425,7 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
                 zkId: employee.zkId,
             },
             slots,
+            devices: devicesResult,
             summary: {
                 totalEnrolled,
                 maxSlots: MAX_SLOTS,
