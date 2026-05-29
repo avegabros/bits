@@ -68,7 +68,90 @@ export async function resolveShiftForTimestamp(
         try { return JSON.parse(shift.workDays || '[]'); } catch { return []; }
     };
 
-    const tryMatch = (candidateShifts: typeof assignments): { shift: Shift; isNewCheckin: boolean } | null => {
+    // ── APPROVED OT REST-DAY GATE (User Suggestion & Option 1) ────────────────
+    const approvedOts = await prisma.overtimeRequest.findMany({
+        where: {
+            employeeId,
+            date: dateOnly,
+            status: 'APPROVED'
+        }
+    });
+
+    if (approvedOts.length > 0) {
+        const phtScanMin = phtTimestamp.getUTCHours() * 60 + phtTimestamp.getUTCMinutes();
+        const matchingOt = approvedOts.find(ot => {
+            const [sH, sM] = ot.startTime.split(':').map(Number);
+            const otStartMin = sH * 60 + sM;
+            const diff = Math.abs(phtScanMin - otStartMin);
+            const dist = Math.min(diff, 1440 - diff);
+            return dist <= bufferMins;
+        });
+
+        if (matchingOt) {
+            const dayMatchingShifts = filteredAssignments.filter(a => {
+                const workDays = getWorkDays(a.shift);
+                return workDays.includes(currentDayName);
+            });
+
+            let insideScheduledWindow = false;
+            for (const { shift } of dayMatchingShifts) {
+                const [startH, startM] = shift.startTime.split(':').map(Number);
+                const [endH, endM] = shift.endTime.split(':').map(Number);
+
+                const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+                const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+
+                if (shiftEnd <= shiftStart) {
+                    shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
+                }
+
+                const windowStart = new Date(shiftStart.getTime() - bufferMs);
+                const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
+
+                if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
+                    insideScheduledWindow = true;
+                    break;
+                }
+            }
+
+            // If the scan matches an approved OT and is completely outside the buffer window
+            // of all regular scheduled shifts for the day, route it directly to rest-day OT!
+            if (!insideScheduledWindow) {
+                const restDayShifts = filteredAssignments.filter(a => {
+                    const workDays = getWorkDays(a.shift);
+                    return !workDays.includes(currentDayName);
+                });
+
+                for (const { shift } of restDayShifts) {
+                    const [startH, startM] = shift.startTime.split(':').map(Number);
+                    const [endH, endM] = shift.endTime.split(':').map(Number);
+
+                    const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+                    const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+
+                    if (shiftEnd <= shiftStart) {
+                        shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
+                    }
+
+                    const windowStart = new Date(shiftStart.getTime() - bufferMs);
+                    const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
+
+                    if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
+                        return { shift, isNewCheckin: true };
+                    }
+                }
+
+                // If no assigned rest-day shift matches the time, treat as OT-only (null shift)
+                return { shift: null, isNewCheckin: true };
+            }
+        }
+    }
+    // ── END APPROVED OT REST-DAY GATE ──────────────────────────────────────────
+
+    const tryMatch = (
+        candidateShifts: typeof assignments,
+        allowFallback = true
+    ): { shift: Shift; isNewCheckin: boolean } | null => {
         const windowMatches: { shift: Shift; needsCheckIn: boolean; needsCheckOut: boolean; distToStart: number; distToEnd: number }[] = [];
         let fallbackMatch: Shift | null = null;
         let fallbackIsNew = true;
@@ -98,19 +181,13 @@ export async function resolveShiftForTimestamp(
 
             if (!isCompleted && normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
                 if (needsCheckOut) {
-                    // Check-out: the full buffer window (including post-shift) is valid.
                     windowMatches.push({ shift, needsCheckIn: false, needsCheckOut: true, distToStart, distToEnd });
                 } else if (needsCheckIn && normalizedTimestamp <= shiftEnd) {
-                    // New check-in: only valid while the shift is still active.
-                    // The post-shift buffer (shiftEnd → windowEnd) is exclusively for check-outs;
-                    // a missed shift whose end time has passed must NOT capture future scans.
                     windowMatches.push({ shift, needsCheckIn: true, needsCheckOut: false, distToStart, distToEnd });
                 }
             }
 
             const minDist = Math.min(distToStart, distToEnd);
-            // For the fallback: same rule — don't propose an already-ended shift as the
-            // target for a brand-new check-in. The buffer tail is check-out territory only.
             const isEligibleFallback = needsCheckOut || (needsCheckIn && normalizedTimestamp <= shiftEnd);
             if (isEligibleFallback && minDist < fallbackMinDist) {
                 fallbackMinDist = minDist;
@@ -133,7 +210,7 @@ export async function resolveShiftForTimestamp(
             }
         }
 
-        if (fallbackMatch) return { shift: fallbackMatch, isNewCheckin: fallbackIsNew };
+        if (allowFallback && fallbackMatch) return { shift: fallbackMatch, isNewCheckin: fallbackIsNew };
         return null;
     };
 
@@ -142,8 +219,10 @@ export async function resolveShiftForTimestamp(
         return record && !record.checkOutTime;
     });
 
+    // ── MULTI-TIER WINDOW MATCHING SEQUENCE ───────────────────────────────────
+    // Tier 1: Window-Only Match in Shifts Needing Checkout
     if (shiftsNeedingCheckout.length > 0) {
-        const match = tryMatch(shiftsNeedingCheckout);
+        const match = tryMatch(shiftsNeedingCheckout, false);
         if (match) return match;
     }
 
@@ -152,13 +231,32 @@ export async function resolveShiftForTimestamp(
         return workDays.includes(currentDayName);
     });
 
+    // Tier 2: Window-Only Match in Day-Matching (Scheduled) Shifts
     if (dayMatchingShifts.length > 0) {
-        const match = tryMatch(dayMatchingShifts);
+        const match = tryMatch(dayMatchingShifts, false);
         if (match) return match;
     }
 
-    const match = tryMatch(filteredAssignments);
+    // Tier 3: Window-Only Match in All assigned shifts (including rest-day shifts)
+    const windowMatchAll = tryMatch(filteredAssignments, false);
+    if (windowMatchAll) return windowMatchAll;
+
+    // Tier 4: Fallback Match in Shifts Needing Checkout
+    if (shiftsNeedingCheckout.length > 0) {
+        const match = tryMatch(shiftsNeedingCheckout, true);
+        if (match) return match;
+    }
+
+    // Tier 5: Fallback Match in Day-Matching (Scheduled) Shifts
+    if (dayMatchingShifts.length > 0) {
+        const match = tryMatch(dayMatchingShifts, true);
+        if (match) return match;
+    }
+
+    // Tier 6: Fallback Match in All Assigned Shifts
+    const match = tryMatch(filteredAssignments, true);
     if (match) return match;
+    // ── END MULTI-TIER SEQUENCE ──────────────────────────────────────────────
 
     let bestMatch: Shift | null = null;
     let minDistance = Infinity;
@@ -562,9 +660,13 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         where: {
                             employeeId: log.employeeId,
                             date: dateOnly,
-                            shiftId: targetShiftId
+                            checkInTime: new Date(pendingOtCheckOut.actualStartTime!)
                         }
                     });
+
+                    if (existingAtt) {
+                        targetShiftId = existingAtt.shiftId;
+                    }
 
                     if (existingAtt) {
                         const updateData: Record<string, unknown> = {
