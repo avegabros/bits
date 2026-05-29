@@ -335,12 +335,63 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 log.employee?.Shift
             );
 
+            // ── REST DAY DETECTION ────────────────────────────────────────────────────
+            // If the resolved shift exists but today is NOT in its workDays, this is a
+            // rest day. On rest days the employee has no scheduled shift — any work is
+            // exclusively because of an approved OT. We therefore treat the shift as null
+            // ("effectiveShift") so that:
+            //  • Attendance records get shiftId: null (OT-only, no shift-based metrics).
+            //  • The unique constraint (employeeId, date, shiftId) prevents duplicates.
+            //  • lateMinutes / undertimeMinutes are not calculated against a shift they
+            //    are not scheduled for.
+            // resolvedShift is kept for the post-shift guard which needs the raw shift.
+            const isRestDay = (() => {
+                if (!resolvedShift) return false;
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const phtTs = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
+                const todayName = dayNames[phtTs.getUTCDay()];
+                try {
+                    const workDays: string[] = JSON.parse(resolvedShift.workDays || '[]');
+                    return workDays.length > 0 && !workDays.includes(todayName);
+                } catch {
+                    return false;
+                }
+            })();
+            const effectiveShift = isRestDay ? null : resolvedShift;
+            // ── END REST DAY DETECTION ────────────────────────────────────────────────
+
             // ── UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────────
             if (recordOts.length > 0) {
                 const phtScanMin = (() => {
                     const pht = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
                     return pht.getUTCHours() * 60 + pht.getUTCMinutes();
                 })();
+
+                // Determine targetShiftId: if the shift has already ended and the employee didn't check in to it,
+                // link the OT to null (OT-only) instead of the ended shift.
+                let targetShiftId: number | null = effectiveShift?.id ?? null;
+                if (effectiveShift) {
+                    const [eH, eM] = effectiveShift.endTime.split(':').map(Number);
+                    const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
+                    const [sH, sM] = effectiveShift.startTime.split(':').map(Number);
+                    const shiftStartMs = dateOnly.getTime() + (sH * 60 + sM) * 60 * 1000;
+                    const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
+                        ? shiftEndMs + 24 * 60 * 60 * 1000
+                        : shiftEndMs;
+
+                    if (log.timestamp.getTime() > adjustedShiftEndMs) {
+                        const shiftRecordExists = await prisma.attendance.findFirst({
+                            where: {
+                                employeeId: log.employeeId,
+                                date: dateOnly,
+                                shiftId: effectiveShift.id
+                            }
+                        });
+                        if (!shiftRecordExists) {
+                            targetShiftId = null;
+                        }
+                    }
+                }
 
                 // Check for a pending OT check-in
                 const pendingOtCheckIn = recordOts.find(ot => {
@@ -370,13 +421,13 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         where: {
                             employeeId: log.employeeId,
                             date: dateOnly,
-                            shiftId: resolvedShift?.id ?? null
+                            shiftId: targetShiftId
                         }
                     });
 
                     if (!existingAtt) {
-                        const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
+                        const empShift = targetShiftId ? effectiveShift : null;
+                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift, recordOts);
                         const checkInStatus = calculatedStatus === 'late' ? 'late' : 'present';
 
                         const checkInMetrics = calculateAttendanceMetrics(
@@ -389,7 +440,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             data: {
                                 employeeId: log.employeeId,
                                 date: dateOnly,
-                                shiftId: resolvedShift?.id ?? null,
+                                shiftId: targetShiftId,
                                 checkInTime: log.timestamp,
                                 status: checkInStatus,
                                 checkInDeviceId: log.deviceId,
@@ -418,7 +469,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
                         created++;
 
-                        const otCheckInShift = createdOtRecord.employee?.Shift ?? null;
+                        const otCheckInShift = targetShiftId ? effectiveShift : null;
                         const otCheckInMetrics = calculateAttendanceMetrics(createdOtRecord, otCheckInShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
@@ -452,7 +503,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
 
                         if (fullAtt) {
-                            const otCheckInShift = fullAtt.employee?.Shift ?? null;
+                            const otCheckInShift = targetShiftId ? effectiveShift : null;
                             const otCheckInMetrics = calculateAttendanceMetrics(fullAtt, otCheckInShift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
@@ -511,7 +562,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         where: {
                             employeeId: log.employeeId,
                             date: dateOnly,
-                            shiftId: resolvedShift?.id ?? null
+                            shiftId: targetShiftId
                         }
                     });
 
@@ -526,8 +577,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             updateData.checkoutSource = 'device';
 
                             if (existingAtt.status === 'incomplete') {
-                                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                                updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, empShift);
+                                updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts);
 
                                 if (existingAtt.notes?.includes('No checkout recorded')) {
                                     updateData.notes = existingAtt.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -555,7 +605,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
                         updated++;
 
-                        const otCoShift = updatedOtRecord.employee?.Shift ?? null;
+                        const otCoShift = targetShiftId ? effectiveShift : null;
                         const otCoMetrics = calculateAttendanceMetrics(updatedOtRecord, otCoShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
@@ -572,13 +622,12 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
 
                         await recalculateAndPersistAttendanceMetrics(log.employeeId, dateOnly);
                     } else {
-                        const empShift = resolvedShift ?? log.employee?.Shift ?? null;
                         const otCheckIn = new Date(pendingOtCheckOut.actualStartTime!);
-                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, dateOnly, empShift);
+                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, dateOnly, targetShiftId ? effectiveShift : null, recordOts);
 
                         const checkMetrics = calculateAttendanceMetrics(
                             { date: dateOnly, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus },
-                            empShift,
+                            targetShiftId ? effectiveShift : null,
                             recordOts
                         );
 
@@ -586,7 +635,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             data: {
                                 employeeId: log.employeeId,
                                 date: dateOnly,
-                                shiftId: resolvedShift?.id ?? null,
+                                shiftId: targetShiftId,
                                 checkInTime: otCheckIn,
                                 checkOutTime: log.timestamp,
                                 status: calculatedStatus,
@@ -618,7 +667,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
                         created++;
 
-                        const otNewCoShift = createdOtCoRecord.employee?.Shift ?? null;
+                        const otNewCoShift = targetShiftId ? effectiveShift : null;
                         const otNewCoMetrics = calculateAttendanceMetrics(createdOtCoRecord, otNewCoShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
@@ -644,7 +693,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 where: {
                     employeeId: log.employeeId,
                     date: dateOnly,
-                    shiftId: resolvedShift?.id ?? null
+                    shiftId: effectiveShift?.id ?? null
                 }
             });
 
@@ -672,8 +721,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 }
                 // ── END POST-SHIFT GUARD ──────────────────────────────────────────────
 
-                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
+                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, effectiveShift, recordOts);
                 const isLate = calculatedStatus === 'late';
                 const checkInStatus = isLate ? 'late' : 'present';
 
@@ -681,7 +729,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 // undertimeMinutes / totalHours / isEarlyOut will be 0/false until checkout.
                 const checkInMetrics = calculateAttendanceMetrics(
                     { date: dateOnly, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
-                    empShift,
+                    effectiveShift,
                     recordOts
                 );
 
@@ -690,7 +738,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         data: {
                             employeeId: log.employeeId,
                             date: dateOnly,
-                            shiftId: resolvedShift?.id ?? null,
+                            shiftId: effectiveShift?.id ?? null,
                             checkInTime: log.timestamp,
                             status: checkInStatus,
                             checkInDeviceId: log.deviceId,
@@ -729,7 +777,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         metadata: { snapshot: { status: createdRecord.status, checkInTime: createdRecord.checkInTime.toISOString() } }
                     });
 
-                    const shift = createdRecord.employee?.Shift ?? null;
+                    const shift = effectiveShift;
                     const metrics = calculateAttendanceMetrics(createdRecord, shift, recordOts);
 
                     attendanceEmitter.emit('new-record', {
@@ -764,10 +812,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     const diffMs = logTime.getTime() - checkInTime.getTime();
                     const diffHours = diffMs / (1000 * 60 * 60);
 
-                    const shiftDurationHours = resolvedShift 
+                    const shiftDurationHours = effectiveShift 
                         ? (() => {
-                            const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
-                            const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                            const [sH, sM] = effectiveShift.startTime.split(':').map(Number);
+                            const [eH, eM] = effectiveShift.endTime.split(':').map(Number);
                             let duration = (eH + eM/60) - (sH + sM/60);
                             if (duration < 0) duration += 24;
                             return duration;
@@ -793,8 +841,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             };
 
                             if (existingAttendance.status === 'incomplete') {
-                                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
+                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
 
                                 if (existingAttendance.notes?.includes('No checkout recorded')) {
                                     updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -802,11 +849,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             }
 
                             // Persist checkout metrics
-                            const coShift1 = resolvedShift ?? log.employee?.Shift ?? null;
                             const coStatus1 = (updateData.status as string) ?? existingAttendance.status;
                             const coMetrics1 = calculateAttendanceMetrics(
                                 { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus1 },
-                                coShift1,
+                                effectiveShift,
                                 recordOts
                             );
                             updateData.lateMinutes = coMetrics1.lateMinutes;
@@ -847,7 +893,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 metadata: { changes: [{ field: 'checkOutTime', oldValue: existingAttendance.checkOutTime ? existingAttendance.checkOutTime.toISOString() : null, newValue: log.timestamp.toISOString() }] }
                             });
 
-                            const shift = updatedRecord.employee?.Shift ?? null;
+                            const shift = effectiveShift;
                             const metrics = calculateAttendanceMetrics(updatedRecord, shift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
@@ -871,8 +917,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         };
 
                         if (existingAttendance.status === 'incomplete') {
-                            const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
+                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
 
                             if (existingAttendance.notes?.includes('No checkout recorded')) {
                                 updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -880,11 +925,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         }
 
                         // Persist checkout metrics
-                        const coShift2 = resolvedShift ?? log.employee?.Shift ?? null;
                         const coStatus2 = (updateData.status as string) ?? existingAttendance.status;
                         const coMetrics2 = calculateAttendanceMetrics(
                             { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus2 },
-                            coShift2,
+                            effectiveShift,
                             recordOts
                         );
                         updateData.lateMinutes = coMetrics2.lateMinutes;
@@ -925,7 +969,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             metadata: { changes: [{ field: 'checkOutTime', oldValue: null, newValue: log.timestamp.toISOString() }] }
                         });
 
-                        const shift2 = updatedRecord2.employee?.Shift ?? null;
+                        const shift2 = effectiveShift;
                         const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2, recordOts);
 
                         attendanceEmitter.emit('new-record', {

@@ -51,12 +51,19 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
 
         // Late: after default shift start PHT
         const checkInPHT = new Date(checkIn.getTime() + 8 * 60 * 60 * 1000);
-        const lateMinutes = Math.max(0, checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes() - ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60);
+        const rawLateMinutes = Math.max(0, checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes() - ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60);
 
         // Anomaly: Tap in is more than threshold away from default shift start
         const ANOMALY_THRESHOLD_MINS = ATTENDANCE_LIMITS.ANOMALY_THRESHOLD_MINS;
         const diffMins = Math.abs(checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes() - ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60);
-        const isAnomaly = diffMins > ANOMALY_THRESHOLD_MINS;
+        const rawIsAnomaly = diffMins > ANOMALY_THRESHOLD_MINS;
+
+        // On an approved OT-only day (rest day with no shift), the employee has no
+        // scheduled start time. Do not penalise them with default-shift-based lateness
+        // or anomaly flags — they are working exactly as approved.
+        const hasApprovedOt = approvedOts && approvedOts.length > 0;
+        const lateMinutes = hasApprovedOt ? 0 : rawLateMinutes;
+        const isAnomaly = hasApprovedOt ? false : rawIsAnomaly;
 
         const today = getTodayPHT();
         const recordDateStr = new Date(record.date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);

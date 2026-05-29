@@ -250,10 +250,10 @@ export const handleExportIndividual = (
       const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
       const isShiftActive = dayRecords.some(r => r.isShiftActive);
 
-      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
-      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.totalHours ?? 0)), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.lateMinutes ?? 0)), 0);
       const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
-      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.undertimeMinutes ?? 0)), 0);
 
       // Construct representative merged record
       const mergedRecord: AttendanceRecord = {
@@ -563,10 +563,10 @@ export const handleExportAllCompanies = async (
       const firstRecord = sortedDayRecords[0];
       const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
       const isShiftActive = dayRecords.some(r => r.isShiftActive);
-      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
-      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.totalHours ?? 0)), 0);
+      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.lateMinutes ?? 0)), 0);
       const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
-      const utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+      const utMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.undertimeMinutes ?? 0)), 0);
 
       const mergedRecord = {
         ...firstRecord,
