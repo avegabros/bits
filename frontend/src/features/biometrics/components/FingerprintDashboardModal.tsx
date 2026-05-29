@@ -3,11 +3,12 @@
 import React from 'react'
 import {
   X, Fingerprint, Loader2,
-  CheckCircle2, AlertTriangle, RefreshCw, Info
+  CheckCircle2, AlertTriangle, Info
 } from 'lucide-react'
 import { useFingerprintDashboard } from '../hooks/useFingerprintDashboard'
 import { FingerprintDevicePicker } from './FingerprintDevicePicker'
 import { FingerprintSlotList } from './FingerprintSlotList'
+import { FingerprintDeviceSyncPanel } from './FingerprintDeviceSyncPanel'
 
 interface FingerprintDashboardModalProps {
   isOpen: boolean
@@ -25,6 +26,13 @@ export default function FingerprintDashboardModal({
   onScanNow
 }: FingerprintDashboardModalProps) {
   const { state, actions } = useFingerprintDashboard(isOpen, employeeId, onScanNow, onClose)
+  const [confirmDeleteFingerIndex, setConfirmDeleteFingerIndex] = React.useState<number | null>(null)
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setConfirmDeleteFingerIndex(null)
+    }
+  }, [isOpen])
 
   if (!isOpen || !employeeId) return null
 
@@ -78,8 +86,8 @@ export default function FingerprintDashboardModal({
               <AlertTriangle className="w-8 h-8" />
             </div>
             <h4 className="text-xl font-black text-slate-800 mb-2">Unallow Last Device?</h4>
-            <p className="text-sm text-slate-500 mb-8 max-w-sm leading-relaxed">
-              This is the <strong>last allowed device</strong> holding this fingerprint. Unallowing it will permanently delete the fingerprint globally. <br/><span className="font-bold text-red-500">Employee will lose biometric access.</span>
+            <p className="text-sm text-slate-500 mb-8 max-w-md leading-relaxed">
+              This is the last allowed device for this fingerprint/employee. Excluding this device will remove or delete all fingerprints from active synchronization. Do you want to continue?
             </p>
             <div className="flex gap-3 w-full max-w-xs">
               <button
@@ -92,7 +100,38 @@ export default function FingerprintDashboardModal({
                 onClick={() => actions.handleToggleExclusion(state.confirmLastExclusion!.deviceId, 'FINGERPRINT', true, true)}
                 className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
               >
-                Yes, Unallow
+                Yes, Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Fingerprint Confirmation Overlay */}
+        {confirmDeleteFingerIndex !== null && (
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 mb-5 shadow-inner">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h4 className="text-xl font-black text-slate-800 mb-2">Delete Fingerprint Globally?</h4>
+            <p className="text-sm text-slate-500 mb-8 max-w-sm leading-relaxed">
+              Are you sure you want to delete this fingerprint globally? This will permanently remove the biometric template from all devices. <br/><span className="font-bold text-red-500">This action cannot be undone.</span>
+            </p>
+            <div className="flex gap-3 w-full max-w-xs">
+              <button
+                onClick={() => setConfirmDeleteFingerIndex(null)}
+                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const fingerIndex = confirmDeleteFingerIndex;
+                  setConfirmDeleteFingerIndex(null);
+                  await actions.handleDeleteFinger(fingerIndex);
+                }}
+                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+              >
+                Yes, Delete
               </button>
             </div>
           </div>
@@ -136,12 +175,19 @@ export default function FingerprintDashboardModal({
               <FingerprintSlotList
                 slots={state.slots}
                 summary={state.summary}
-                syncingDevice={state.syncingDevice}
-                deletingKey={null}
                 onEnrollSlot={actions.setShowDevicePicker}
-                onToggleExclusion={(deviceId, exclude) => actions.handleToggleExclusion(deviceId, 'FINGERPRINT', exclude)}
-                onDeviceSync={actions.handleDeviceSync}
+                onDeleteFinger={setConfirmDeleteFingerIndex}
               />
+
+              {/* Device Sync Panel */}
+              {state.summary.totalEnrolled > 0 && (
+                <FingerprintDeviceSyncPanel
+                  devices={state.devices}
+                  syncingDevice={state.syncingDevice}
+                  onToggleExclusion={(deviceId, exclude) => actions.handleToggleExclusion(deviceId, 'FINGERPRINT', exclude)}
+                  onDeviceSync={actions.handleDeviceSync}
+                />
+              )}
             </div>
           )}
         </div>

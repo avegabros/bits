@@ -30,6 +30,7 @@ export interface FingerprintSummary {
 export interface FingerprintDashboardState {
   loading: boolean
   slots: FingerprintSlot[]
+  devices: DeviceSyncStatus[]
   allDevices: { id: number; name: string; isActive: boolean; syncEnabled: boolean }[]
   summary: FingerprintSummary
   syncingDevice: number | null
@@ -45,6 +46,7 @@ export interface FingerprintDashboardActions {
   setConfirmLastExclusion: (val: { deviceId: number } | null) => void
   handleDeviceSync: (deviceId: number) => Promise<void>
   handleToggleExclusion: (deviceId: number, type: 'FINGERPRINT', exclude: boolean, force?: boolean) => Promise<void>
+  handleDeleteFinger: (fingerIndex: number) => Promise<void>
   startEnrollment: () => void
 }
 
@@ -56,6 +58,7 @@ export function useFingerprintDashboard(
 ): { state: FingerprintDashboardState; actions: FingerprintDashboardActions } {
   const [loading, setLoading] = useState(true)
   const [slots, setSlots] = useState<FingerprintSlot[]>([])
+  const [devices, setDevices] = useState<DeviceSyncStatus[]>([])
   const [allDevices, setAllDevices] = useState<{ id: number; name: string; isActive: boolean; syncEnabled: boolean }[]>([])
   const [summary, setSummary] = useState<FingerprintSummary>({ totalEnrolled: 0, maxSlots: 3, canEnrollMore: true })
 
@@ -74,6 +77,7 @@ export function useFingerprintDashboard(
       const data = await res.json()
       if (data.success) {
         setSlots(data.slots || [])
+        setDevices(data.devices || [])
         setAllDevices(data.allDevices || [])
         setSummary(data.summary || { totalEnrolled: 0, maxSlots: 3, canEnrollMore: true })
       }
@@ -120,12 +124,12 @@ export function useFingerprintDashboard(
 
   const handleToggleExclusion = useCallback(async (deviceId: number, type: 'FINGERPRINT', exclude: boolean, force = false) => {
     if (exclude && !force) {
-      // Check if this is the last allowed device among all devices for enrolled fingers
-      const enrolledSlot = slots.find(s => s.enrolled);
-      if (enrolledSlot) {
-        const allowedDevices = enrolledSlot.devices.filter(d => !d.excluded && d.isActive && d.syncEnabled);
+      const hasEnrolled = slots.some(s => s.enrolled);
+      if (hasEnrolled) {
+        // Count allowed active devices from root devices list
+        const allowedDevices = devices.filter(d => !d.excluded && d.isActive && d.syncEnabled);
         if (allowedDevices.length === 1 && allowedDevices[0].deviceId === deviceId) {
-          // This is the last allowed device! Need confirmation.
+          // This is the last allowed active device! Need confirmation.
           setConfirmLastExclusion({ deviceId });
           return;
         }
@@ -150,7 +154,29 @@ export function useFingerprintDashboard(
     } catch {
       setSyncResult({ success: false, message: 'Network error while updating exclusion' })
     }
-  }, [employeeId, fetchStatus, slots])
+  }, [employeeId, fetchStatus, slots, devices])
+
+  const handleDeleteFinger = useCallback(async (fingerIndex: number) => {
+    setLoading(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/fingerprint/${fingerIndex}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      setSyncResult({
+        success: data.success,
+        message: data.message || (data.success ? 'Fingerprint deleted successfully' : 'Failed to delete fingerprint')
+      })
+      if (data.success) {
+        await fetchStatus()
+      }
+    } catch {
+      setSyncResult({ success: false, message: 'Network error during deletion' })
+    } finally {
+      setLoading(false)
+    }
+  }, [employeeId, fetchStatus])
 
   const startEnrollment = useCallback(() => {
     if (!selectedDeviceId || showDevicePicker === null) return
@@ -165,7 +191,7 @@ export function useFingerprintDashboard(
   }, [selectedDeviceId, showDevicePicker, slots, onScanNow, onClose])
 
   const state: FingerprintDashboardState = {
-    loading, slots, allDevices, summary,
+    loading, slots, devices, allDevices, summary,
     syncingDevice, syncResult,
     showDevicePicker, selectedDeviceId, confirmLastExclusion,
   }
@@ -176,6 +202,7 @@ export function useFingerprintDashboard(
     setConfirmLastExclusion,
     handleDeviceSync,
     handleToggleExclusion,
+    handleDeleteFinger,
     startEnrollment,
   }
 

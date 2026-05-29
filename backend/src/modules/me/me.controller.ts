@@ -69,7 +69,7 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
             include: {
                 checkInDevice: { select: { name: true } },
                 checkOutDevice: { select: { name: true } },
-                shift: { select: { name: true, shiftCode: true } },
+                shift: { select: { name: true, shiftCode: true, startTime: true, endTime: true } },
                 employee: {
                     include: {
                         Shift: true,
@@ -83,13 +83,25 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
             orderBy: { date: 'desc' },
         });
 
+        const syncConfig = await prisma.syncConfig.findUnique({ where: { id: 1 } });
+        const minCheckoutMins = syncConfig?.globalMinCheckoutMinutes ?? 120;
+        const minCheckoutHours = minCheckoutMins / 60;
+
         const dateValues = new Set(records.map(r => r.date.getTime()));
         const queryDates = Array.from(dateValues).map(ms => new Date(ms));
+
+        let otDateQuery: any = { in: queryDates };
+        if (startDate && endDate) {
+            otDateQuery = {
+                gte: new Date(`${startDate}T00:00:00.000+08:00`),
+                lte: new Date(`${endDate}T23:59:59.999+08:00`),
+            };
+        }
 
         const approvedOts = await prisma.overtimeRequest.findMany({
             where: {
                 employeeId,
-                date: { in: queryDates },
+                date: otDateQuery,
                 status: 'APPROVED'
             },
             select: {
@@ -141,6 +153,25 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
             const recordOtsForCalc = isLatestForDay ? (otsByEmpAndDate.get(dateKey) || []) : [];
 
             const metrics = calculateAttendanceMetrics(record, shift, recordOtsForCalc);
+
+            let minCheckoutTime: Date | null = null;
+            if (record.checkInTime) {
+                const checkInTime = new Date(record.checkInTime);
+                const shiftDurationHours = record.shift 
+                    ? (() => {
+                        const [sH, sM] = record.shift.startTime.split(':').map(Number);
+                        const [eH, eM] = record.shift.endTime.split(':').map(Number);
+                        let duration = (eH + eM/60) - (sH + sM/60);
+                        if (duration < 0) duration += 24;
+                        return duration;
+                    })()
+                    : null;
+                const effectiveMinCheckout = shiftDurationHours 
+                    ? Math.min(shiftDurationHours / 2, minCheckoutHours) 
+                    : minCheckoutHours;
+                minCheckoutTime = new Date(checkInTime.getTime() + effectiveMinCheckout * 60 * 60 * 1000);
+            }
+
             return {
                 ...record,
                 checkInDeviceName: record.checkInDevice?.name || null,
@@ -150,10 +181,11 @@ export const getMyAttendance = async (req: Request, res: Response): Promise<void
                 checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null,
                 ...metrics,
                 approvedOts: otsByEmpAndDate.get(dateKey) || [],
+                minCheckoutTime
             };
         });
 
-        res.status(200).json({ success: true, count: enrichedData.length, data: enrichedData });
+        res.status(200).json({ success: true, count: enrichedData.length, data: enrichedData, approvedOts });
     } catch (error: unknown) {
         console.error('getMyAttendance error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch attendance records', error: error instanceof Error ? error.message : String(error) });

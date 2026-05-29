@@ -123,7 +123,7 @@ export function CardDeviceSyncPanel({
                 </div>
 
                 {/* Actions per device */}
-                {device.isActive && device.syncEnabled && (
+                {device.syncEnabled && (
                   <div className="flex items-center gap-2">
                     <label className="relative inline-flex items-center cursor-pointer mr-2">
                       <input
@@ -136,7 +136,7 @@ export function CardDeviceSyncPanel({
                       <span className="ml-2 text-xs font-medium text-slate-600 w-12">{device.excluded ? 'Excluded' : 'Allowed'}</span>
                     </label>
 
-                    {!device.excluded && (
+                    {!device.excluded && device.isActive && (
                       <>
                         {device.enrolled && !device.pendingDeletion ? (
                           <button

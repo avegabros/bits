@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useAttendanceDashboard } from '@/features/attendance/hooks/useAttendanceDashboard';
@@ -38,8 +39,14 @@ function AdminAttendanceContent() {
     getTodayDate,
   } = useAttendanceDashboard('admin');
 
+  const router = useRouter();
+
   const handleShiftQuickNav = (shiftName: string, _row: any) => {
-    setShiftFilter(shiftName);
+    if (shiftName === 'OT Approved') {
+      router.push('/overtime?tab=monitoring');
+    } else {
+      setShiftFilter(shiftName);
+    }
   };
 
   return (

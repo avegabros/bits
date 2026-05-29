@@ -1,9 +1,9 @@
 import React from 'react'
-import { LogIn, LogOut, CalendarDays, Clock, UserCheck, AlertCircle, Sparkles, TrendingUp } from 'lucide-react'
+import { LogIn, LogOut, CalendarDays, Clock, UserCheck, AlertCircle, Sparkles, TrendingUp, Info } from 'lucide-react'
 import { useEmployeeDashboard } from '../hooks/useEmployeeDashboard'
 
 export function OverviewDashboard() {
-  const { loading, userName, todayRecords, weeklyStats } = useEmployeeDashboard()
+  const { loading, userName, todayRecords, weeklyStats, todayApprovedOts } = useEmployeeDashboard()
 
   if (loading) {
     return (
@@ -31,6 +31,15 @@ export function OverviewDashboard() {
   const formatTime = (timeStr?: string | null) => {
     if (!timeStr) return '--:--'
     return new Date(timeStr).toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatTimeString = (hhmm?: string | null) => {
+    if (!hhmm) return '--:--'
+    const [h, m] = hhmm.split(':').map(Number)
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const displayH = h % 12 || 12
+    const displayM = m.toString().padStart(2, '0')
+    return `${displayH}:${displayM} ${ampm}`
   }
 
   return (
@@ -81,12 +90,57 @@ export function OverviewDashboard() {
           </div>
 
           {todayRecords.length === 0 ? (
-            <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-slate-100 shadow-sm p-8 flex flex-col items-center justify-center gap-3 text-center min-h-[300px]">
-              <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
-                <Clock className="w-8 h-8 text-slate-300" />
+            <div className="flex flex-col gap-6">
+              <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-slate-100 shadow-sm p-8 flex flex-col items-center justify-center gap-3 text-center min-h-[220px]">
+                <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
+                  <Clock className="w-8 h-8 text-slate-300" />
+                </div>
+                <p className="text-slate-500 font-bold">No active shifts scheduled for today</p>
+                <p className="text-slate-400 text-xs max-w-xs">
+                  {todayApprovedOts.length > 0
+                    ? 'However, you have approved overtime scheduled below.'
+                    : 'Your schedule is clear. If you think this is an error, please contact HR.'}
+                </p>
               </div>
-              <p className="text-slate-500 font-bold">No active shifts scheduled for today</p>
-              <p className="text-slate-400 text-xs max-w-xs">Your schedule is clear. If you think this is an error, please contact HR.</p>
+
+              {todayApprovedOts.length > 0 && (
+                <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-slate-100/80 shadow-sm p-6 relative overflow-hidden group">
+                  <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500" />
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Approved Overtime Schedule</span>
+                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100/50 rounded-full text-[10px] font-black uppercase tracking-wider">
+                      Approved
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {todayApprovedOts.map((ot: any, idx: number) => (
+                      <div key={ot.id || idx} className="bg-emerald-500/[0.02] border border-emerald-500/10 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
+                            <Clock className="w-5 h-5 text-emerald-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800">
+                              Overtime Request
+                            </p>
+                            <p className="text-xs text-slate-400 font-medium">
+                              Date: {new Date(ot.date).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:text-right">
+                          <span className="text-sm font-black text-slate-800">
+                            Time-in: {formatTimeString(ot.startTime)}
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            Time-out: {formatTimeString(ot.endTime)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-6">
@@ -154,8 +208,50 @@ export function OverviewDashboard() {
                         <span className="text-2xl font-black text-slate-800 tracking-tight">
                           {formatTime(record.checkOutTime)}
                         </span>
+                        {!record.checkOutTime && (
+                          <div className="flex flex-col gap-1 mt-1.5">
+                            {record.minCheckoutTime && (
+                              <span className="text-[10px] text-amber-600/80 font-bold flex items-center gap-1">
+                                <Info className="w-3.5 h-3.5 shrink-0" /> Earliest checkout (biometrics): {formatTime(record.minCheckoutTime)}
+                              </span>
+                            )}
+                            {record.shift?.endTime && (
+                              <span className="text-[10px] text-indigo-600/80 font-bold flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 shrink-0" /> Minimum checkout (shift end): {formatTimeString(record.shift.endTime)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {record.approvedOts && record.approvedOts.length > 0 && (
+                      <div className="mt-6 border-t border-slate-100 pt-4">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Approved Overtime</span>
+                        <div className="flex flex-col gap-2">
+                          {record.approvedOts.map((ot: any, idx: number) => (
+                            <div key={ot.id || idx} className="bg-emerald-500/[0.02] border border-emerald-500/10 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20">
+                                  <Clock className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <span className="text-xs font-bold text-slate-700 block">
+                                    Time-in: {formatTimeString(ot.startTime)}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-700 block">
+                                    Time-out: {formatTimeString(ot.endTime)}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[9px] font-black uppercase tracking-wider">
+                                Approved
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}

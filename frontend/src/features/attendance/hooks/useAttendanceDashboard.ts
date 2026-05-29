@@ -296,7 +296,10 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
 
           const checkIn = log.checkInTime ? new Date(log.checkInTime) : new Date()
           const checkOut = log.checkOutTime ? new Date(log.checkOutTime) : null
-          const totalHours: number = isPendingManualCreation ? 0 : (log.totalHours ?? (checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0))
+          // OT-only records (no shift assigned, but has approved overtime) should not display
+          // regular hours — all time worked belongs to overtime, not a regular shift.
+          const isOtOnlyRecord = !log.shift && !log.shiftId && !log.shiftCode && (log.approvedOts && log.approvedOts.length > 0)
+          const totalHours: number = (isPendingManualCreation || isOtOnlyRecord) ? 0 : (log.totalHours ?? (checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0))
           const lateMinutes: number = isPendingManualCreation ? 0 : (log.lateMinutes ?? 0)
           const overtimeMinutes: number = isPendingManualCreation ? 0 : (log.overtimeMinutes ?? 0)
           const undertimeMinutes: number = isPendingManualCreation ? 0 : (log.undertimeMinutes ?? 0)
@@ -491,11 +494,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
 
-        // Extract available shifts from the filtered (by department/branch/etc) list before applying shiftFilter
+        // Extract available shifts from the filtered (by department/branch/etc) list before applying shiftFilter.
+        // NOTE: 'OT Approved' is intentionally excluded from the tab list — clicking the OT Approved badge
+        // in the Shift column redirects directly to Manage OT / Live Monitoring instead of filtering here.
         const uniqueShifts = new Set<string>()
         const shiftStartTimes = new Map<string, string>()
         
         for (const r of full) {
+          // OT-only records (no shift, but has approved OT) are grouped under 'No Shift' for tab purposes
           const shiftKey = r.shiftName ?? r.shiftCode ?? 'No Shift'
           uniqueShifts.add(shiftKey)
           if (!shiftStartTimes.has(shiftKey) && r.shiftStartTime) {
@@ -850,7 +856,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : (isHolidayDate && r.status === 'absent') ? 'Holiday' : r.status === 'rest_day' ? 'Rest Day' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
       const checkoutSourceLabel = r.checkoutSource === 'device' ? '' : r.checkoutSource === 'manual' ? 'Manual' : r.checkoutSource === 'auto_closed' ? 'Auto-Closed' : r.displayStatus === 'missing_checkout' ? 'Missing' : ''
       allRows.push([
-        i + 1, r.employeeName, r.branchName, r.department, r.shiftCode || 'No Shift',
+        i + 1, r.employeeName, r.branchName, r.department, r.shiftCode || r.shiftName || (r.approvedOts && r.approvedOts.length > 0 ? 'OT Approved' : 'No Shift'),
         r.checkIn,
         r.isShiftActive ? 'ACTIVE' : r.checkOut,
         r.isShiftActive ? '' : checkoutSourceLabel,

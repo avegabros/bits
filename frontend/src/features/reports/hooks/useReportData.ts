@@ -162,12 +162,18 @@ export const useReportData = (startDate: string, endDate: string) => {
           const row = rowMap.get(r.employeeId);
           if (!row) return;
 
-          const lateMins = r.lateMinutes ?? 0;
-          if (lateMins > 0) {
-            row.late++;
-            row.lateMinutes += lateMins;
+          // OT-only records (punch-in during approved overtime with no regular shift assigned)
+          // should NOT contribute regular hours, late minutes, or undertime to report summaries.
+          const isOtOnly = !r.shift && !r.shiftCode;
+
+          if (!isOtOnly) {
+            const lateMins = r.lateMinutes ?? 0;
+            if (lateMins > 0) {
+              row.late++;
+              row.lateMinutes += lateMins;
+            }
           }
-          // Increment present for any valid check-in
+          // Increment present for any valid check-in (OT punch-ins count as present)
           row.present++;
 
           if (r.isAnomaly) {
@@ -179,9 +185,9 @@ export const useReportData = (startDate: string, endDate: string) => {
             row.missingCheckoutsCount++;
           }
 
-          row.totalHours += r.totalHours ?? 0;
+          row.totalHours += isOtOnly ? 0 : (r.totalHours ?? 0);
           row.overtime += (r.overtimeMinutes ?? 0) / 60;
-          row.undertime += (r.undertimeMinutes ?? 0) / 60;
+          row.undertime += isOtOnly ? 0 : ((r.undertimeMinutes ?? 0) / 60);
         });
 
         setReportData(Array.from(rowMap.values()));

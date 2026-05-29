@@ -118,10 +118,10 @@ function buildTableRows(
             const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
             const isShiftActive = dayRecords.some(r => r.isShiftActive);
 
-            workedHrsVal = dayRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
-            lateMinsVal = dayRecords.reduce((sum, r) => sum + (r.lateMinutes ?? 0), 0);
+            workedHrsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.totalHours ?? 0)), 0);
+            lateMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.lateMinutes ?? 0)), 0);
             otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
-            utMinsVal = dayRecords.reduce((sum, r) => sum + (r.undertimeMinutes ?? 0), 0);
+            utMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.undertimeMinutes ?? 0)), 0);
 
             // Construct representative merged record
             const mergedRecord: AttendanceRecord = {

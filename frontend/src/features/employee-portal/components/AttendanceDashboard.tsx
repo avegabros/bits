@@ -189,9 +189,13 @@ export function AttendanceDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {r.shiftName ? (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
-                            {r.shiftName}
+                        {r.shiftName || (r.approvedOts && r.approvedOts.length > 0) ? (
+                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border ${
+                            r.shiftName
+                              ? 'bg-slate-100 text-slate-600 border-slate-200'
+                              : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                          }`}>
+                            {r.shiftName ?? 'OT Approved'}
                           </span>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>

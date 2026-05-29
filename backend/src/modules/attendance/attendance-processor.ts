@@ -68,7 +68,90 @@ export async function resolveShiftForTimestamp(
         try { return JSON.parse(shift.workDays || '[]'); } catch { return []; }
     };
 
-    const tryMatch = (candidateShifts: typeof assignments): { shift: Shift; isNewCheckin: boolean } | null => {
+    // ── APPROVED OT REST-DAY GATE (User Suggestion & Option 1) ────────────────
+    const approvedOts = await prisma.overtimeRequest.findMany({
+        where: {
+            employeeId,
+            date: dateOnly,
+            status: 'APPROVED'
+        }
+    });
+
+    if (approvedOts.length > 0) {
+        const phtScanMin = phtTimestamp.getUTCHours() * 60 + phtTimestamp.getUTCMinutes();
+        const matchingOt = approvedOts.find(ot => {
+            const [sH, sM] = ot.startTime.split(':').map(Number);
+            const otStartMin = sH * 60 + sM;
+            const diff = Math.abs(phtScanMin - otStartMin);
+            const dist = Math.min(diff, 1440 - diff);
+            return dist <= bufferMins;
+        });
+
+        if (matchingOt) {
+            const dayMatchingShifts = filteredAssignments.filter(a => {
+                const workDays = getWorkDays(a.shift);
+                return workDays.includes(currentDayName);
+            });
+
+            let insideScheduledWindow = false;
+            for (const { shift } of dayMatchingShifts) {
+                const [startH, startM] = shift.startTime.split(':').map(Number);
+                const [endH, endM] = shift.endTime.split(':').map(Number);
+
+                const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+                const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+
+                if (shiftEnd <= shiftStart) {
+                    shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
+                }
+
+                const windowStart = new Date(shiftStart.getTime() - bufferMs);
+                const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
+
+                if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
+                    insideScheduledWindow = true;
+                    break;
+                }
+            }
+
+            // If the scan matches an approved OT and is completely outside the buffer window
+            // of all regular scheduled shifts for the day, route it directly to rest-day OT!
+            if (!insideScheduledWindow) {
+                const restDayShifts = filteredAssignments.filter(a => {
+                    const workDays = getWorkDays(a.shift);
+                    return !workDays.includes(currentDayName);
+                });
+
+                for (const { shift } of restDayShifts) {
+                    const [startH, startM] = shift.startTime.split(':').map(Number);
+                    const [endH, endM] = shift.endTime.split(':').map(Number);
+
+                    const shiftStart = new Date(dateOnly.getTime() + (startH * 60 + startM) * 60 * 1000);
+                    const shiftEnd = new Date(dateOnly.getTime() + (endH * 60 + endM) * 60 * 1000);
+
+                    if (shiftEnd <= shiftStart) {
+                        shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
+                    }
+
+                    const windowStart = new Date(shiftStart.getTime() - bufferMs);
+                    const windowEnd = new Date(shiftEnd.getTime() + bufferMs);
+
+                    if (normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
+                        return { shift, isNewCheckin: true };
+                    }
+                }
+
+                // If no assigned rest-day shift matches the time, treat as OT-only (null shift)
+                return { shift: null, isNewCheckin: true };
+            }
+        }
+    }
+    // ── END APPROVED OT REST-DAY GATE ──────────────────────────────────────────
+
+    const tryMatch = (
+        candidateShifts: typeof assignments,
+        allowFallback = true
+    ): { shift: Shift; isNewCheckin: boolean } | null => {
         const windowMatches: { shift: Shift; needsCheckIn: boolean; needsCheckOut: boolean; distToStart: number; distToEnd: number }[] = [];
         let fallbackMatch: Shift | null = null;
         let fallbackIsNew = true;
@@ -98,19 +181,13 @@ export async function resolveShiftForTimestamp(
 
             if (!isCompleted && normalizedTimestamp >= windowStart && normalizedTimestamp <= windowEnd) {
                 if (needsCheckOut) {
-                    // Check-out: the full buffer window (including post-shift) is valid.
                     windowMatches.push({ shift, needsCheckIn: false, needsCheckOut: true, distToStart, distToEnd });
                 } else if (needsCheckIn && normalizedTimestamp <= shiftEnd) {
-                    // New check-in: only valid while the shift is still active.
-                    // The post-shift buffer (shiftEnd → windowEnd) is exclusively for check-outs;
-                    // a missed shift whose end time has passed must NOT capture future scans.
                     windowMatches.push({ shift, needsCheckIn: true, needsCheckOut: false, distToStart, distToEnd });
                 }
             }
 
             const minDist = Math.min(distToStart, distToEnd);
-            // For the fallback: same rule — don't propose an already-ended shift as the
-            // target for a brand-new check-in. The buffer tail is check-out territory only.
             const isEligibleFallback = needsCheckOut || (needsCheckIn && normalizedTimestamp <= shiftEnd);
             if (isEligibleFallback && minDist < fallbackMinDist) {
                 fallbackMinDist = minDist;
@@ -133,7 +210,7 @@ export async function resolveShiftForTimestamp(
             }
         }
 
-        if (fallbackMatch) return { shift: fallbackMatch, isNewCheckin: fallbackIsNew };
+        if (allowFallback && fallbackMatch) return { shift: fallbackMatch, isNewCheckin: fallbackIsNew };
         return null;
     };
 
@@ -142,8 +219,10 @@ export async function resolveShiftForTimestamp(
         return record && !record.checkOutTime;
     });
 
+    // ── MULTI-TIER WINDOW MATCHING SEQUENCE ───────────────────────────────────
+    // Tier 1: Window-Only Match in Shifts Needing Checkout
     if (shiftsNeedingCheckout.length > 0) {
-        const match = tryMatch(shiftsNeedingCheckout);
+        const match = tryMatch(shiftsNeedingCheckout, false);
         if (match) return match;
     }
 
@@ -152,21 +231,37 @@ export async function resolveShiftForTimestamp(
         return workDays.includes(currentDayName);
     });
 
+    // Tier 2: Window-Only Match in Day-Matching (Scheduled) Shifts
     if (dayMatchingShifts.length > 0) {
-        const match = tryMatch(dayMatchingShifts);
+        const match = tryMatch(dayMatchingShifts, false);
         if (match) return match;
     }
 
-    const match = tryMatch(filteredAssignments);
+    // Tier 3: Window-Only Match in All assigned shifts (including rest-day shifts)
+    const windowMatchAll = tryMatch(filteredAssignments, false);
+    if (windowMatchAll) return windowMatchAll;
+
+    // Tier 4: Fallback Match in Shifts Needing Checkout
+    if (shiftsNeedingCheckout.length > 0) {
+        const match = tryMatch(shiftsNeedingCheckout, true);
+        if (match) return match;
+    }
+
+    // Tier 5: Fallback Match in Day-Matching (Scheduled) Shifts
+    if (dayMatchingShifts.length > 0) {
+        const match = tryMatch(dayMatchingShifts, true);
+        if (match) return match;
+    }
+
+    // Tier 6: Fallback Match in All Assigned Shifts
+    const match = tryMatch(filteredAssignments, true);
     if (match) return match;
+    // ── END MULTI-TIER SEQUENCE ──────────────────────────────────────────────
 
     let bestMatch: Shift | null = null;
     let minDistance = Infinity;
-    for (const { shift } of filteredAssignments) {
-        const record = recordMap.get(shift.id);
-        const needsCheckIn = !record;
-        const needsCheckOut = record && !record.checkOutTime;
-
+    const candidates = dayMatchingShifts.length > 0 ? dayMatchingShifts : filteredAssignments;
+    for (const { shift } of candidates) {
         const [startH, startM] = shift.startTime.split(':').map(Number);
         const [endH, endM] = shift.endTime.split(':').map(Number);
 
@@ -176,10 +271,6 @@ export async function resolveShiftForTimestamp(
         if (shiftEnd <= shiftStart) {
             shiftEnd.setTime(shiftEnd.getTime() + 24 * 60 * 60 * 1000);
         }
-
-        // Don't use an already-ended shift as the last-resort fallback for a fresh check-in.
-        // Only allow it if there's a pending check-out or the shift is still active.
-        if (needsCheckIn && normalizedTimestamp > shiftEnd) continue;
 
         const distStart = Math.abs(normalizedTimestamp.getTime() - shiftStart.getTime());
         const distEnd = Math.abs(normalizedTimestamp.getTime() - shiftEnd.getTime());
@@ -342,68 +433,397 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 log.employee?.Shift
             );
 
+            // ── REST DAY DETECTION ────────────────────────────────────────────────────
+            // If the resolved shift exists but today is NOT in its workDays, this is a
+            // rest day. On rest days the employee has no scheduled shift — any work is
+            // exclusively because of an approved OT. We therefore treat the shift as null
+            // ("effectiveShift") so that:
+            //  • Attendance records get shiftId: null (OT-only, no shift-based metrics).
+            //  • The unique constraint (employeeId, date, shiftId) prevents duplicates.
+            //  • lateMinutes / undertimeMinutes are not calculated against a shift they
+            //    are not scheduled for.
+            // resolvedShift is kept for the post-shift guard which needs the raw shift.
+            const isRestDay = (() => {
+                if (!resolvedShift) return false;
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const phtTs = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
+                const todayName = dayNames[phtTs.getUTCDay()];
+                try {
+                    const workDays: string[] = JSON.parse(resolvedShift.workDays || '[]');
+                    return workDays.length > 0 && !workDays.includes(todayName);
+                } catch {
+                    return false;
+                }
+            })();
+            const effectiveShift = isRestDay ? null : resolvedShift;
+            // ── END REST DAY DETECTION ────────────────────────────────────────────────
+
+            // ── UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────────
+            if (recordOts.length > 0) {
+                const phtScanMin = (() => {
+                    const pht = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
+                    return pht.getUTCHours() * 60 + pht.getUTCMinutes();
+                })();
+
+                // Determine targetShiftId: if the shift has already ended and the employee didn't check in to it,
+                // link the OT to null (OT-only) instead of the ended shift.
+                let targetShiftId: number | null = effectiveShift?.id ?? null;
+                if (effectiveShift) {
+                    const [eH, eM] = effectiveShift.endTime.split(':').map(Number);
+                    const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
+                    const [sH, sM] = effectiveShift.startTime.split(':').map(Number);
+                    const shiftStartMs = dateOnly.getTime() + (sH * 60 + sM) * 60 * 1000;
+                    const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
+                        ? shiftEndMs + 24 * 60 * 60 * 1000
+                        : shiftEndMs;
+
+                    if (log.timestamp.getTime() > adjustedShiftEndMs) {
+                        const shiftRecordExists = await prisma.attendance.findFirst({
+                            where: {
+                                employeeId: log.employeeId,
+                                date: dateOnly,
+                                shiftId: effectiveShift.id
+                            }
+                        });
+                        if (!shiftRecordExists) {
+                            targetShiftId = null;
+                        }
+                    }
+                }
+
+                // Check for a pending OT check-in
+                const pendingOtCheckIn = recordOts.find(ot => {
+                    if (ot.actualStartTime) return false;
+                    const [sH, sM] = ot.startTime.split(':').map(Number);
+                    const otStartMin = sH * 60 + sM;
+                    return phtScanMin >= otStartMin - bufferMins && phtScanMin <= otStartMin + bufferMins;
+                });
+
+                if (pendingOtCheckIn) {
+                    await prisma.overtimeRequest.update({
+                        where: { id: pendingOtCheckIn.id },
+                        data: { actualStartTime: log.timestamp }
+                    });
+                    pendingOtCheckIn.actualStartTime = log.timestamp;
+
+                    void audit({
+                        action: 'CHECK_IN',
+                        entityType: 'OvertimeRequest',
+                        entityId: pendingOtCheckIn.id,
+                        performedBy: log.employeeId,
+                        source: 'device-sync',
+                        details: `Employee biometric OT check-in`
+                    });
+
+                    const existingAtt = await prisma.attendance.findFirst({
+                        where: {
+                            employeeId: log.employeeId,
+                            date: dateOnly,
+                            shiftId: targetShiftId
+                        }
+                    });
+
+                    if (!existingAtt) {
+                        const empShift = targetShiftId ? effectiveShift : null;
+                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift, recordOts);
+                        const checkInStatus = calculatedStatus === 'late' ? 'late' : 'present';
+
+                        const checkInMetrics = calculateAttendanceMetrics(
+                            { date: dateOnly, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
+                            empShift,
+                            recordOts
+                        );
+
+                        const createdOtRecord = await prisma.attendance.create({
+                            data: {
+                                employeeId: log.employeeId,
+                                date: dateOnly,
+                                shiftId: targetShiftId,
+                                checkInTime: log.timestamp,
+                                status: checkInStatus,
+                                checkInDeviceId: log.deviceId,
+                                lateMinutes: checkInMetrics.lateMinutes,
+                                undertimeMinutes: checkInMetrics.undertimeMinutes,
+                                overtimeMinutes: checkInMetrics.overtimeMinutes,
+                                totalHours: checkInMetrics.totalHours,
+                                isAnomaly: checkInMetrics.isAnomaly,
+                                isEarlyOut: checkInMetrics.isEarlyOut,
+                                gracePeriodApplied: checkInMetrics.gracePeriodApplied
+                            },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
+                        });
+                        created++;
+
+                        const otCheckInShift = targetShiftId ? effectiveShift : null;
+                        const otCheckInMetrics = calculateAttendanceMetrics(createdOtRecord, otCheckInShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-in',
+                            record: {
+                                ...createdOtRecord,
+                                checkInDeviceName: createdOtRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: createdOtRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(createdOtRecord.checkInTime),
+                                checkOutTimePH: null,
+                                ...otCheckInMetrics,
+                            },
+                        });
+                    } else {
+                        const fullAtt = await prisma.attendance.findUnique({
+                            where: { id: existingAtt.id },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
+                        });
+
+                        if (fullAtt) {
+                            const otCheckInShift = targetShiftId ? effectiveShift : null;
+                            const otCheckInMetrics = calculateAttendanceMetrics(fullAtt, otCheckInShift, recordOts);
+
+                            attendanceEmitter.emit('new-record', {
+                                type: 'check-in',
+                                record: {
+                                    ...fullAtt,
+                                    checkInTime: log.timestamp,
+                                    checkInDeviceName: fullAtt.checkInDevice?.name || null,
+                                    checkOutDeviceName: fullAtt.checkOutDevice?.name || null,
+                                    checkInTimePH: formatToPhilippineTime(log.timestamp),
+                                    checkOutTimePH: fullAtt.checkOutTime ? formatToPhilippineTime(fullAtt.checkOutTime) : null,
+                                    ...otCheckInMetrics,
+                                },
+                            });
+                        }
+                    }
+
+                    await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                    continue;
+                }
+
+                // Check for an active OT check-out
+                const pendingOtCheckOut = recordOts.find(ot => {
+                    if (!ot.actualStartTime || ot.actualEndTime) return false;
+                    
+                    const otCheckInTime = new Date(ot.actualStartTime);
+                    const otDiffMs = log.timestamp.getTime() - otCheckInTime.getTime();
+                    const otDiffHours = otDiffMs / (1000 * 60 * 60);
+
+                    const [sH, sM] = ot.startTime.split(':').map(Number);
+                    const [eH, eM] = ot.endTime.split(':').map(Number);
+                    let otDurationHours = (eH + eM/60) - (sH + sM/60);
+                    if (otDurationHours < 0) otDurationHours += 24;
+
+                    const effectiveOTMinCheckout = Math.min(otDurationHours / 2, minCheckoutHours);
+                    return otDiffHours >= effectiveOTMinCheckout;
+                });
+
+                if (pendingOtCheckOut) {
+                    await prisma.overtimeRequest.update({
+                        where: { id: pendingOtCheckOut.id },
+                        data: { actualEndTime: log.timestamp }
+                    });
+                    pendingOtCheckOut.actualEndTime = log.timestamp;
+
+                    void audit({
+                        action: 'CHECK_OUT',
+                        entityType: 'OvertimeRequest',
+                        entityId: pendingOtCheckOut.id,
+                        performedBy: log.employeeId,
+                        source: 'device-sync',
+                        details: `Employee biometric OT check-out`
+                    });
+
+                    const existingAtt = await prisma.attendance.findFirst({
+                        where: {
+                            employeeId: log.employeeId,
+                            date: dateOnly,
+                            checkInTime: new Date(pendingOtCheckOut.actualStartTime!)
+                        }
+                    });
+
+                    if (existingAtt) {
+                        targetShiftId = existingAtt.shiftId;
+                    }
+
+                    if (existingAtt) {
+                        const updateData: Record<string, unknown> = {
+                            updatedAt: new Date()
+                        };
+
+                        if (!existingAtt.checkOutTime) {
+                            updateData.checkOutTime = log.timestamp;
+                            updateData.checkOutDeviceId = log.deviceId;
+                            updateData.checkoutSource = 'device';
+
+                            if (existingAtt.status === 'incomplete') {
+                                updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts);
+
+                                if (existingAtt.notes?.includes('No checkout recorded')) {
+                                    updateData.notes = existingAtt.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
+                                }
+                            }
+                        }
+
+                        const updatedOtRecord = await prisma.attendance.update({
+                            where: { id: existingAtt.id },
+                            data: updateData,
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
+                        });
+                        updated++;
+
+                        const otCoShift = targetShiftId ? effectiveShift : null;
+                        const otCoMetrics = calculateAttendanceMetrics(updatedOtRecord, otCoShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-out',
+                            record: {
+                                ...updatedOtRecord,
+                                checkInDeviceName: updatedOtRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: updatedOtRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(updatedOtRecord.checkInTime),
+                                checkOutTimePH: updatedOtRecord.checkOutTime ? formatToPhilippineTime(updatedOtRecord.checkOutTime) : null,
+                                ...otCoMetrics,
+                            },
+                        });
+
+                        await recalculateAndPersistAttendanceMetrics(log.employeeId, dateOnly);
+                    } else {
+                        const otCheckIn = new Date(pendingOtCheckOut.actualStartTime!);
+                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, dateOnly, targetShiftId ? effectiveShift : null, recordOts);
+
+                        const checkMetrics = calculateAttendanceMetrics(
+                            { date: dateOnly, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus },
+                            targetShiftId ? effectiveShift : null,
+                            recordOts
+                        );
+
+                        const createdOtCoRecord = await prisma.attendance.create({
+                            data: {
+                                employeeId: log.employeeId,
+                                date: dateOnly,
+                                shiftId: targetShiftId,
+                                checkInTime: otCheckIn,
+                                checkOutTime: log.timestamp,
+                                status: calculatedStatus,
+                                checkInDeviceId: log.deviceId,
+                                checkOutDeviceId: log.deviceId,
+                                checkoutSource: 'device',
+                                lateMinutes: checkMetrics.lateMinutes,
+                                undertimeMinutes: checkMetrics.undertimeMinutes,
+                                overtimeMinutes: checkMetrics.overtimeMinutes,
+                                totalHours: checkMetrics.totalHours,
+                                isAnomaly: checkMetrics.isAnomaly,
+                                isEarlyOut: checkMetrics.isEarlyOut,
+                                gracePeriodApplied: checkMetrics.gracePeriodApplied
+                            },
+                            include: {
+                                employee: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        Department: { select: { name: true } },
+                                        Branch: { select: { name: true } },
+                                        Shift: true,
+                                    }
+                                },
+                                checkInDevice: { select: { name: true } },
+                                checkOutDevice: { select: { name: true } }
+                            }
+                        });
+                        created++;
+
+                        const otNewCoShift = targetShiftId ? effectiveShift : null;
+                        const otNewCoMetrics = calculateAttendanceMetrics(createdOtCoRecord, otNewCoShift, recordOts);
+
+                        attendanceEmitter.emit('new-record', {
+                            type: 'check-out',
+                            record: {
+                                ...createdOtCoRecord,
+                                checkInDeviceName: createdOtCoRecord.checkInDevice?.name || null,
+                                checkOutDeviceName: createdOtCoRecord.checkOutDevice?.name || null,
+                                checkInTimePH: formatToPhilippineTime(createdOtCoRecord.checkInTime),
+                                checkOutTimePH: createdOtCoRecord.checkOutTime ? formatToPhilippineTime(createdOtCoRecord.checkOutTime) : null,
+                                ...otNewCoMetrics,
+                            },
+                        });
+                    }
+
+                    await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                    continue;
+                }
+            }
+            // ── END UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────
+
             const existingAttendance = await prisma.attendance.findFirst({
                 where: {
                     employeeId: log.employeeId,
                     date: dateOnly,
-                    shiftId: resolvedShift?.id ?? null
+                    shiftId: effectiveShift?.id ?? null
                 }
             });
 
             if (!existingAttendance) {
-                // ── OT-FIRST GATE ─────────────────────────────────────────────────────────
-                // If the shift has already ended (or no shift matched) and there is an
-                // approved OT for today that hasn't been started yet, route this biometric
-                // scan as an OT check-in instead of creating an erroneous shift record.
-                //
-                // Scenario: shift 08:00–12:00, OT 13:00–14:00, scan at 12:32.
-                // Without this guard, the scan would open a new attendance row for the
-                // already-ended shift; with it, the scan becomes the OT actualStartTime.
-                if (recordOts.length > 0) {
-                    const shiftHasEnded = resolvedShift === null || (() => {
-                        const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
-                        const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
-                        return log.timestamp.getTime() > shiftEndMs;
-                    })();
+                // ── POST-SHIFT GUARD ──────────────────────────────────────────────────
+                // If the employee's shift has already ended and there is no approved OT,
+                // skip this scan entirely. This prevents phantom attendance records from
+                // being created when an employee scans the biometric device after their
+                // shift is over (e.g. shift 09:30–10:30, scan at 11:00).
+                // OT scans are already handled by the Unified OT Gate above.
+                if (resolvedShift && recordOts.length === 0) {
+                    const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                    const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
+                    // Handle overnight shifts where endTime < startTime
+                    const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
+                    const shiftStartMs = dateOnly.getTime() + (sH * 60 + sM) * 60 * 1000;
+                    const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
+                        ? shiftEndMs + 24 * 60 * 60 * 1000
+                        : shiftEndMs;
 
-                    if (shiftHasEnded) {
-                        // Convert scan timestamp to PHT minutes-of-day for OT window comparison.
-                        const phtScanMin = (() => {
-                            const pht = new Date(log.timestamp.getTime() + 8 * 60 * 60 * 1000);
-                            return pht.getUTCHours() * 60 + pht.getUTCMinutes();
-                        })();
-
-                        const pendingOt = recordOts.find(ot => {
-                            if (ot.actualStartTime) return false; // already started
-                            const [sH, sM] = ot.startTime.split(':').map(Number);
-                            const otStartMin = sH * 60 + sM;
-                            // Accept the scan if it falls within [otStart - buffer, otStart + buffer].
-                            // This handles employees who arrive slightly early or late for their OT.
-                            return phtScanMin >= otStartMin - bufferMins && phtScanMin <= otStartMin + bufferMins;
-                        });
-
-                        if (pendingOt) {
-                            await prisma.overtimeRequest.update({
-                                where: { id: pendingOt.id },
-                                data: { actualStartTime: log.timestamp }
-                            });
-                            void audit({
-                                action: 'CHECK_IN',
-                                entityType: 'OvertimeRequest',
-                                entityId: pendingOt.id,
-                                performedBy: log.employeeId,
-                                source: 'device-sync',
-                                details: `Employee biometric OT check-in (shift had ended or was not worked)`
-                            });
-                            await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
-                            continue;
-                        }
+                    if (log.timestamp.getTime() > adjustedShiftEndMs) {
+                        await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
+                        continue;
                     }
                 }
-                // ── END OT-FIRST GATE ─────────────────────────────────────────────────────
+                // ── END POST-SHIFT GUARD ──────────────────────────────────────────────
 
-                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift);
+                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, effectiveShift, recordOts);
                 const isLate = calculatedStatus === 'late';
                 const checkInStatus = isLate ? 'late' : 'present';
 
@@ -411,7 +831,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 // undertimeMinutes / totalHours / isEarlyOut will be 0/false until checkout.
                 const checkInMetrics = calculateAttendanceMetrics(
                     { date: dateOnly, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
-                    empShift,
+                    effectiveShift,
                     recordOts
                 );
 
@@ -420,7 +840,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         data: {
                             employeeId: log.employeeId,
                             date: dateOnly,
-                            shiftId: resolvedShift?.id ?? null,
+                            shiftId: effectiveShift?.id ?? null,
                             checkInTime: log.timestamp,
                             status: checkInStatus,
                             checkInDeviceId: log.deviceId,
@@ -459,7 +879,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         metadata: { snapshot: { status: createdRecord.status, checkInTime: createdRecord.checkInTime.toISOString() } }
                     });
 
-                    const shift = createdRecord.employee?.Shift ?? null;
+                    const shift = effectiveShift;
                     const metrics = calculateAttendanceMetrics(createdRecord, shift, recordOts);
 
                     attendanceEmitter.emit('new-record', {
@@ -494,10 +914,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     const diffMs = logTime.getTime() - checkInTime.getTime();
                     const diffHours = diffMs / (1000 * 60 * 60);
 
-                    const shiftDurationHours = resolvedShift 
+                    const shiftDurationHours = effectiveShift 
                         ? (() => {
-                            const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
-                            const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                            const [sH, sM] = effectiveShift.startTime.split(':').map(Number);
+                            const [eH, eM] = effectiveShift.endTime.split(':').map(Number);
                             let duration = (eH + eM/60) - (sH + sM/60);
                             if (duration < 0) duration += 24;
                             return duration;
@@ -513,64 +933,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     if (existingAttendance.checkOutTime) {
                         if (log.timestamp > existingAttendance.checkOutTime) {
                             // OVERTIME BIOMETRIC CHECK-IN LOGIC
-                            if (recordOts && recordOts.length > 0) {
-                                // There is an approved OT for today.
-                                // Instead of stretching the normal shift's checkout time, 
-                                // we route this scan to the OvertimeRequest actual execution fields.
-                                const ot = recordOts[0];
-                                
-                                // If we already have an actualStartTime but no actualEndTime, this is the OT checkout
-                                // If we already have both, we overwrite the actualEndTime
-                                if (!ot.actualStartTime) {
-                                    await prisma.overtimeRequest.update({
-                                        where: { id: ot.id },
-                                        data: { actualStartTime: log.timestamp }
-                                    });
-                                    ot.actualStartTime = log.timestamp;
-                                    void audit({
-                                        action: 'CHECK_IN',
-                                        entityType: 'OvertimeRequest',
-                                        entityId: ot.id,
-                                        performedBy: log.employeeId,
-                                        source: 'device-sync',
-                                        details: `Employee biometric OT check-in`
-                                    });
-                                } else {
-                                    // Minimum checkout gap for OT (cap at half the approved OT duration or global minCheckoutHours)
-                                    const otCheckInTime = new Date(ot.actualStartTime);
-                                    const otDiffMs = log.timestamp.getTime() - otCheckInTime.getTime();
-                                    const otDiffHours = otDiffMs / (1000 * 60 * 60);
 
-                                    const [sH, sM] = ot.startTime.split(':').map(Number);
-                                    const [eH, eM] = ot.endTime.split(':').map(Number);
-                                    let otDurationHours = (eH + eM/60) - (sH + sM/60);
-                                    if (otDurationHours < 0) otDurationHours += 24;
-
-                                    const effectiveOTMinCheckout = Math.min(otDurationHours / 2, minCheckoutHours);
-
-                                    if (otDiffHours < effectiveOTMinCheckout) {
-                                        await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
-                                        continue;
-                                    }
-
-                                    await prisma.overtimeRequest.update({
-                                        where: { id: ot.id },
-                                        data: { actualEndTime: log.timestamp }
-                                    });
-                                    ot.actualEndTime = log.timestamp;
-                                    void audit({
-                                        action: 'CHECK_OUT',
-                                        entityType: 'OvertimeRequest',
-                                        entityId: ot.id,
-                                        performedBy: log.employeeId,
-                                        source: 'device-sync',
-                                        details: `Employee biometric OT check-out`
-                                    });
-                                }
-
-                                await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
-                                continue;
-                            }
 
                             const updateData: Record<string, unknown> = {
                                 checkOutTime: log.timestamp,
@@ -580,8 +943,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             };
 
                             if (existingAttendance.status === 'incomplete') {
-                                const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
+                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
 
                                 if (existingAttendance.notes?.includes('No checkout recorded')) {
                                     updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -589,11 +951,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             }
 
                             // Persist checkout metrics
-                            const coShift1 = resolvedShift ?? log.employee?.Shift ?? null;
                             const coStatus1 = (updateData.status as string) ?? existingAttendance.status;
                             const coMetrics1 = calculateAttendanceMetrics(
                                 { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus1 },
-                                coShift1,
+                                effectiveShift,
                                 recordOts
                             );
                             updateData.lateMinutes = coMetrics1.lateMinutes;
@@ -634,7 +995,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 metadata: { changes: [{ field: 'checkOutTime', oldValue: existingAttendance.checkOutTime ? existingAttendance.checkOutTime.toISOString() : null, newValue: log.timestamp.toISOString() }] }
                             });
 
-                            const shift = updatedRecord.employee?.Shift ?? null;
+                            const shift = effectiveShift;
                             const metrics = calculateAttendanceMetrics(updatedRecord, shift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
@@ -658,8 +1019,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         };
 
                         if (existingAttendance.status === 'incomplete') {
-                            const empShift = resolvedShift ?? log.employee?.Shift ?? null;
-                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, empShift);
+                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
 
                             if (existingAttendance.notes?.includes('No checkout recorded')) {
                                 updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -667,11 +1027,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         }
 
                         // Persist checkout metrics
-                        const coShift2 = resolvedShift ?? log.employee?.Shift ?? null;
                         const coStatus2 = (updateData.status as string) ?? existingAttendance.status;
                         const coMetrics2 = calculateAttendanceMetrics(
                             { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus2 },
-                            coShift2,
+                            effectiveShift,
                             recordOts
                         );
                         updateData.lateMinutes = coMetrics2.lateMinutes;
@@ -712,7 +1071,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             metadata: { changes: [{ field: 'checkOutTime', oldValue: null, newValue: log.timestamp.toISOString() }] }
                         });
 
-                        const shift2 = updatedRecord2.employee?.Shift ?? null;
+                        const shift2 = effectiveShift;
                         const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2, recordOts);
 
                         attendanceEmitter.emit('new-record', {

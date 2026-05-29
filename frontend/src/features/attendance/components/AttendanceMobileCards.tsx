@@ -194,50 +194,61 @@ export function AttendanceMobileCards({
                     const colorClass = isComplete
                       ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                       : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+                    const isOtApproved = (sr.approvedOts && sr.approvedOts.length > 0) || (row.approvedOts && row.approvedOts.length > 0);
+                    const label = sr.shiftCode ?? sr.shiftName ?? (isOtApproved ? 'OT Approved' : 'No Shift');
                     return (
                       <div key={idx} className="flex flex-col">
-                        {onShiftClick && (sr.shiftCode || sr.shiftName) ? (
+                        {onShiftClick && (sr.shiftCode || sr.shiftName || isOtApproved) ? (
                           <button 
-                            onClick={() => onShiftClick(sr.shiftName || sr.shiftCode || '', row)}
+                            onClick={() => onShiftClick(sr.shiftName || sr.shiftCode || 'OT Approved', row)}
                             className={`group/shift text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
-                            title="Click to filter and edit"
+                            title={isOtApproved && !sr.shiftCode && !sr.shiftName ? 'Click to go to Manage OT → Live Monitoring' : 'Click to filter and edit'}
                           >
-                            <span className="group-hover/shift:hidden">{sr.shiftCode ?? sr.shiftName ?? 'No Shift'}</span>
-                            <span className="hidden group-hover/shift:inline">{sr.shiftName ?? sr.shiftCode ?? 'No Shift'}</span>
+                            <span className="group-hover/shift:hidden">{label}</span>
+                            <span className="hidden group-hover/shift:inline">{sr.shiftName ?? sr.shiftCode ?? (isOtApproved ? 'OT Approved' : 'No Shift')}</span>
                           </button>
                         ) : (
                           <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`} title={sr.shiftName || sr.shiftCode || undefined}>
-                            {sr.shiftCode ?? sr.shiftName ?? 'No Shift'}
+                            {label}
                           </span>
                         )}
                       </div>
                     )
                   })}
                 </div>
-              ) : (row.shiftName || row.shiftCode) ? (() => {
-                const isComplete = row.checkIn !== '—' && row.checkOut !== '—' && row.checkoutSource !== 'auto_closed';
-                const colorClass = isComplete
-                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20'
-                  : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20';
-                
+              ) : (() => {
+                const isOtApproved = row.approvedOts && row.approvedOts.length > 0;
+                if (row.shiftName || row.shiftCode || isOtApproved) {
+                  const isComplete = row.checkIn !== '—' && row.checkOut !== '—' && row.checkoutSource !== 'auto_closed';
+                  const colorClass = isComplete
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20'
+                    : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20';
+                  const label = row.shiftCode ?? row.shiftName ?? 'OT Approved';
+                  const hoverLabel = row.shiftName ?? row.shiftCode ?? 'OT Approved';
+                  
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      {onShiftClick && (row.shiftName || row.shiftCode || isOtApproved) ? (
+                        <button 
+                          onClick={() => onShiftClick(row.shiftName || row.shiftCode || 'OT Approved', row)}
+                          className={`group/shift text-[10px] font-black px-2.5 py-0.5 rounded-md border uppercase tracking-widest w-fit transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
+                          title={isOtApproved && !row.shiftName && !row.shiftCode ? 'Click to go to Manage OT → Live Monitoring' : 'Click to filter and edit'}
+                        >
+                          <span className="group-hover/shift:hidden">{label}</span>
+                          <span className="hidden group-hover/shift:inline">{hoverLabel}</span>
+                        </button>
+                      ) : (
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`} title={row.shiftName || row.shiftCode || undefined}>
+                          {label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
                 return (
-                <div className="flex flex-col gap-0.5">
-                  {onShiftClick ? (
-                    <button 
-                      onClick={() => onShiftClick(row.shiftName || row.shiftCode || '', row)}
-                      className={`group/shift text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit transition-all hover:scale-105 active:scale-95 cursor-pointer ${colorClass}`}
-                      title="Click to filter and edit"
-                    >
-                      <span className="group-hover/shift:hidden">{row.shiftCode ?? row.shiftName}</span>
-                      <span className="hidden group-hover/shift:inline">{row.shiftName ?? row.shiftCode}</span>
-                    </button>
-                  ) : (
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest w-fit ${colorClass}`} title={row.shiftName || row.shiftCode || undefined}>{row.shiftCode ?? row.shiftName}</span>
-                  )}
-                </div>
-              )})() : (
-                <span className="text-[10px] text-muted-foreground italic font-medium">No shift</span>
-              )}
+                  <span className="text-[10px] text-muted-foreground italic font-medium">No shift</span>
+                );
+              })()}
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-1">Reg Hrs</p>

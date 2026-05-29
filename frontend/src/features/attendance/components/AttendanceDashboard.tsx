@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { Suspense } from 'react'
+import { useRouter } from 'next/navigation'
 import { Fingerprint, Calendar as CalendarIcon, Download, AlertCircle, Clock } from 'lucide-react'
 import Link from 'next/link'
 import ToastContainer from '@/components/ui/ToastContainer'
@@ -44,8 +45,14 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
     getTodayDate,
   } = useAttendanceDashboard(role)
 
+  const router = useRouter()
+
   const handleShiftQuickNav = (shiftName: string, _row: any) => {
-    setShiftFilter(shiftName)
+    if (shiftName === 'OT Approved') {
+      router.push(role === 'admin' ? '/overtime?tab=monitoring' : '/hr/overtime?tab=monitoring')
+    } else {
+      setShiftFilter(shiftName)
+    }
   }
 
   return (
