@@ -25,6 +25,7 @@ export function useEmployeeDashboard() {
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
   const [todayRecords, setTodayRecords] = useState<PortalAttendanceRecord[]>([])
+  const [todayApprovedOts, setTodayApprovedOts] = useState<any[]>([])
   const [weeklyStats, setWeeklyStats] = useState({ present: 0, late: 0, totalHours: 0 })
 
   const loadData = useCallback(async () => {
@@ -40,6 +41,7 @@ export function useEmployeeDashboard() {
       const attData = await employeeSelfApi.getAttendance(todayStr, todayStr)
       if (attData.success && attData.data) {
         setTodayRecords((attData.data as unknown as PortalAttendanceRecord[]) || [])
+        setTodayApprovedOts((attData as any).approvedOts || [])
       }
 
       // Fetch Weekly Attendance
@@ -117,5 +119,5 @@ export function useEmployeeDashboard() {
     return () => clearInterval(t)
   }, [loadData])
 
-  return { loading, userName, todayRecords, weeklyStats }
+  return { loading, userName, todayRecords, weeklyStats, todayApprovedOts }
 }

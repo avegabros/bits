@@ -37,6 +37,8 @@ export interface PortalAttendanceRecord {
   gracePeriodApplied?: boolean // Found in detailed view
   isEdited?: boolean // True when checkin/checkout was manually adjusted
   approvedOts?: any[]
+  minCheckoutTime?: string | null
+  shift?: { name: string; shiftCode: string; startTime: string; endTime: string } | null
 }
 
 export interface PortalShiftData {
