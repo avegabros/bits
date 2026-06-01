@@ -26,7 +26,7 @@ import profilePictureRoutes from './modules/profile-picture/profilePicture.route
 import path from 'path';
 import { correlationId } from './shared/middleware/correlationId.middleware';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 

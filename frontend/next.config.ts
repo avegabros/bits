@@ -1,13 +1,18 @@
 import type { NextConfig } from "next";
+import dotenv from "dotenv";
+import path from "path";
+
+// Load environment variables from project root .env
+dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 
 // BACKEND_URL:
-//   LOCAL  → set in frontend/.env.local  (e.g. http://localhost:3001)
-//   DOCKER → set in docker-compose.yml   (e.g. http://backend:3001)
+//   LOCAL  → set in root-level .env  (e.g. http://localhost:3001)
+//   DOCKER → set in docker-compose.yml (e.g. http://backend:3001)
 const backendUrl = process.env.BACKEND_URL;
 if (!backendUrl) {
   throw new Error(
     "[next.config] BACKEND_URL is not set.\n" +
-    "  LOCAL:  Add BACKEND_URL=http://localhost:3001 to frontend/.env.local\n" +
+    "  LOCAL:  Add BACKEND_URL=http://localhost:3001 to root-level .env\n" +
     "  DOCKER: It is already set in docker-compose.yml"
   );
 }

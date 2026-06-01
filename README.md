@@ -17,10 +17,10 @@ A modern full-stack application with a Next.js frontend and an Express.js backen
 
 ## Quick Start (Docker)
 
-1. Copy any necessary env files for services (backend, DB):
+1. Copy the unified .env.example file to .env at the project root:
 
 ```powershell
-cp backend/.env.example backend/.env
+cp .env.example .env
 ```
 
 2. Build and run with Docker Compose:
@@ -58,7 +58,6 @@ Backend (example):
 
 ```bash
 cd backend
-cp .env.example .env
 npm install
 npm run dev
 ```

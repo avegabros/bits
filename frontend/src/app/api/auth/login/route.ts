@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// BACKEND_URL must be set in .env.local (local) or docker-compose.yml (Docker).
+// BACKEND_URL must be set in root-level .env (local) or docker-compose.yml (Docker).
 const backendUrl = process.env.BACKEND_URL;
 if (!backendUrl) {
     throw new Error(
         '[STARTUP] BACKEND_URL is not set.\n' +
-        '  LOCAL:  Add BACKEND_URL=http://localhost:3001 to frontend/.env.local\n' +
+        '  LOCAL:  Add BACKEND_URL=http://localhost:3001 to root-level .env\n' +
         '  DOCKER: Set BACKEND_URL in docker-compose.yml (already configured).'
     );
 }
