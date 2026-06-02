@@ -108,8 +108,7 @@ export function LoginForm({ loginState }: LoginFormProps) {
       </p>
 
       <a
-        href="/BITS-User-Manual.pdf"
-        download="BITS-User-Manual.pdf"
+        href="/api/download-manual"
         className="mt-4 block text-xs text-center text-muted-foreground underline hover:text-primary transition-colors"
       >
         Download User Manual

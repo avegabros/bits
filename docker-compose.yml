@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OPTIONAL: Create a .env file in this directory to override any of the
-# default values below. Copy from backend/.env.example to get started.
+# OPTIONAL: Create/use the .env file in this root directory to override any of the
+# default values below. Copy from .env.example at the root to get started.
 #
 # The ${VAR:-default} syntax means:
 #   ✅ If VAR is set in .env → use that value (secure)
