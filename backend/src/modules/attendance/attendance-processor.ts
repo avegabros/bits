@@ -231,6 +231,108 @@ export async function resolveShiftForTimestamp(
         return workDays.includes(currentDayName);
     });
 
+    // ── Tier 1.5: CLOSE-BEFORE-OPEN RULE ─────────────────────────────
+    // If any assigned shift has an open record (checked in, no checkout),
+    // and this scan is sufficiently far from the check-in time to be a
+    // valid checkout, route this scan to close that record BEFORE
+    // considering it as a new check-in for any other shift.
+    if (shiftsNeedingCheckout.length > 0) {
+        // Fetch the actual check-in times for the open records
+        const openRecords = await prisma.attendance.findMany({
+            where: {
+                employeeId,
+                date: dateOnly,
+                checkOutTime: null,
+                shiftId: { in: shiftsNeedingCheckout.map(a => a.shift.id) }
+            },
+            orderBy: { checkInTime: 'asc' }
+        });
+
+        const minCheckoutMins = syncConfig?.globalMinCheckoutMinutes ?? 120;
+
+        for (const openRecord of openRecords) {
+            const shiftAssignment = shiftsNeedingCheckout.find(
+                a => a.shift.id === openRecord.shiftId
+            );
+            if (!shiftAssignment) continue;
+
+            const checkInTime = new Date(openRecord.checkInTime);
+            const diffMs = normalizedTimestamp.getTime() - checkInTime.getTime();
+            const diffHours = diffMs / (1000 * 60 * 60);
+
+            // Calculate effective min checkout for this shift
+            const shift = shiftAssignment.shift;
+            const [sH, sM] = shift.startTime.split(':').map(Number);
+            const [eH, eM] = shift.endTime.split(':').map(Number);
+            let shiftDurationHours = (eH + eM/60) - (sH + sM/60);
+            if (shiftDurationHours < 0) shiftDurationHours += 24;
+            const effectiveMinCheckout = Math.min(
+                shiftDurationHours / 2,
+                minCheckoutMins / 60
+            );
+
+            if (diffHours >= effectiveMinCheckout) {
+                // Exception (Q3): If the scan falls cleanly inside a LATER shift's start window,
+                // and there is a sufficient gap between the open shift and the later shift,
+                // we treat it as a new check-in for the later shift.
+                const candidateShifts = dayMatchingShifts.length > 0 ? dayMatchingShifts : filteredAssignments;
+                const minGapMins = syncConfig?.minShiftGapMinutes ?? 30;
+                
+                let transitionToLaterShift: Shift | null = null;
+                for (const { shift: candidateShift } of candidateShifts) {
+                    if (candidateShift.id === shift.id) continue;
+                    // Ensure this candidate shift does not have a record yet
+                    if (recordMap.has(candidateShift.id)) continue;
+
+                    const [csH, csM] = candidateShift.startTime.split(':').map(Number);
+                    const candidateStart = new Date(dateOnly.getTime() + (csH * 60 + csM) * 60 * 1000);
+                    
+                    const [oeH, oeM] = shift.endTime.split(':').map(Number);
+                    const openShiftEnd = new Date(dateOnly.getTime() + (oeH * 60 + oeM) * 60 * 1000);
+                    const [osH, osM] = shift.startTime.split(':').map(Number);
+                    const openShiftStart = new Date(dateOnly.getTime() + (osH * 60 + osM) * 60 * 1000);
+                    const adjustedOpenShiftEnd = openShiftEnd <= openShiftStart
+                        ? new Date(openShiftEnd.getTime() + 24 * 60 * 60 * 1000)
+                        : openShiftEnd;
+
+                    const [csEndH, csEndM] = candidateShift.endTime.split(':').map(Number);
+                    const candidateEnd = new Date(dateOnly.getTime() + (csEndH * 60 + csEndM) * 60 * 1000);
+                    const adjustedCandidateEnd = candidateEnd <= candidateStart
+                        ? new Date(candidateEnd.getTime() + 24 * 60 * 60 * 1000)
+                        : candidateEnd;
+
+                    const shiftLengthMs = adjustedCandidateEnd.getTime() - candidateStart.getTime();
+                    const maxCheckInDelayMs = Math.min(bufferMs, shiftLengthMs / 2);
+
+                    const checkInWindowStart = new Date(candidateStart.getTime() - bufferMs);
+                    const checkInWindowEnd = new Date(candidateStart.getTime() + maxCheckInDelayMs);
+
+                    // Is the candidate shift later than the open shift?
+                    if (candidateStart >= adjustedOpenShiftEnd) {
+                        // Is this scan cleanly within the candidate shift's check-in window?
+                        if (normalizedTimestamp >= checkInWindowStart && normalizedTimestamp <= checkInWindowEnd) {
+                            // Check the gap between the open shift's end and candidate shift's start
+                            const gapMs = candidateStart.getTime() - adjustedOpenShiftEnd.getTime();
+                            const gapMins = gapMs / (1000 * 60);
+
+                            if (gapMins >= minGapMins) {
+                                transitionToLaterShift = candidateShift;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (transitionToLaterShift) {
+                    return { shift: transitionToLaterShift, isNewCheckin: true };
+                }
+
+                // This scan is a valid checkout for this open shift
+                return { shift: shift, isNewCheckin: false };
+            }
+        }
+    }
+
     // Tier 2: Window-Only Match in Day-Matching (Scheduled) Shifts
     if (dayMatchingShifts.length > 0) {
         const match = tryMatch(dayMatchingShifts, false);
