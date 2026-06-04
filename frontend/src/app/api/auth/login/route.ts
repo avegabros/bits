@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
         const cookieBase = {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: process.env.COOKIE_SECURE !== 'false',
             sameSite: 'lax' as const,
             path: '/',
         }
