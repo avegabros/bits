@@ -177,7 +177,7 @@ The portal will be available at `http://localhost:3000`.
 
 | Symptom | Fix |
 | :--- | :--- |
-| API calls return `ECONNREFUSED` | Verify the backend is running and `BACKEND_URL` in `.env` points to the correct host/port. |
+| API calls return `ECONNREFUSED` | Verify backend is running. For Docker setups, ensure `BACKEND_URL` is set to `http://backend:3001` (either dynamically at runtime in dev compose, or at build-time in the Dockerfile for production builds). |
 | Blank page after login | Check browser console for hydration errors; ensure `NODE_ENV` is correctly set. |
 | `Module not found` on install | Delete `node_modules` and `.next`, then re-run `npm install`. |
 | Hot reload not working in Docker | Ensure `WATCHPACK_POLLING=true` and `CHOKIDAR_USEPOLLING=true` are set in `docker-compose.yml`. |

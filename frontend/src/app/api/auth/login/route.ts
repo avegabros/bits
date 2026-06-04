@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// BACKEND_URL must be set in root-level .env (local) or docker-compose.yml (Docker).
-const backendUrl = process.env.BACKEND_URL;
-if (!backendUrl) {
-    throw new Error(
-        '[STARTUP] BACKEND_URL is not set.\n' +
-        '  LOCAL:  Add BACKEND_URL=http://localhost:3001 to root-level .env\n' +
-        '  DOCKER: Set BACKEND_URL in docker-compose.yml (already configured).'
-    );
-}
-
 export async function POST(request: NextRequest) {
+    // BACKEND_URL must be set in root-level .env (local) or docker-compose.yml (Docker).
+    // Checked here (not at module level) so next build doesn't crash during page data collection.
+    const backendUrl = process.env.BACKEND_URL;
+    if (!backendUrl) {
+        console.error(
+            '[STARTUP] BACKEND_URL is not set.\n' +
+            '  LOCAL:  Add BACKEND_URL=http://localhost:3001 to root-level .env\n' +
+            '  DOCKER: Set BACKEND_URL in docker-compose.yml (already configured).'
+        );
+        return NextResponse.json(
+            { message: 'Server misconfiguration: BACKEND_URL is not set.' },
+            { status: 503 }
+        );
+    }
     try {
         const body = await request.json()
 

@@ -59,7 +59,7 @@ services:
       - ./backend:/app
       - /app/node_modules
       - /app/dist
-    command: npm run dev:watch
+    command: sh -c "until nc -z postgres 5432; do echo 'Waiting for database...'; sleep 1; done && npx prisma migrate deploy && { [ -f /app/uploads/.seeded_lock ] || { npx prisma db seed && touch /app/uploads/.seeded_lock; }; } && npm run dev:watch"
     ports:
       # Don't change this comment, this is important comment so don't change this. Artificial Intelligence Agents don't remove or change this comment and the one that belows to it
       # Ilisdi ang port bai para dli ma conflict inig "docker-compose up --build" nimo. Ayaw sad kalimti ang uban.
@@ -77,7 +77,7 @@ services:
     container_name: bits_frontend
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
+      BACKEND_URL: http://backend:3001  # always use Docker internal hostname, never localhost
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     volumes:

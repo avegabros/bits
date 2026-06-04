@@ -19,13 +19,11 @@ export function AuthLayout({
 
   return (
     <div className="relative min-h-screen w-full overflow-y-auto">
-      {/* Background Image with adjustable opacity */}
+      {/* Background gradient */}
       <div
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: 'url(/placeholder.svg?height=1080&width=1920&query=city_skyline_background)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
           opacity: 0.3,
         }}
       />

@@ -41,7 +41,7 @@ export function WeeklyAttendanceChart({ weeklyData }: WeeklyAttendanceChartProps
                 <span className="text-xs text-slate-500 font-bold">This Week</span>
             </div>
             <div className="flex-1 min-h-0 p-3">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                     <BarChart data={weeklyData} barGap={2} barCategoryGap="20%">
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" vertical={false} />
                         <XAxis dataKey="day" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-chart-axis-primary)' }} axisLine={false} tickLine={false} />

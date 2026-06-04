@@ -124,17 +124,38 @@ bits/
 
 1. **Copy the environment template:**
 
-   ```powershell
+   ```bash
+   # Windows Command Prompt (cmd.exe):
+   copy .env.example .env
+
+   # PowerShell / Linux / macOS:
    cp .env.example .env
    ```
 
-2. **Build and run:**
+2. **Configure environment variables for Docker:**
 
-   ```bash
-   docker-compose up --build
+   Open the newly created `.env` file at the root of the project and update the `FRONTEND_URL` to match the mapped Docker host port (`3013`):
+   ```env
+   FRONTEND_URL=http://localhost:3013
    ```
 
-3. **Access the application:**
+3. **Choose your running mode:**
+
+   * **Option A: Development Mode (Hot-Reloading)**
+     Best for active coding. Uses bind mounts so code changes are reflected in real time:
+     ```bash
+     docker-compose up --build
+     ```
+
+   * **Option B: Production / Deployment Mode**
+     Best for staging, deployment, and testing. Code is baked into the container images (no bind mounts):
+     ```bash
+     docker compose -f docker-compose.prod.yml up --build
+     ```
+
+4. **Access the application:**
+
+   Once the containers are running (in either mode), access the services at:
 
    | Service  | URL                    |
    | -------- | ---------------------- |
@@ -142,42 +163,75 @@ bits/
    | Backend  | http://localhost:4013   |
    | Postgres | `localhost:5013`       |
 
-### Production Simulation
-
-```bash
-docker compose -f docker-compose.prod.yml up --build
-```
-
-No bind mounts — code is baked into Docker images. Upload volumes persist across rebuilds.
-
 ### Local Development (No Docker)
+
+Because the configuration `.env` file resides at the project root, running Prisma CLI commands directly inside the `backend` folder will fail with `Environment variable not found: DATABASE_URL` errors. 
+
+Follow these steps to set up and run the services locally:
 
 **Backend:**
 
-```bash
-cd backend
-npm install
-# Set DATABASE_URL in root .env pointing to your local PostgreSQL
-npx prisma migrate deploy    # apply migrations
-npx prisma generate          # generate Prisma client
-npm run seed                 # seed initial data
-npm run dev                  # start dev server (ts-node)
-npm run dev:watch            # start with hot reload (nodemon)
-```
+1. **Install dependencies:**
+   ```bash
+   cd backend
+   npm install
+   ```
+
+2. **Configure environment:**
+   Ensure you have a local PostgreSQL instance running. Create and configure your `.env` file at the **root** directory of the project (`bits/.env`) with your database credentials:
+   ```env
+   DATABASE_URL=postgresql://postgres:root@127.0.0.1:5432/db_bits
+   ```
+
+3. **Run database migrations:**
+   Since Prisma needs to read `DATABASE_URL` from `.env`, you can either run migrations from the root directory or copy the `.env` file into the backend folder:
+
+   * **Option A: Run from the project root (Recommended)**
+     Keep a single `.env` at the root and point Prisma to the backend schema:
+     ```bash
+     # Run from the project root:
+     npx --prefix backend prisma migrate dev --schema=backend/prisma/schema.prisma
+     ```
+
+   * **Option B: Copy `.env` to the backend directory**
+     ```bash
+     # From the backend/ directory:
+     copy ..\.env .env     # Windows CMD
+     # or cp ../.env .env  # macOS/Linux
+     
+     npx prisma migrate dev
+     ```
+
+4. **Seed database & start the backend:**
+   Once migrations are applied, the backend server and seeder will automatically resolve the root `.env` file:
+   ```bash
+   # From the backend/ directory:
+   npm run seed          # Seed default admin/HR accounts & configuration
+   npm run dev:watch     # Start the Express API server with hot-reload (nodemon)
+   ```
 
 **Frontend:**
 
 ```bash
 cd frontend
 npm install
-npm run dev                  # Next.js dev server on port 3000
+npm run dev              # Next.js dev server on port 3000 (automatically resolves root .env)
 ```
 
 
 ## Build Notes & Troubleshooting
 
-- If `npm install` fails with `No matching version found for next@...`, update `frontend/package.json` to a valid Next.js version.
-- The frontend Dockerfile expects the Next.js standalone build output — ensure `next.config.ts` contains `output: "standalone"` for production builds.
-- If the Next.js build detects the wrong workspace root (warning about multiple lockfiles), run build commands from inside the `frontend/` folder or remove extra lockfiles.
-- The backend uses `patch-package` — patches in `backend/patches/` are applied automatically via `postinstall`.
-- Timezone is set to `Asia/Manila` in Docker containers.
+- **If `npm install` fails with `No matching version found for next@...`**: Update `frontend/package.json` to a valid Next.js version.
+- **The frontend Dockerfile expects Next.js standalone build output**: Ensure `next.config.ts` contains `output: "standalone"` for production builds.
+- **If the Next.js build detects the wrong workspace root**: Run build commands from inside the `frontend/` folder or remove extra lockfiles.
+- **The backend uses `patch-package`**: Patches in `backend/patches/` are applied automatically via `postinstall`.
+- **Timezone settings**: Timezone is set to `Asia/Manila` in Docker containers.
+- **Database authentication failures / `role "..." does not exist`**:
+  * **Cause:** PostgreSQL only runs the initialization script (which sets up users and databases) on a **fresh, empty volume**. If you run the stack once and later change `DB_USER` in `.env`, Postgres will skip initialization and keep the old user (e.g. `root`), but the backend will try to connect with the new one.
+  * **Fix:** Either make sure `DB_USER` in `.env` matches the user the database was first created with, or delete the old docker volume and start fresh: `docker volume rm project_postgres_data`.
+- **API CORS errors (Blocked requests / Blank page on login)**:
+  * **Cause:** The backend CORS allowed origin must match the browser's address bar exactly.
+  * **Fix:** If accessing the app via Docker, set `FRONTEND_URL=http://localhost:3013` in `.env`. If running locally without Docker, set `FRONTEND_URL=http://localhost:3000`.
+- **Frontend failed to proxy / `ECONNREFUSED` in Docker**:
+  * **Cause:** Next.js bakes path rewrites into the static routes manifest at build-time.
+  * **Fix:** The frontend Dockerfile has been configured to bake in the correct internal hostname (`ENV BACKEND_URL=http://backend:3001`). If you ever modify your Docker Compose services to rename the backend service, update the build-time env in the `frontend/Dockerfile` accordingly.

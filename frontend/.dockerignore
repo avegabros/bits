@@ -1,3 +1,7 @@
 # frontend/.dockerignore
 .env
 .env.local
+node_modules
+.next
+test-results
+*.tsbuildinfo
