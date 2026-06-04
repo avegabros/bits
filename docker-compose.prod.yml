@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: bits_backend
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       DATABASE_URL: postgresql://${DB_USER:-root}:${DB_PASSWORD:-root}@postgres:5432/${DB_NAME:-db_bits}
       DB_HOST: postgres
@@ -53,10 +53,10 @@ services:
       - "4013:3001"
     depends_on:
       postgres:
-        condition: service_healthy   # 👈 waits for pg_isready before starting
+        condition: service_healthy   # waits for pg_isready before starting
     networks:
       - bits_network
-    restart: unless-stopped          # 👈 auto-recover on crash
+    restart: unless-stopped          # auto-recover on crash
 
   frontend:
     build:
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
     container_name: bits_frontend
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       BACKEND_URL: http://backend:3001  # always use Docker internal hostname, never localhost
     ports:
       - "3013:3000"
@@ -73,7 +73,7 @@ services:
         condition: service_started   # frontend just needs backend container up
     networks:
       - bits_network
-    restart: unless-stopped          # 👈 auto-recover on crash
+    restart: unless-stopped          # auto-recover on crash
 
 volumes:
   postgres_data:
