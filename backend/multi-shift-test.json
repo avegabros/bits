@@ -8,9 +8,9 @@
     {
       "shiftCode": "S_MORN",
       "name": "Morning Shift (9-12)",
-      "startTime": "09:00",
+      "startTime": "8:00",
       "endTime": "12:00",
-      "graceMinutes": 15,
+      "graceMinutes": 30,
       "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       "sortOrder": 1,
       "isPrimary": false
@@ -18,9 +18,9 @@
     {
       "shiftCode": "S_AFT",
       "name": "Afternoon Shift (14-16)",
-      "startTime": "12:00",
-      "endTime": "16:00",
-      "graceMinutes": 15,
+      "startTime": "13:00",
+      "endTime": "17:00",
+      "graceMinutes": 0,
       "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       "sortOrder": 2,
       "isPrimary": true
@@ -28,20 +28,21 @@
   ],
   "overtimes": [
         {
-      "startTime": "16:30",
-      "endTime": "18:00",
+      "startTime": "18:30",
+      "endTime": "20:00",
       "status": "APPROVED",
       "reason": "Simulated Overtime Work"
     }
   ],
   "punches": [
-    { "timestamp": "2026-06-03T12:12:00+08:00"},
-    { "timestamp": "2026-06-03T16:35:00+08:00"}
+    { "timestamp": "2026-06-03T08:00:00+08:00"},
+    { "timestamp": "2026-06-03T13:00:00+08:00"},
+    { "timestamp": "2026-06-03T13:11:00+08:00"}
   ],
   "syncConfigOverrides": {
     "globalMinCheckoutMinutes": 120,
     "minShiftGapMinutes": 30,
-    "shiftBufferMinutes": 15
+    "shiftBufferMinutes": 120
   },
   "simulationMode": "sequential"
 }

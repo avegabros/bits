@@ -224,79 +224,14 @@ async function tryCloseOpenRecord(
         );
 
         if (diffHours >= effectiveMinCheckout) {
-            // Exception (Q3): If the scan falls cleanly inside a LATER shift's start window,
-            // and there is a sufficient gap between the open shift and the later shift,
-            // we treat it as a new check-in for the later shift.
-            const candidateShifts = dayMatchingShifts.length > 0 ? dayMatchingShifts : filteredAssignments;
-            const minGapMins = syncConfig?.minShiftGapMinutes ?? 30;
-
-            let transitionToLaterShift: Shift | null = null;
-            for (const { shift: candidateShift } of candidateShifts) {
-                if (candidateShift.id === shift.id) continue;
-                // Ensure this candidate shift does not have a record yet
-                if (recordMap.has(candidateShift.id)) continue;
-
-                const [csH, csM] = candidateShift.startTime.split(':').map(Number);
-                const candidateStart = new Date(dateOnly.getTime() + (csH * 60 + csM) * 60 * 1000);
-
-                const [oeH, oeM] = shift.endTime.split(':').map(Number);
-                const openShiftEnd = new Date(dateOnly.getTime() + (oeH * 60 + oeM) * 60 * 1000);
-                const [osH, osM] = shift.startTime.split(':').map(Number);
-                const openShiftStart = new Date(dateOnly.getTime() + (osH * 60 + osM) * 60 * 1000);
-                const adjustedOpenShiftEnd = openShiftEnd <= openShiftStart
-                    ? new Date(openShiftEnd.getTime() + 24 * 60 * 60 * 1000)
-                    : openShiftEnd;
-
-                const [csEndH, csEndM] = candidateShift.endTime.split(':').map(Number);
-                const candidateEnd = new Date(dateOnly.getTime() + (csEndH * 60 + csEndM) * 60 * 1000);
-                const adjustedCandidateEnd = candidateEnd <= candidateStart
-                    ? new Date(candidateEnd.getTime() + 24 * 60 * 60 * 1000)
-                    : candidateEnd;
-
-                const shiftLengthMs = adjustedCandidateEnd.getTime() - candidateStart.getTime();
-                const maxCheckInDelayMs = Math.min(bufferMs, shiftLengthMs / 2);
-
-                const checkInWindowStart = new Date(candidateStart.getTime() - bufferMs);
-                const checkInWindowEnd = new Date(candidateStart.getTime() + maxCheckInDelayMs);
-
-                // Is the candidate shift later than the open shift?
-                if (candidateStart >= adjustedOpenShiftEnd) {
-                    // Is this scan cleanly within the candidate shift's check-in window?
-                    if (normalizedTimestamp >= checkInWindowStart && normalizedTimestamp <= checkInWindowEnd) {
-                        // Check the gap between the open shift's end and candidate shift's start
-                        const gapMs = candidateStart.getTime() - adjustedOpenShiftEnd.getTime();
-                        const gapMins = gapMs / (1000 * 60);
-
-                        if (gapMins >= minGapMins) {
-                            // ── Q3 CHECKOUT-WINDOW GUARD ─────────────────────────────────────
-                            // Only transition to the later shift if the punch is also OUTSIDE
-                            // the open shift's checkout buffer window. When the punch still
-                            // falls inside that window the employee could simply be checking
-                            // out of the open shift; prefer closing the open record rather
-                            // than starting a new check-in for the candidate shift.
-                            //
-                            // Example: regular 08:00-10:00, OT 10:30-12:00, buffer=120 min.
-                            //   Checkout window end = 10:00 + 2 h = 12:00.
-                            //   A punch at 10:31 is still inside that window → do NOT
-                            //   transition; close the regular shift instead.
-                            const openShiftCheckoutWindowEnd = new Date(
-                                adjustedOpenShiftEnd.getTime() + bufferMs
-                            );
-                            if (normalizedTimestamp > openShiftCheckoutWindowEnd) {
-                                transitionToLaterShift = candidateShift;
-                                break;
-                            }
-                            // ── END Q3 CHECKOUT-WINDOW GUARD ─────────────────────────────────
-                        }
-                    }
-                }
-            }
-
-            if (transitionToLaterShift) {
-                return { shift: transitionToLaterShift, isNewCheckin: true };
-            }
-
-            // This scan is a valid checkout for this open shift
+            // ── CLOSE-FIRST RULE ─────────────────────────────────────────────
+            // If an employee has an open (unclosed) shift and enough time has
+            // passed since check-in, always close it. This is predictable and
+            // avoids buffer-window-based guessing about whether the punch
+            // belongs to a later shift.  Employees who genuinely need to start
+            // a new shift without checking out of the previous one should use
+            // a manual adjustment.
+            // ── END CLOSE-FIRST RULE ─────────────────────────────────────────
             return { shift: shift, isNewCheckin: false };
         }
     }
