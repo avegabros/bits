@@ -6,8 +6,8 @@ A full-stack attendance management platform with biometric device integration, r
 
 | Layer          | Technology                                                     |
 | -------------- | -------------------------------------------------------------- |
-| **Frontend**   | Next.js 16, React 19, TypeScript, Tailwind CSS 4    |
-| **Backend**    | Express.js 5, TypeScript, Prisma ORM, Zod validation          |
+| **Frontend**   | Next.js 16, React 19, TypeScript, Tailwind CSS 4               |
+| **Backend**    | Express.js 5, TypeScript, Prisma ORM, Zod validation           |
 | **Database**   | PostgreSQL 15                                                  |
 | **Auth**       | JWT (access + refresh tokens), bcrypt password hashing         |
 | **Biometrics** | ZKTeco device integration via zklib-js / node-zklib            |
@@ -108,7 +108,8 @@ bits/
 │
 ├── docker-compose.yml           # Development (bind mounts, hot reload)
 ├── docker-compose.prod.yml      # Production simulation (baked images)
-├── .env.example                 # Environment variable template
+├── .env.local.example           # Env template for local (non-Docker) development
+├── .env.docker.example          # Env template for Docker Compose (secrets + overrides only)
 └── .gitignore
 ```
 
@@ -122,88 +123,127 @@ bits/
 
 ### Docker (Recommended)
 
-1. **Copy the environment template:**
+Both Docker Compose files ship with **built-in `${VAR:-default}` fallbacks**, so the stack works out of the box without any `.env` file. Only set up a `.env` if you want to override secrets, credentials, or `FRONTEND_URL`.
 
-   ```bash
-   # Windows Command Prompt (cmd.exe):
-   copy .env.example .env
+> **Auto-setup on first run:** When the containers start, the backend automatically runs `prisma migrate deploy` and seeds the database (default admin/HR accounts & config). The seed is guarded by a `.seeded_lock` file so it only runs **once** — subsequent restarts skip it safely.
 
-   # PowerShell / Linux / macOS:
-   cp .env.example .env
-   ```
+1. **Choose your running mode and copy the matching env template:**
 
-2. **Configure environment variables for Docker:**
+   - **Option A: Development Mode (Hot-Reloading)** — `docker-compose.yml`
 
-   Open the newly created `.env` file at the root of the project and update the `FRONTEND_URL` to match the mapped Docker host port (`3013`):
-   ```env
-   FRONTEND_URL=http://localhost:3013
-   ```
+     Uses bind mounts so code changes are reflected in real time. Copy the **local** template:
 
-3. **Choose your running mode:**
+     ```bash
+     # Windows Command Prompt (cmd.exe):
+     copy .env.local.example .env
 
-   * **Option A: Development Mode (Hot-Reloading)**
-     Best for active coding. Uses bind mounts so code changes are reflected in real time:
+     # PowerShell / Linux / macOS:
+     cp .env.local.example .env
+     ```
+
+     Then run:
+
      ```bash
      docker-compose up --build
      ```
 
-   * **Option B: Production / Deployment Mode**
-     Best for staging, deployment, and testing. Code is baked into the container images (no bind mounts):
+   - **Option B: Production / Deployment Mode** — `docker-compose.prod.yml`
+
+     Code is baked into the container images (no bind mounts). Copy the **docker** template:
+
+     ```bash
+     # Windows Command Prompt (cmd.exe):
+     copy .env.docker.example .env
+
+     # PowerShell / Linux / macOS:
+     cp .env.docker.example .env
+     ```
+
+     Then run:
+
      ```bash
      docker compose -f docker-compose.prod.yml up --build
      ```
+
+2. **Fill in secrets (both modes):**
+
+   Open the `.env` you just created and set at minimum:
+
+   - `JWT_SECRET` and `JWT_REFRESH_SECRET` — replace the placeholder values
+   - `SMTP_USER` / `SMTP_PASS` — only if you need email notifications
+
+3. **Set `FRONTEND_URL` if needed:**
+
+   The fallback is `http://localhost:3000`. Update it to match the mapped Docker host port:
+
+   ```env
+   FRONTEND_URL=http://localhost:3013
+   ```
+
+   Or your server's LAN IP for network access (e.g. `http://192.168.1.50:3013`).
 
 4. **Access the application:**
 
    Once the containers are running (in either mode), access the services at:
 
-   | Service  | URL                    |
-   | -------- | ---------------------- |
-   | Frontend | http://localhost:3013   |
-   | Backend  | http://localhost:4013   |
-   | Postgres | `localhost:5013`       |
+   | Service  | URL                  |
+   | -------- | -------------------- |
+   | Frontend | http://localhost:3013 |
+   | Backend  | http://localhost:4013 |
+   | Postgres | `localhost:5013`     |
 
 ### Local Development (No Docker)
 
-Because the configuration `.env` file resides at the project root, running Prisma CLI commands directly inside the `backend` folder will fail with `Environment variable not found: DATABASE_URL` errors. 
+> **Note:** The `.env` file lives at the project root. Running Prisma CLI commands directly inside `backend/` will fail with `Environment variable not found: DATABASE_URL` unless you follow the steps below.
 
-Follow these steps to set up and run the services locally:
+1. **Copy the local env template:**
 
-**Backend:**
+   ```bash
+   # Windows Command Prompt (cmd.exe):
+   copy .env.local.example .env
 
-1. **Install dependencies:**
+   # PowerShell / Linux / macOS:
+   cp .env.local.example .env
+   ```
+
+   Open `.env` and update `DATABASE_URL` (and `DB_*` fields) to match your local PostgreSQL instance:
+
+   ```env
+   DATABASE_URL=postgresql://postgres:root@127.0.0.1:5432/db_bits
+   ```
+
+2. **Install backend dependencies:**
+
    ```bash
    cd backend
    npm install
    ```
 
-2. **Configure environment:**
-   Ensure you have a local PostgreSQL instance running. Create and configure your `.env` file at the **root** directory of the project (`bits/.env`) with your database credentials:
-   ```env
-   DATABASE_URL=postgresql://postgres:root@127.0.0.1:5432/db_bits
-   ```
-
 3. **Run database migrations:**
-   Since Prisma needs to read `DATABASE_URL` from `.env`, you can either run migrations from the root directory or copy the `.env` file into the backend folder:
 
-   * **Option A: Run from the project root (Recommended)**
-     Keep a single `.env` at the root and point Prisma to the backend schema:
+   Run from the **project root** so Prisma can find the root `.env`:
+
+   - **Option A: Run from the project root (Recommended)**
+
      ```bash
-     # Run from the project root:
      npx --prefix backend prisma migrate dev --schema=backend/prisma/schema.prisma
      ```
 
-   * **Option B: Copy `.env` to the backend directory**
+   - **Option B: Copy `.env` into the backend directory**
+
      ```bash
-     # From the backend/ directory:
-     copy ..\.env .env     # Windows CMD
-     # or cp ../.env .env  # macOS/Linux
-     
+     # Windows CMD:
+     copy .env backend\.env
+
+     # macOS/Linux/PowerShell:
+     cp .env backend/.env
+
+     # Then from inside backend/:
      npx prisma migrate dev
      ```
 
-4. **Seed database & start the backend:**
-   Once migrations are applied, the backend server and seeder will automatically resolve the root `.env` file:
+4. **Seed the database & start the backend:**
+
    ```bash
    # From the backend/ directory:
    npm run seed          # Seed default admin/HR accounts & configuration
