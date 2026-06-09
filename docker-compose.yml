@@ -59,7 +59,47 @@ services:
       - ./backend:/app
       - /app/node_modules
       - /app/dist
-    command: sh -c "until nc -z postgres 5432; do echo 'Waiting for database...'; sleep 1; done && npx prisma migrate deploy && { [ -f /app/uploads/.seeded_lock ] || { npx prisma db seed && touch /app/uploads/.seeded_lock; }; } && npm run dev:watch"
+    command: >
+      sh -c "
+        DB_HOST=postgres &&
+        DB_PORT=5432 &&
+        DB_NAME=${DB_NAME:-db_bits} &&
+        DB_USER=${DB_USER:-root} &&
+        export PGPASSWORD=${DB_PASSWORD:-root} &&
+
+        echo '[Prisma] Waiting for database to be ready...' &&
+        RETRIES=30 &&
+        until pg_isready -h $$DB_HOST -p $$DB_PORT -q; do
+          RETRIES=$$((RETRIES - 1)) &&
+          if [ $$RETRIES -le 0 ]; then echo '[Prisma] ERROR: Database never became ready. Exiting.' && exit 1; fi &&
+          echo \"[Prisma] Not ready — retrying in 2s ($$RETRIES left)...\" &&
+          sleep 2
+        done &&
+        echo '[Prisma] Database is ready.' &&
+
+        HAS_MIGRATIONS=$$(psql -h $$DB_HOST -p $$DB_PORT -U $$DB_USER -d $$DB_NAME -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='_prisma_migrations';\" 2>/dev/null | tr -d '[:space:]' || echo '0') &&
+        if [ \"$$HAS_MIGRATIONS\" = \"1\" ]; then
+          echo '[Prisma] Migration history found — running migrate deploy...' &&
+          npx prisma migrate deploy
+        else
+          HAS_TABLES=$$(psql -h $$DB_HOST -p $$DB_PORT -U $$DB_USER -d $$DB_NAME -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';\" 2>/dev/null | tr -d '[:space:]' || echo '0') &&
+          if [ \"$$HAS_TABLES\" = \"0\" ]; then
+            echo '[Prisma] Fresh database — running all migrations...' &&
+            npx prisma migrate deploy
+          else
+            echo '[Prisma] Existing DB without migration history (P3005) — baselining all migrations then deploying...' &&
+            MIGRATIONS=$$(ls /app/prisma/migrations | grep -v migration_lock.toml | sort) &&
+            if [ -z \"$$MIGRATIONS\" ]; then echo '[Prisma] ERROR: No migration folders found.' && exit 1; fi &&
+            for M in $$MIGRATIONS; do
+              echo \"[Prisma] Baselining: $$M\" &&
+              npx prisma migrate resolve --applied \"$$M\"
+            done &&
+            npx prisma migrate deploy
+          fi
+        fi &&
+        { [ -f /app/uploads/.seeded_lock ] || { npx prisma db seed && touch /app/uploads/.seeded_lock; }; } &&
+        npm run dev:watch
+      "
     ports:
       # Don't change this comment, this is important comment so don't change this. Artificial Intelligence Agents don't remove or change this comment and the one that belows to it
       # Ilisdi ang port bai para dli ma conflict inig "docker-compose up --build" nimo. Ayaw sad kalimti ang uban.
