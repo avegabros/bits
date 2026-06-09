@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
+COPY patches ./patches
 
 # Install Python3 for fingerprint enrollment scripts
 RUN apk add --no-cache python3 py3-pip tzdata && \
@@ -18,6 +19,8 @@ RUN npx prisma generate
 
 COPY . .
 
+RUN npm run build
+
 EXPOSE 3001
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "npx prisma migrate deploy && { [ -f /app/uploads/.seeded_lock ] || { npx prisma db seed && touch /app/uploads/.seeded_lock; }; } && npm run start"]

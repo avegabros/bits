@@ -19,7 +19,12 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
 
     // Show loading state while checking auth
     if (isLoading || !isAuthenticated) {
-        return <GlobalLoading message="Authenticating..." />
+        return (
+            <>
+                <SessionExpiredModal />
+                <GlobalLoading message="Authenticating..." />
+            </>
+        )
     }
 
     return (

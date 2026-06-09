@@ -69,38 +69,38 @@ export function AttendanceTable({
         />
       )}
       {showStatsHeader && stats && (
-        <div className="px-6 py-4 border-b border-border bg-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-black text-foreground uppercase tracking-widest">Attendance Logs</h3>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="grid grid-cols-4 sm:flex sm:items-center gap-3 sm:gap-4">
             <div className="text-center">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">On Time</p>
-              <p className="text-xl font-black text-emerald-500">{stats.onTime}</p>
+              <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">On Time</p>
+              <p className="text-lg sm:text-xl font-black text-emerald-500">{stats.onTime}</p>
             </div>
-            <div className="w-px h-8 bg-border" />
+            <div className="hidden sm:block w-px h-8 bg-border" />
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Late</p>
-              <p className="text-xl font-black text-yellow-500">{stats.late}</p>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground">Late</p>
+              <p className="text-lg sm:text-xl font-black text-yellow-500">{stats.late}</p>
             </div>
-            <div className="w-px h-8 bg-border" />
+            <div className="hidden sm:block w-px h-8 bg-border" />
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Absent</p>
-              <p className="text-xl font-black text-red-500">{stats.absent}</p>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground">Absent</p>
+              <p className="text-lg sm:text-xl font-black text-red-500">{stats.absent}</p>
             </div>
             {stats.restDay !== undefined && stats.restDay > 0 && (
               <>
-                <div className="w-px h-8 bg-border" />
+                <div className="hidden sm:block w-px h-8 bg-border" />
                 <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rest Day</p>
-                  <p className="text-xl font-black text-slate-400">{stats.restDay}</p>
+                  <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rest Day</p>
+                  <p className="text-lg sm:text-xl font-black text-slate-400">{stats.restDay}</p>
                 </div>
               </>
             )}
-            <div className="w-px h-8 bg-border" />
+            <div className="hidden sm:block w-px h-8 bg-border" />
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total</p>
-              <p className="text-xl font-black text-foreground">{stats.total}</p>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total</p>
+              <p className="text-lg sm:text-xl font-black text-foreground">{stats.total}</p>
             </div>
           </div>
         </div>

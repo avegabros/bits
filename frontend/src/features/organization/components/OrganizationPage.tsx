@@ -168,45 +168,45 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
       )}
 
       {/* ── Summary Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="bg-white border-slate-200 p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Companies</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.companies.length}</p>
-              <p className="text-xs text-slate-400 mt-1">Registered companies</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="bg-white border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-400 font-medium truncate">Companies</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.companies.length}</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1 leading-tight">Registered companies</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-violet-50"><Building className="w-5 h-5 text-violet-600" /></div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-violet-50 shrink-0"><Building className="w-4 h-4 sm:w-5 sm:h-5 text-violet-600" /></div>
           </div>
         </Card>
-        <Card className="bg-white border-slate-200 p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Departments</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.departments.length}</p>
-              <p className="text-xs text-slate-400 mt-1">Active departments</p>
+        <Card className="bg-white border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-400 font-medium truncate">Departments</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.departments.length}</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1 leading-tight">Active depts</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-red-50"><Building2 className="w-5 h-5 text-red-600" /></div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-red-50 shrink-0"><Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" /></div>
           </div>
         </Card>
-        <Card className="bg-white border-slate-200 p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Branches</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.branches.length}</p>
-              <p className="text-xs text-slate-400 mt-1">Office locations</p>
+        <Card className="bg-white border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-400 font-medium truncate">Branches</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.branches.length}</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1 leading-tight">Office locations</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-blue-50"><MapPin className="w-5 h-5 text-blue-600" /></div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-blue-50 shrink-0"><MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" /></div>
           </div>
         </Card>
-        <Card className="bg-white border-slate-200 p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Total Workforce</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.totalEmployees}</p>
-              <p className="text-xs text-slate-400 mt-1">Active employees</p>
+        <Card className="bg-white border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-400 font-medium truncate">Workforce</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{org.loading ? '—' : org.totalEmployees}</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1 leading-tight">Active employees</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-emerald-50"><Users className="w-5 h-5 text-emerald-600" /></div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-50 shrink-0"><Users className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" /></div>
           </div>
         </Card>
       </div>
@@ -229,8 +229,8 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
       />
 
       {/* ── Search + Filter + View Toggle ── */}
-      <Card className="bg-white border-slate-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <Card className="bg-white border-slate-200 p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
@@ -240,30 +240,32 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
               onChange={e => org.setSearchTerm(e.target.value)}
             />
           </div>
-          <Select value={org.branchFilter} onValueChange={org.setBranchFilter}>
-            <SelectTrigger className="w-full sm:w-44 bg-slate-50 border-slate-200 text-slate-700">
-              <SelectValue placeholder="Branch" />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-slate-200">
-              <SelectItem value="all">All Branches</SelectItem>
-              {org.branches.map(branch => (
-                <SelectItem key={branch.id} value={branch.name}>{branch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center bg-slate-100 rounded-xl p-1">
-            <button
-              onClick={() => org.setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${org.viewMode === 'grid' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Grid
-            </button>
-            <button
-              onClick={() => org.setViewMode('list')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${org.viewMode === 'list' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <List className="w-3.5 h-3.5" /> List
-            </button>
+          <div className="flex gap-2">
+            <Select value={org.branchFilter} onValueChange={org.setBranchFilter}>
+              <SelectTrigger className="flex-1 sm:w-44 bg-slate-50 border-slate-200 text-slate-700">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200">
+                <SelectItem value="all">All Branches</SelectItem>
+                {org.branches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.name}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+              <button
+                onClick={() => org.setViewMode('grid')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${org.viewMode === 'grid' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" /> Grid
+              </button>
+              <button
+                onClick={() => org.setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${org.viewMode === 'list' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <List className="w-3.5 h-3.5" /> List
+              </button>
+            </div>
           </div>
         </div>
       </Card>

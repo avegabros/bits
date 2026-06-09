@@ -48,7 +48,7 @@ export function CompanyCards({
                   <button
                     onClick={() => onEditCompany(company)}
                     title="Edit company"
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-violet-500 hover:bg-violet-50 transition-all"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 sm:text-slate-300 hover:text-violet-500 hover:bg-violet-50 transition-all"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
@@ -56,14 +56,14 @@ export function CompanyCards({
                     <button
                       onClick={() => onDeleteCompany(company)}
                       title="Remove company"
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 sm:text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   ) : (
                     <span
                       title={`Cannot delete — ${branchCount} branch${branchCount > 1 ? 'es' : ''} assigned`}
-                      className="opacity-0 group-hover:opacity-40 p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-40 p-1.5 rounded-lg text-slate-200 sm:text-slate-300 cursor-not-allowed"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </span>

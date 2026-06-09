@@ -270,7 +270,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
       const params = new URLSearchParams({
         startDate: selectedDate,
         endDate: selectedDate,
-        limit: '500',
+        limit: '10000',
       })
       if (statusFilter !== 'all') params.append('status', statusFilter)
 

@@ -96,7 +96,7 @@ export function LoginForm({ loginState }: LoginFormProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="inline-block rounded-full bg-red-600 px-8 py-3 font-bold text-white transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="auth-login-btn inline-block rounded-full bg-red-600 px-8 py-3 font-bold text-white transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isLoading ? 'LOGGING IN...' : 'LOG IN'}
           </button>

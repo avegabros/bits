@@ -1,9 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCTION SIMULATION - For use with Portainer
-# No bind mounts — code is baked into the Docker image
-# Use: docker compose -f docker-compose.prod.yml up --build
-# ─────────────────────────────────────────────────────────────────────────────
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -18,6 +12,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - bits_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-root} -d ${DB_NAME:-db_bits}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -25,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: bits_backend
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       DATABASE_URL: postgresql://${DB_USER:-root}:${DB_PASSWORD:-root}@postgres:5432/${DB_NAME:-db_bits}
       DB_HOST: postgres
@@ -37,22 +36,27 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-change-this-in-production}
       ZK_HOST: ${ZK_HOST:-192.168.0.201}
       ZK_PORT: ${ZK_PORT:-4370}
+      # FRONTEND_URL = what the browser uses to reach the frontend (used for CORS).
+      # Must match the browser's address bar — NOT a Docker internal hostname.
+      # Set FRONTEND_URL in your .env to your server's IP/domain, e.g.:
+      #   http://localhost:3013        (same machine)
+      #   http://192.168.1.50:3013    (LAN access via server IP)
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       TZ: Asia/Manila
-    # No bind mounts for code, but we MUST mount the uploads directory
-    # so that user avatars survive container restarts/rebuilds.
     volumes:
       - bits_uploads:/app/uploads
     ports:
       - "4013:3001"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy   # waits for pg_isready before starting
     networks:
       - bits_network
+    restart: unless-stopped          # auto-recover on crash
 
   frontend:
     build:
@@ -60,15 +64,16 @@ services:
       dockerfile: Dockerfile
     container_name: bits_frontend
     environment:
-      NODE_ENV: production
-      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
-    # No bind mounts — code is baked into the image via Dockerfile
+      NODE_ENV: ${NODE_ENV:-production}
+      BACKEND_URL: http://backend:3001  # always use Docker internal hostname, never localhost
     ports:
       - "3013:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_started   # frontend just needs backend container up
     networks:
       - bits_network
+    restart: unless-stopped          # auto-recover on crash
 
 volumes:
   postgres_data:

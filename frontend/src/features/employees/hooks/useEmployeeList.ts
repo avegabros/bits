@@ -163,7 +163,7 @@ export function useEmployeeList({ statusFilter = 'Active', role = 'admin' }: Use
       const res = await fetch(`/api/employees/${confirmResetPassword.id}/reset-password`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        showToast('success', 'Password Reset', data.message || 'Password has been reset.');
+        showToast('success', 'Password Reset', `${data.message || 'Password has been reset.'} Ask the employee to check their spam/junk folder if it is not in the inbox.`);
         setConfirmResetPassword(null);
       } else {
         showToast('error', 'Reset Failed', data.message || 'Failed to reset.');

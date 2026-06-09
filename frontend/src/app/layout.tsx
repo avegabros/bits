@@ -1,7 +1,6 @@
 import React from "react"
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { NavigationProvider } from '@/context/NavigationContext'
 import './globals.css'
@@ -31,7 +30,6 @@ export default function RootLayout({
           <NavigationProgress />
           {children}
         </NavigationProvider>
-        <Analytics />
       </body>
     </html>
   )

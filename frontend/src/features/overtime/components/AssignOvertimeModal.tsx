@@ -186,8 +186,8 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-100 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white w-full h-[95vh] sm:h-auto sm:max-h-[90vh] sm:max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-8 sm:zoom-in duration-300">
         
         {/* Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-blue-50/50">
@@ -226,7 +226,7 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
                   1. Select Employees <span className="text-red-500">*</span>
                 </label>
                 
-                <div className="flex gap-2 mb-2">
+                <div className="flex flex-col sm:flex-row gap-2 mb-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input 
@@ -241,7 +241,7 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
                     <select
                       value={selectedDepartment}
                       onChange={e => setSelectedDepartment(e.target.value)}
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-colors min-w-[150px]"
+                      className="w-full sm:w-auto px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-colors min-w-[150px]"
                     >
                       <option value="ALL">All Departments</option>
                       {departments.map(d => <option key={d} value={d}>{d}</option>)}

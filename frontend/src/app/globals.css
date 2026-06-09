@@ -373,4 +373,64 @@
 @keyframes loading-bar {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
+}
+
+/* ===== Auth / Login — Mobile-only responsive overrides ===== */
+@media (max-width: 767px) {
+  /* Container: edge-to-edge, no padding */
+  .auth-page {
+    padding: 0;
+    min-height: 100dvh;
+    align-items: stretch;
+  }
+
+  /* Card: full viewport, seamless — no floating look */
+  .auth-card-outer {
+    max-width: none;
+    width: 100vw;
+    min-height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .auth-card-flex {
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  /* Hide the dark brand panel entirely on mobile */
+  .auth-brand-panel {
+    display: none !important;
+  }
+
+  /* Form panel — full screen, solid light background */
+  .auth-form-panel {
+    width: 100%;
+    flex: 1;
+    min-height: 100dvh;
+    padding: 48px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: none;
+  }
+
+  /* Show the mobile-only brand header */
+  .auth-mobile-brand {
+    display: block !important;
+  }
+
+  /* Show the mobile-only copyright */
+  .auth-mobile-copyright {
+    display: block !important;
+  }
+
+  /* Login button — full width */
+  .auth-login-btn {
+    width: 100%;
+    display: block;
+    text-align: center;
+  }
 }

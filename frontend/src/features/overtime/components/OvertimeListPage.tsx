@@ -16,6 +16,31 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [searchInput, setSearchInput] = useState(filters.search);
+  
+  const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>(departments || []);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const getTodayDate = () => new Date().toISOString().split('T')[0];
+
+  // Fetch departments locally if they are not passed down
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      setDepartmentsList(departments);
+      return;
+    }
+    const fetchDepts = async () => {
+      try {
+        const url = role === 'manager' ? '/api/me/departments' : '/api/departments';
+        const res = await fetch(url, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success && data.departments) {
+          setDepartmentsList(data.departments);
+        }
+      } catch (err) {
+        console.error('Failed to fetch departments', err);
+      }
+    };
+    fetchDepts();
+  }, [departments, role]);
 
   // Debounced search
   useEffect(() => {
@@ -36,8 +61,9 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
   return (
     <div className="space-y-6">
       {/* Search & Filter Row */}
-      <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-slate-200/60 shadow-sm">
-        <div className="relative flex-1 min-w-[240px]">
+      <div className="flex flex-col md:flex-row gap-3 bg-white/80 backdrop-blur-md p-3 rounded-3xl border border-slate-200/60 shadow-sm w-full">
+        {/* Search */}
+        <div className="relative flex-1">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
@@ -47,16 +73,60 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
             className="w-full h-11 pl-11 pr-4 text-sm border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all bg-white font-medium text-slate-800 placeholder-slate-400"
           />
         </div>
-        {departments && (
-          <select 
-            value={filters.departmentId || ''} 
-            onChange={e => setFilters(f => ({ ...f, departmentId: e.target.value ? parseInt(e.target.value) : null }))}
-            className="h-11 px-4 text-sm border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all bg-white font-bold text-slate-700 cursor-pointer shadow-sm min-w-[160px]"
-          >
-            <option value="">All Departments</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        )}
+
+        {/* Action Selects and Dates */}
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center w-full md:w-auto">
+          {/* Department Select */}
+          {departmentsList.length > 0 && (
+            <select 
+              value={filters.departmentId || ''} 
+              onChange={e => setFilters(f => ({ ...f, departmentId: e.target.value ? parseInt(e.target.value) : null }))}
+              className="flex-1 sm:flex-none h-11 px-4 text-sm border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all bg-white font-bold text-slate-700 cursor-pointer shadow-sm w-full sm:w-[180px] max-w-full"
+            >
+              <option value="">All Departments</option>
+              {departmentsList.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          )}
+
+          {/* Date Selector */}
+          <div className="flex items-center gap-2 flex-1 sm:flex-none w-full sm:w-auto">
+            <input
+              type="date"
+              ref={dateInputRef}
+              className="absolute opacity-0 pointer-events-none w-0 h-0"
+              value={filters.startDate || ''}
+              onChange={(e) => setFilters(f => ({ ...f, startDate: e.target.value, endDate: e.target.value }))}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
+                  dateInputRef.current.showPicker();
+                }
+              }}
+              className="w-full sm:w-auto flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 h-11 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm cursor-pointer whitespace-nowrap"
+            >
+              <Calendar className="w-4 h-4 text-red-500" />
+              <span>
+                {filters.startDate
+                  ? filters.startDate === getTodayDate()
+                    ? `Today, ${new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                    : new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+                  : 'Filter Date'}
+              </span>
+            </button>
+            {filters.startDate && (
+              <button
+                type="button"
+                onClick={() => setFilters(f => ({ ...f, startDate: '', endDate: '' }))}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-all shrink-0 cursor-pointer"
+                title="Clear date filter"
+              >
+                <XCircle size={16} />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Lists / Loading / Empty States */}
@@ -112,7 +182,7 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
             const config = statusConfig[req.status as keyof typeof statusConfig] || statusConfig.PENDING;
 
             return (
-              <div key={req.id} className="bg-white/90 backdrop-blur-md border border-slate-200/60 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 relative overflow-hidden group">
+              <div key={req.id} className="bg-white/90 backdrop-blur-md border border-slate-200/60 rounded-3xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 relative overflow-hidden group">
                 {/* Visual indicator bar top */}
                 <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${config.bar}`} />
                 
@@ -149,7 +219,7 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
                           {req.status}
                         </span>
                         {req.source === 'ASSIGNED' && (
-                          <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-xl border bg-blue-500/10 text-blue-600 border-blue-500/20 flex items-center gap-1">
+                          <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-xl border bg-blue-50/10 text-blue-600 border-blue-500/20 flex items-center gap-1">
                             <UserPlus size={11} /> Assigned
                           </span>
                         )}
@@ -211,7 +281,7 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
 
                   {/* Actions Block (Only visible for PENDING) */}
                   {req.status === 'PENDING' && (
-                    <div className="flex sm:flex-col md:flex-row items-stretch sm:items-end md:items-center gap-2 shrink-0 self-stretch sm:self-auto md:mt-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 w-full sm:w-auto mt-4 sm:mt-0">
                       <button
                         onClick={() => handleReview(req.id, 'APPROVED')}
                         disabled={actionLoading === req.id}

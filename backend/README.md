@@ -142,20 +142,25 @@ docker-compose logs -f backend
 
 ### B. Local Development (Without Docker)
 
-Ensure you have **Node.js 18+** and a local **PostgreSQL** instance running, and that your `.env` file is configured (see root `README.md`).
+Ensure you have **Node.js 18+** and a local **PostgreSQL** instance running, and that your `.env` file is configured at the project root (see root `README.md`).
 
 ```bash
 # 1. Install dependencies
 npm install
 
-# 2. Generate Prisma client and run migrations
-npx prisma generate
-npx prisma migrate dev
+# 2. Run migrations (resolving the root .env)
+# Option A: Run from the project root (Recommended)
+# npx --prefix backend prisma migrate dev --schema=backend/prisma/schema.prisma
 
-# 3. (Optional) Seed the database
+# Option B: Copy .env into the backend folder first
+# copy ..\.env .env     # Windows CMD
+# cp ../.env .env       # macOS/Linux
+# npx prisma migrate dev
+
+# 3. (Optional) Seed the database (automatically resolves root .env)
 npm run seed
 
-# 4. Start the development server with hot-reload
+# 4. Start the development server with hot-reload (automatically resolves root .env)
 npm run dev:watch
 ```
 
@@ -199,6 +204,8 @@ Once the server is running, the full interactive API reference is available at:
 | `ECONNREFUSED` | Device port blocked | Ensure port `4370` (UDP/TCP) is not blocked by the router. |
 
 ### Database / Prisma Issues
+
+> ⚠️ **Note:** Since your `.env` file is located at the project root, make sure you have either copied it into this `backend/` directory (`copy ..\.env .env`) or are running these commands from the root directory with the `--prefix backend` and `--schema=backend/prisma/schema.prisma` flags.
 
 ```bash
 # Regenerate the Prisma client after schema changes

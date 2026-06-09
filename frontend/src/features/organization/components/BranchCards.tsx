@@ -31,7 +31,7 @@ export function BranchCards({
                   <MapPin className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-700 text-sm">{branch.name}</p>
+                  <p className="font-bold text-slate-700 text-sm truncate">{branch.name}</p>
                   <p className="text-xs text-slate-400">{count} {count === 1 ? 'employee' : 'employees'}</p>
                   <div className="flex flex-wrap items-center gap-1 mt-1">
                     {companyLinks.length > 0 ? (
@@ -56,7 +56,7 @@ export function BranchCards({
                   <button
                     onClick={() => onEditBranch(branch)}
                     title="Edit branch"
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 sm:text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
@@ -64,14 +64,14 @@ export function BranchCards({
                     <button
                       onClick={() => onDeleteBranch(branch)}
                       title="Remove branch"
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 sm:text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   ) : (
                     <span
                       title={`Cannot delete — ${count} active employee${count > 1 ? 's' : ''} assigned`}
-                      className="opacity-0 group-hover:opacity-40 p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-40 p-1.5 rounded-lg text-slate-200 sm:text-slate-300 cursor-not-allowed"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </span>

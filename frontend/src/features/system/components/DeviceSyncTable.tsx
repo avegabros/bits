@@ -94,8 +94,84 @@ export function DeviceSyncTable({ devices, loading, onDevicesChange }: DeviceSyn
             </div>
 
             {/* Table */}
+            {/* Mobile Card List View */}
+            <div className="md:hidden divide-y divide-slate-100 bg-white">
+                {devices.length === 0 ? (
+                    <div className="text-center py-10 px-4">
+                        <MonitorSmartphone className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400 font-semibold">No devices found</p>
+                        <p className="text-xs text-slate-300 mt-0.5">Add devices from the Devices page to see them here.</p>
+                    </div>
+                ) : (
+                    devices.map((device) => (
+                        <div 
+                            key={device.id} 
+                            className={`p-4 flex flex-col gap-3 hover:bg-slate-50/50 transition-colors ${
+                                !device.isActive && device.syncEnabled
+                                    ? 'bg-amber-50/40 hover:bg-amber-50/60'
+                                    : ''
+                            }`}
+                        >
+                            {/* Title & Toggle Switch */}
+                            <div className="flex items-center justify-between">
+                                <div className="min-w-0">
+                                    <h4 className="text-sm font-bold text-slate-800 truncate">{device.name}</h4>
+                                    <p className="text-xs text-slate-400 font-mono mt-0.5">{device.ip}</p>
+                                </div>
+                                <Switch
+                                    checked={device.syncEnabled}
+                                    onCheckedChange={() => toggleDeviceSync(device.id, device.syncEnabled)}
+                                    disabled={togglingId === device.id}
+                                    aria-label={`Toggle sync for ${device.name}`}
+                                />
+                            </div>
+
+                            {/* Status Badges */}
+                            <div className="flex flex-wrap gap-1.5">
+                                {device.isActive ? (
+                                    <Badge variant="outline" className="text-[9px] font-bold border-emerald-200 bg-emerald-50 text-emerald-700 gap-1 px-2 py-0.5">
+                                        <Wifi className="h-2 w-2" /> Online
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="text-[9px] font-bold border-red-200 bg-red-50 text-red-700 gap-1 px-2 py-0.5">
+                                        <CloudOff className="h-2 w-2" /> Offline
+                                    </Badge>
+                                )}
+                                {device.lastSyncStatus === 'FAILED' && (
+                                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold" title={device.lastSyncError || 'Sync failed'}>
+                                        Sync Failed
+                                    </Badge>
+                                )}
+                                {!device.isActive && device.syncEnabled && (
+                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-amber-300 bg-amber-50 text-amber-700">
+                                        Unreachable
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {/* Timestamps */}
+                            <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-slate-50 pt-2.5">
+                                <div>
+                                    <span className="text-slate-400 font-medium block">Last Attendance</span>
+                                    <span className="text-slate-600 font-semibold block mt-0.5">
+                                        {device.lastSyncedAt ? format(new Date(device.lastSyncedAt), 'MMM d, HH:mm') : '—'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-400 font-medium block">Last Poll</span>
+                                    <span className="text-slate-600 font-semibold block mt-0.5">
+                                        {device.lastPolledAt ? format(new Date(device.lastPolledAt), 'MMM d, HH:mm') : '—'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Desktop Table View */}
             <div
-              className="overflow-x-auto scrollbar-table"
+              className="hidden md:block overflow-x-auto scrollbar-table"
               tabIndex={0}
               role="region"
               aria-label="Device sync status table — scroll horizontally"

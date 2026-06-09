@@ -9,6 +9,7 @@ import { SortableHeader } from '@/components/ui/SortableHeader';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { useAdjustmentLogs } from '../hooks/useAdjustmentLogs';
 import { fieldLabels, GroupedAuditLog } from '../utils/adjustment-log-types';
+import { AdjustmentAuditLogsMobileCards } from './AdjustmentAuditLogsMobileCards';
 
 /* ── Helpers ── */
 function formatValue(field: string, value: string | null): string {
@@ -122,7 +123,7 @@ export function AdjustmentAuditLogsDashboard() {
       </button>
 
       {openDropdown === id && (
-        <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-[50] max-h-[240px] overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-50 max-h-[240px] overflow-y-auto">
           {options.map((opt) => (
             <button
               key={opt}
@@ -191,9 +192,18 @@ export function AdjustmentAuditLogsDashboard() {
 
       {/* Audit Log Table Card */}
       <div className="bg-white border border-[#E0E0E0] rounded-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        {/* Mobile View */}
+        <div className="md:hidden">
+          <AdjustmentAuditLogsMobileCards
+            loading={loading}
+            sortedGroupedLogs={sortedGroupedLogs}
+          />
+        </div>
+
+        {/* Desktop View */}
         <div
           ref={dragScrollRef}
-          className="overflow-x-auto scrollbar-table"
+          className="hidden md:block overflow-x-auto scrollbar-table"
           tabIndex={0}
           role="region"
           aria-label="Adjustment audit logs table — scroll horizontally"

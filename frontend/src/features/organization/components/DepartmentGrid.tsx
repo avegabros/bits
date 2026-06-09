@@ -30,10 +30,10 @@ export function DepartmentGrid({
             key={dept.id}
             className={`group relative ${color.bg} border ${color.border} rounded-2xl p-5 hover:shadow-lg hover:shadow-slate-200/50 transition-all duration-300 hover:-translate-y-0.5`}
           >
-            <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            <div className="absolute top-4 right-4 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
               <button
                 onClick={() => onEditDept(dept)}
-                className="p-2 rounded-xl text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                className="p-2 rounded-xl text-slate-400 sm:text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
                 title="Edit department"
               >
                 <Edit2 className="w-3.5 h-3.5" />
@@ -41,7 +41,7 @@ export function DepartmentGrid({
               {count === 0 ? (
                 <button
                   onClick={() => onDeleteDept(dept)}
-                  className="p-2 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                  className="p-2 rounded-xl text-slate-400 sm:text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
                   title="Remove department"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -49,13 +49,13 @@ export function DepartmentGrid({
               ) : (
                 <span
                   title={`Cannot delete — ${count} active employee${count > 1 ? 's' : ''} assigned`}
-                  className="p-2 rounded-xl text-slate-200 cursor-not-allowed"
+                  className="p-2 rounded-xl text-slate-300 sm:text-slate-200 cursor-not-allowed"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </span>
               )}
             </div>
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-4 pr-16 sm:pr-0">
               <div
                 className={`w-12 h-12 ${color.icon} rounded-xl flex items-center justify-center text-white text-sm font-black shrink-0 shadow-lg`}
                 style={{ boxShadow: `0 4px 14px ${color.accent}30` }}
@@ -63,7 +63,7 @@ export function DepartmentGrid({
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-slate-700 text-sm leading-tight">{displayName}</h3>
+                <h3 className="font-bold text-slate-700 text-sm leading-tight truncate">{displayName}</h3>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Department</p>
               </div>
             </div>
