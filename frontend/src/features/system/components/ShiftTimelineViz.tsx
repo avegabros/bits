@@ -235,7 +235,7 @@ export function ShiftTimelineViz({ bufferMinutes, enabled }: ShiftTimelineVizPro
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-4 text-[10px] text-slate-500 font-semibold">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-slate-500 font-semibold">
                 <div className="flex items-center gap-1.5">
                     <div className="w-3 h-2 rounded-sm bg-emerald-400/50 border border-emerald-500/30" />
                     Clock-In Rush

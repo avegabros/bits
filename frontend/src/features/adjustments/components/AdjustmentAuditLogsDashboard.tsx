@@ -123,7 +123,7 @@ export function AdjustmentAuditLogsDashboard() {
       </button>
 
       {openDropdown === id && (
-        <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-[50] max-h-[240px] overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-50 max-h-[240px] overflow-y-auto">
           {options.map((opt) => (
             <button
               key={opt}

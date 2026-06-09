@@ -60,7 +60,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
             </button>
 
             {openDropdown === id && (
-                <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-[50] max-h-[240px] overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-[4px] py-[4px] bg-white border border-[#E0E0E0] rounded-[6px] shadow-lg z-50 max-h-[240px] overflow-y-auto">
                     {options.map((opt) => (
                         <button
                             key={opt}
@@ -179,7 +179,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
 
             {/* Reject Modal */}
             {rejectingId !== null && (
-                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[100] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-xs z-100 flex items-center justify-center p-[20px] animate-in fade-in duration-200">
                     <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="px-[24px] py-[20px] bg-[#D0021B] text-white flex justify-between items-center">
                             <h3 className="font-bold text-[18px] tracking-tight">Reject Adjustment</h3>
@@ -217,7 +217,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
                 const isDeleteApproval = approvingAdj?.type === 'DELETE'
 
                 return (
-                    <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[150] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                    <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-xs z-150 flex items-center justify-center p-[20px] animate-in fade-in duration-200">
                         <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[360px] overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-[32px] text-center space-y-[24px]">
                                 {isDeleteApproval ? (
@@ -263,7 +263,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
 
             {/* Cancel Confirmation Modal */}
             {cancellingId !== null && (
-                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[150] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-xs z-150 flex items-center justify-center p-[20px] animate-in fade-in duration-200">
                     <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[360px] overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-[32px] text-center space-y-[24px]">
                             <div className="w-[64px] h-[64px] rounded-full bg-[#FFF8E1] flex items-center justify-center mx-auto">
@@ -288,7 +288,7 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
 
             {/* Reopen Confirmation Modal */}
             {reopeningId !== null && (
-                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-[4px] z-[150] flex items-center justify-center p-[20px] animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-[#212121]/40 backdrop-blur-xs z-150 flex items-center justify-center p-[20px] animate-in fade-in duration-200">
                     <div className="bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] w-full max-w-[360px] overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-[32px] text-center space-y-[24px]">
                             <div className="w-[64px] h-[64px] rounded-full bg-[#E3F2FD] flex items-center justify-center mx-auto">

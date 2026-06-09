@@ -101,8 +101,8 @@ export function SyncConfigForm() {
                 </div>
 
                 {/* ── Sticky Save Bar ───────────────────────────────────── */}
-                <div className="fixed bottom-0 left-0 lg:left-64 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 flex items-center justify-between">
-                    <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
+                <div className="fixed bottom-0 left-0 lg:left-64 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40">
+                    <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-3">
                         <div className="text-sm font-medium">
                             {isDirty ? (
                                 <span className="text-amber-600 flex items-center gap-2">
@@ -113,19 +113,19 @@ export function SyncConfigForm() {
                                 <span className="text-slate-500">All changes saved</span>
                             )}
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 w-full sm:w-auto justify-end">
                             {isDirty && (
                                 <Button 
                                     type="button" 
                                     variant="ghost" 
                                     disabled={saving} 
                                     onClick={handleDiscard}
-                                    className="text-sm font-semibold h-10 px-4 text-slate-500 hover:text-slate-700"
+                                    className="flex-1 sm:flex-none text-sm font-semibold h-10 px-4 text-slate-500 hover:text-slate-700"
                                 >
                                     Discard Changes
                                 </Button>
                             )}
-                            <Button type="submit" disabled={saving || !isDirty} className="text-sm font-semibold h-10 px-6">
+                            <Button type="submit" disabled={saving || !isDirty} className="flex-1 sm:flex-none text-sm font-semibold h-10 px-6">
                                 {saving ? (
                                     'Saving...'
                                 ) : (

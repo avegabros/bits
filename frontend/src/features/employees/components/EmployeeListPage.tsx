@@ -39,7 +39,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
               if (res.deviceSync?.success === false) {
                 list.showToast('warning', 'Registered — Device Offline', `${name} was saved but couldn't sync to the device.`);
               } else {
-                list.showToast('success', 'Employee Registered', `${name} has been saved.`);
+                list.showToast('success', 'Employee Registered', `${name} has been saved. Ask the employee to check their spam/junk folder for their login credentials.`);
               }
               return true;
             } else {

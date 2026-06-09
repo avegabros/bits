@@ -32,7 +32,7 @@ export function SyncStatsGrid({
     return (
         <div className="flex flex-col lg:flex-row gap-4">
             {/* ── Stats ─────────────────────────────────────────── */}
-            <div className="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Current Interval */}
                 <div className="bg-slate-50 rounded-lg px-3 py-2.5 transition-shadow hover:shadow-sm hover:bg-white border border-transparent hover:border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1 mb-1">
@@ -103,7 +103,7 @@ export function SyncStatsGrid({
             </div>
 
             {/* ── Action Buttons ─────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:w-44 shrink-0">
+            <div className="flex flex-col sm:grid sm:grid-cols-3 lg:flex lg:flex-col gap-2 lg:w-44 shrink-0 w-full lg:w-auto">
                 <Button
                     onClick={onManualSync}
                     disabled={syncing || syncingTime || !status.globalSyncEnabled}

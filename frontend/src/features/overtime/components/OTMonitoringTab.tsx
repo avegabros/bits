@@ -269,13 +269,13 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
         </div>
 
         {/* Action Selects and Dates */}
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center w-full md:w-auto">
           {/* Department */}
           <Select
             value={filters.departmentId ? String(filters.departmentId) : 'all'}
             onValueChange={(val) => setFilters(f => ({ ...f, departmentId: val === 'all' ? null : parseInt(val) }))}
           >
-            <SelectTrigger className="w-52 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
+            <SelectTrigger className="w-full sm:w-52 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
               <SelectValue placeholder="Department" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -291,7 +291,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
             value={filters.sessionState || 'all'}
             onValueChange={(val) => setFilters(f => ({ ...f, sessionState: val === 'all' ? '' : val }))}
           >
-            <SelectTrigger className="w-44 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
+            <SelectTrigger className="w-full sm:w-44 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
               <SelectValue placeholder="Session State" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -305,7 +305,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
           </Select>
 
           {/* Date Selector */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 sm:flex-none w-full sm:w-auto">
             <input
               type="date"
               ref={dateInputRef}
@@ -319,7 +319,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
                   dateInputRef.current.showPicker();
                 }
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-xl text-xs font-bold text-foreground hover:bg-secondary transition-all shadow-sm h-10"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-card border border-border rounded-xl text-xs font-bold text-foreground hover:bg-secondary transition-all shadow-sm h-10 w-full sm:w-auto"
             >
               <Calendar className="w-4 h-4 text-rose-500" />
               <span>
@@ -350,7 +350,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-black text-foreground uppercase tracking-widest">OT Monitoring Logs</h3>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-4 sm:gap-6 w-full sm:w-auto">
             <div className="text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Scheduled</p>
               <p className="text-xl font-black text-blue-500">{stats.scheduled}</p>
@@ -375,7 +375,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Missed</p>
               <p className="text-xl font-black text-rose-500">{stats.missed}</p>
             </div>
-            <div className="w-px h-8 bg-border" />
+            <div className="w-px h-8 bg-border hidden sm:block" />
             <div className="text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total</p>
               <p className="text-xl font-black text-foreground">{stats.total}</p>
@@ -397,7 +397,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
           ) : (
             <div className="divide-y divide-border">
               {sortedSessions.map(row => (
-                <div key={row.id} className="p-5 hover:bg-primary/5 transition-colors relative flex flex-col gap-4">
+                <div key={row.id} className="p-4 sm:p-5 hover:bg-primary/5 transition-colors relative flex flex-col gap-4">
                   {/* Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
@@ -699,7 +699,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
 
       {/* Premium Glassmorphic Extend Modal */}
       {extendingSession && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-100">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-rose-50/20">

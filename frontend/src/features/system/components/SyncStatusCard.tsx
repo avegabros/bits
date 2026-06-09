@@ -43,8 +43,8 @@ export function SyncStatusCard({ status, loading, onStatusRefresh }: SyncStatusC
                         <Skeleton className="h-8 w-24 rounded-lg" />
                     </div>
                 </div>
-                <div className="grid grid-cols-4 gap-6 mt-4">
-                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
                 </div>
             </div>
         );
