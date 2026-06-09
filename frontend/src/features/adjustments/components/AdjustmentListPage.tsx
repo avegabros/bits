@@ -6,6 +6,7 @@ import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import ToastContainer from '@/components/ui/ToastContainer'
 import { useAdjustmentList } from '../hooks/useAdjustmentList'
 import { AdjustmentTable } from './AdjustmentTable'
+import { AdjustmentMobileCards } from './AdjustmentMobileCards'
 
 export interface AdjustmentListPageProps {
     role: 'admin' | 'hr' | 'manager'
@@ -124,9 +125,26 @@ export function AdjustmentListPage({ role }: AdjustmentListPageProps) {
 
             {/* Adjustment Table Card */}
             <div className="bg-white border border-[#E0E0E0] rounded-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+                {/* Mobile View */}
+                <div className="md:hidden">
+                    <AdjustmentMobileCards
+                        loading={loading}
+                        sortedAdjustments={sortedAdjustments}
+                        role={hookRole}
+                        isAdmin={isAdmin}
+                        currentUserId={currentUserId}
+                        actionLoading={actionLoading}
+                        onApprove={setApprovingId}
+                        onReject={(id) => { setRejectingId(id); setRejectionReason('') }}
+                        onCancel={setCancellingId}
+                        onReopen={setReopeningId}
+                    />
+                </div>
+
+                {/* Desktop View */}
                 <div
                   ref={dragScrollRef}
-                  className="overflow-x-auto scrollbar-table"
+                  className="hidden md:block overflow-x-auto scrollbar-table"
                   tabIndex={0}
                   role="region"
                   aria-label="Adjustments table — scroll horizontally"

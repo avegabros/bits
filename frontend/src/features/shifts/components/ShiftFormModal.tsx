@@ -28,10 +28,10 @@ export function ShiftFormModal({
 }: ShiftFormModalProps) {
   return (
     <Dialog open={isFormOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl border border-white/40 max-w-lg p-0 rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5">
-        <div className="relative px-8 pt-8 pb-6 flex items-start justify-between shrink-0">
+      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl p-0 fixed top-0 left-0 translate-x-0 translate-y-0 w-full h-dvh max-w-none rounded-none border-none shadow-none ring-0 flex flex-col sm:fixed sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:max-w-lg sm:h-auto sm:rounded-[2rem] sm:border sm:border-white/40 sm:shadow-[0_20px_50px_rgba(0,0,0,0.15)] sm:ring-1 sm:ring-black/5 overflow-hidden">
+        <div className="relative px-6 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 flex items-start justify-between shrink-0">
           <div className="space-y-1">
-            <DialogTitle className="text-slate-900 font-poppins font-bold text-2xl tracking-tight">
+            <DialogTitle className="text-slate-900 font-poppins font-bold text-xl sm:text-2xl tracking-tight">
               {editingShift ? 'Edit Shift' : 'New Shift'}
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-xs font-medium tracking-wide">
@@ -46,10 +46,10 @@ export function ShiftFormModal({
           </button>
           
           {/* Subtle Accent Line */}
-          <div className="absolute bottom-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+          <div className="absolute bottom-0 left-6 sm:left-8 right-6 sm:right-8 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
 
-        <div className="px-8 py-6 space-y-6 max-h-[65vh] overflow-y-auto scrollbar-light">
+        <div className="px-6 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 flex-1 sm:flex-initial sm:max-h-[65vh] overflow-y-auto scrollbar-light">
           {formError && (
             <div className="bg-red-50/80 backdrop-blur-sm border border-red-100 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="w-1.5 h-8 bg-red-500 rounded-full shrink-0" />
@@ -58,7 +58,7 @@ export function ShiftFormModal({
           )}
 
           {/* Shift Identification */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift Code</label>
@@ -108,8 +108,8 @@ export function ShiftFormModal({
           </div>
 
           {/* Timing & Duration */}
-          <div className="bg-slate-50/40 rounded-[1.5rem] p-5 border border-slate-100 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-50/40 rounded-[1.5rem] p-4 sm:p-5 border border-slate-100 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Start Time</label>
                 <div className="relative">
@@ -119,7 +119,6 @@ export function ShiftFormModal({
                     onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))}
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all"
                   />
-                  <Clock size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -131,7 +130,6 @@ export function ShiftFormModal({
                     onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all"
                   />
-                  <Clock size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                 </div>
               </div>
             </div>
@@ -143,7 +141,7 @@ export function ShiftFormModal({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Grace Period (mins)</label>
                 <input
@@ -256,9 +254,9 @@ export function ShiftFormModal({
           </div>
 
           {/* Night Shift toggle */}
-          <div className="flex items-center justify-between bg-indigo-50/40 border border-indigo-100 rounded-[1.5rem] p-5 transition-all hover:bg-indigo-50/60">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
+          <div className="flex items-center justify-between bg-indigo-50/40 border border-indigo-100 rounded-[1.5rem] p-4 sm:p-5 transition-all hover:bg-indigo-50/60">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
                 <Moon size={20} />
               </div>
               <div>
@@ -268,7 +266,7 @@ export function ShiftFormModal({
             </div>
             <button 
               onClick={() => setForm(f => ({ ...f, isNightShift: !f.isNightShift }))}
-              className={`relative w-12 h-7 rounded-full transition-all duration-300 ${form.isNightShift ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'bg-slate-200'}`}
+              className={`relative w-12 h-7 rounded-full transition-all duration-300 shrink-0 ${form.isNightShift ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'bg-slate-200'}`}
             >
               <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 flex items-center justify-center ${form.isNightShift ? 'translate-x-5' : 'translate-x-0'}`}>
                 {form.isNightShift && <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse" />}
@@ -285,7 +283,7 @@ export function ShiftFormModal({
               </p>
             </div>
             
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap justify-between sm:justify-start gap-1.5 sm:gap-2.5">
               {DAYS.map(day => {
                 const isWeekend = day === 'Sat' || day === 'Sun'
                 const active = form.workDays.includes(day)
@@ -301,7 +299,7 @@ export function ShiftFormModal({
                           : [...f.workDays, day],
                         halfDays: active ? f.halfDays.filter(d => d !== day) : f.halfDays,
                       }))}
-                      className={`w-11 h-11 rounded-2xl text-[11px] font-black transition-all border flex items-center justify-center relative overflow-hidden ${active
+                      className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl text-[11px] font-black transition-all border flex items-center justify-center relative overflow-hidden ${active
                         ? isWeekend
                           ? 'bg-red-50 border-red-200 text-red-600 shadow-sm'
                           : 'bg-brand border-brand text-white shadow-lg shadow-brand/20 scale-105 z-10'
@@ -321,7 +319,7 @@ export function ShiftFormModal({
                             ? f.halfDays.filter(d => d !== day)
                             : [...f.halfDays, day]
                         }))}
-                        className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-all border ${isHalf
+                        className={`text-[9px] font-black px-1.5 py-0.5 rounded-full transition-all border ${isHalf
                           ? 'bg-orange-500 border-orange-600 text-white shadow-sm'
                           : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'
                           }`}
@@ -357,7 +355,7 @@ export function ShiftFormModal({
 
           {/* Preview */}
           {(form.startTime && form.endTime) && (
-            <div className="bg-slate-900 rounded-[1.75rem] p-6 text-white shadow-2xl relative overflow-hidden group">
+            <div className="bg-slate-900 rounded-[1.75rem] p-5 sm:p-6 text-white shadow-2xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-brand/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-brand/20 transition-colors" />
               <div className="flex items-center justify-between relative z-10">
                 <div className="space-y-1">
@@ -379,8 +377,8 @@ export function ShiftFormModal({
                 </div>
               </div>
               
-              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-4">
+              <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 relative z-10">
+                <div className="flex items-center gap-3 sm:gap-4">
                   <div className="flex items-center gap-1.5">
                     <Coffee size={12} className="text-slate-500" />
                     <span className="text-[11px] font-bold text-slate-400">{calcFormBreaks(form.breaks, form.breakMinutes)}m Break</span>
@@ -391,7 +389,7 @@ export function ShiftFormModal({
                     <span className="text-[11px] font-bold text-slate-400">{form.graceMinutes}m Grace</span>
                   </div>
                 </div>
-                <div className="px-3 py-1 bg-white/5 rounded-lg border border-white/10">
+                <div className="px-3 py-1 bg-white/5 rounded-lg border border-white/10 w-fit">
                   <span className="text-[10px] font-bold text-slate-400">
                     {DAYS.filter(d => !form.workDays.includes(d)).length} Rest Days
                   </span>
@@ -401,17 +399,17 @@ export function ShiftFormModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-4 px-8 py-6 bg-slate-50/50 backdrop-blur-md border-t border-slate-100 shrink-0">
+        <div className="flex items-center justify-end gap-3 sm:gap-4 px-6 sm:px-8 py-4 sm:py-6 bg-slate-50/50 backdrop-blur-md border-t border-slate-100 shrink-0">
           <button 
             onClick={onClose} 
-            className="px-6 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors active:scale-95"
+            className="px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-colors active:scale-95 shrink-0"
           >
             Discard
           </button>
           <button 
             onClick={onSubmit} 
             disabled={formLoading || hasInvalidBreaks || !!shiftTimingError} 
-            className="flex-1 max-w-[200px] px-6 py-3.5 bg-brand text-white rounded-2xl text-sm font-bold shadow-xl shadow-brand/20 hover:bg-brand-dark disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
+            className="flex-1 sm:flex-initial sm:min-w-[160px] px-5 sm:px-6 py-3 bg-brand text-white rounded-2xl text-sm font-bold shadow-xl shadow-brand/20 hover:bg-brand-dark disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
           >
             {formLoading ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
