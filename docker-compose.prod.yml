@@ -51,6 +51,7 @@ services:
       - bits_uploads:/app/uploads
     ports:
       - "4013:3001"
+      - "4014:5555"
     depends_on:
       postgres:
         condition: service_healthy   # waits for pg_isready before starting
