@@ -13,7 +13,7 @@ export interface ParsedImportRow {
   suffix?: string;
   gender?: string;
   dateOfBirth?: string;
-  email: string;
+  email?: string;
   contactNumber: string;
   company: string;
   department: string;
@@ -162,12 +162,10 @@ export function useEmployeeImport({
         if (!empNum) errors.push('Missing emp#');
         if (!firstName) errors.push('Missing first name');
         if (!lastName) errors.push('Missing last name');
-        if (!email) errors.push('Missing email');
         if (!normalizedContact) errors.push('Missing contact');
         if (!company) errors.push('Missing company');
         if (!department) errors.push('Missing department');
         if (!branch) errors.push('Missing branch');
-        if (!shiftCode || !shiftCode.trim()) errors.push('Missing shift');
         if (!dateOfBirth) errors.push('Missing date of birth');
         if (!hireDate) errors.push('Missing hire date');
 
@@ -280,7 +278,7 @@ export function useEmployeeImport({
         suffix: r.suffix || undefined,
         gender: r.gender || undefined,
         dateOfBirth: r.dateOfBirth || undefined,
-        email: r.email,
+        email: r.email || undefined,
         contactNumber: r.contactNumber || undefined,
         company: r.company || undefined,
         department: r.department,
