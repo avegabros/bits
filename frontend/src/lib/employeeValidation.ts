@@ -16,6 +16,7 @@ export const employeeFormSchema = z.object({
   email: z.string()
     .email('A valid email is required')
     .or(z.literal(''))
+    .nullable()
     .optional(),
   departmentId: z.number({ error: 'Department is required' }),
   branchId: z.number({ error: 'Branch is required' }),

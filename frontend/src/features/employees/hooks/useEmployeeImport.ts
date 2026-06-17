@@ -129,7 +129,9 @@ export function useEmployeeImport({
       const parsed: ParsedImportRow[] = dataRows.map((raw, idx) => {
         const n: Record<string, string> = {};
         for (const [k, v] of Object.entries(raw))
-          n[k.replace(/[\s_]+/g, '').toLowerCase()] = v instanceof Date ? v.toISOString() : String(v ?? '').trim();
+          n[k.replace(/[\s_]+/g, '').toLowerCase()] = v instanceof Date
+            ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
+            : String(v ?? '').trim();
 
         const errors: string[] = [];
         const empNum = n['employeenumber'] || n['employeeid'] || n['empid'] || '';
