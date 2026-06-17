@@ -16,13 +16,16 @@ export const employeeFormSchema = z.object({
   email: z.string()
     .email('A valid email is required')
     .or(z.literal(''))
+    .nullable()
     .optional(),
   departmentId: z.number({ error: 'Department is required' }),
   branchId: z.number({ error: 'Branch is required' }),
-  dateOfBirth: z.string().optional().refine((date) => {
-    if (!date) return true;
-    return new Date(date).getTime() <= new Date().getTime();
-  }, { message: 'Date of Birth cannot be in the future' }),
+  dateOfBirth: z.string()
+    .min(1, 'Date of Birth is required')
+    .refine((date) => {
+      if (!date) return true;
+      return new Date(date).getTime() <= new Date().getTime();
+    }, { message: 'Date of Birth cannot be in the future' }),
   hireDate: z.string().optional().refine((date) => {
     if (!date) return true;
     return new Date(date).getTime() <= new Date().getTime();

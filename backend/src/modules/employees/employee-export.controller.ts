@@ -6,7 +6,7 @@ import { syncEmployeesToDevice, enrollEmployeeFingerprint, enrollEmployeeCard, d
 import { enqueueGlobalUpsertUser, enqueueGlobalDeleteUser, processDeviceSyncQueue } from '../devices/deviceSyncQueue.service';
 import { audit } from '../../shared/lib/auditLogger';
 import bcrypt from 'bcryptjs';
-import { generateRandomPassword } from '../../shared/utils/password.utils';
+import { generateRandomPassword, getBirthdatePassword } from '../../shared/utils/password.utils';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
 
 
@@ -94,7 +94,6 @@ export const exportEmployees = async (req: Request, res: Response) => {
             { header: 'Branch', key: 'branch', width: 16 },
             { header: 'Hire Date', key: 'hireDate', width: 16 },
             { header: 'Shift Code', key: 'shiftCode', width: 14 },
-            { header: 'Status', key: 'employmentStatus', width: 14 },
         ];
         sheet.columns = columns;
 
@@ -126,7 +125,6 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 branch: emp.Branch?.name || '',
                 hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
                 shiftCode: emp.EmployeeShift?.length ? emp.EmployeeShift.map(es => es.shift.shiftCode).join(',') : (emp.Shift?.shiftCode || ''),
-                employmentStatus: emp.employmentStatus || '',
             });
         }
 
@@ -193,14 +191,13 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { header: 'Suffix', key: 'suffix', width: 12, required: false, hint: 'Jr., Sr., II, III, etc.' },
             { header: 'Gender', key: 'gender', width: 14, required: false, hint: 'Male / Female / Prefer not to say' },
             { header: 'Date of Birth', key: 'dateOfBirth', width: 18, required: true, hint: 'MM-DD-YYYY format (required)' },
-            { header: 'Email', key: 'email', width: 28, required: true, hint: 'Valid email (login credentials sent here)' },
+            { header: 'Email', key: 'email', width: 28, required: false, hint: 'Optional valid email (if provided, login credentials sent here)' },
             { header: 'Contact Number', key: 'contactNumber', width: 20, required: true, hint: 'Enter in +63 format (e.g. +639171234567) — saved as 09XXXXXXXXX' },
             { header: 'Company', key: 'company', width: 24, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (filtered by Company)' },
             { header: 'Department', key: 'department', width: 20, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Hire Date', key: 'hireDate', width: 16, required: true, hint: 'MM-DD-YYYY format (required)' },
-            { header: 'Shift Code', key: 'shiftCode', width: 16, required: true, hint: 'Select from dropdown (see Reference Lists)' },
-            { header: 'Status', key: 'employmentStatus', width: 14, required: false, hint: 'ACTIVE (default) / INACTIVE' },
+            { header: 'Shift Code', key: 'shiftCode', width: 16, required: false, hint: 'Optional. Select from dropdown (see Reference Lists)' },
         ];
 
         // Column key → 1-based column index map
@@ -471,14 +468,19 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '   • Employee Number — Must be unique across all employees',
             '   • First Name — Legal first name of the employee',
             '   • Last Name — Legal last name of the employee',
-            '   • Email — Valid email address (login credentials will be sent here)',
+            '   • Date of Birth — Legal date of birth',
             '   • Contact Number — Philippine mobile number (e.g. +639171234567 or 09171234567 — auto-converted)',
             '   • Company — Select from the dropdown (must be selected BEFORE Branch)',
             '   • Branch — Filtered by Company. Select Company first, then Branch.',
             '   • Department — Select from the dropdown (values from Reference Lists)',
+            '   • Hire Date — Date the employee was hired',
             '',
             '2. OPTIONAL FIELDS (orange headers on Sheet 1):',
-            '   • Middle Name, Suffix, Gender, Date of Birth, Hire Date, Status',
+            '   • Middle Name — Legal middle name',
+            '   • Suffix — Suffix (Jr., Sr., etc.)',
+            '   • Gender — Male, Female, or Prefer not to say',
+            '   • Email — Optional. If provided, login credentials will be sent here.',
+            '   • Shift Code — Optional. Select from dropdown (values from Reference Lists)',
             '',
             '3. COMPANY → BRANCH (CASCADING DROPDOWN):',
             '   • The Company column must be filled BEFORE selecting a Branch',
@@ -510,14 +512,15 @@ export const exportTemplate = async (req: Request, res: Response) => {
             '   • Branch dropdown is dependent on Company — always fill Company first',
             '',
             '9. WHAT HAPPENS AFTER IMPORT:',
-            '   • Each employee will be created with ACTIVE status and USER role',
-            '   • A random password will be generated and emailed to each employee',
+            '   • Each employee will be created with STAGED status and USER role',
+            '   • If an email is provided, a random password will be generated and emailed to them',
+            '   • If no email is provided, a default password based on Date of Birth (MMDDYY) will be set',
             '   • Employees will be prompted to change their password on first login',
-            '   • The employee will be synced to biometric devices automatically',
+            '   • The employee will be synced to biometric devices automatically when activated',
             '',
             '10. TIPS:',
             '   • The hint row (row 3) will be automatically skipped during import',
-            '   • Duplicate employee numbers or emails will be rejected',
+            '   • Duplicate employee numbers or provided emails will be rejected',
             '   • Row 1 is a color legend — leave it as-is, the system ignores it',
         ];
 
@@ -583,8 +586,8 @@ export const bulkValidateEmployees = async (req: Request, res: Response) => {
 
         const errors: { row: number; reason: string }[] = [];
         
-        const empNumsToVerify = employees.map(e => String(e.employeeNumber).trim()).filter(Boolean);
-        const emailsToVerify = employees.map(e => String(e.email).trim().toLowerCase()).filter(Boolean);
+        const empNumsToVerify = employees.map(e => e.employeeNumber ? String(e.employeeNumber).trim() : '').filter(Boolean);
+        const emailsToVerify = employees.map(e => e.email ? String(e.email).trim().toLowerCase() : '').filter(Boolean);
 
         const [existingEmpNums, existingEmails] = await Promise.all([
             prisma.employee.findMany({ where: { employeeNumber: { in: empNumsToVerify } }, select: { employeeNumber: true } }),
@@ -597,8 +600,8 @@ export const bulkValidateEmployees = async (req: Request, res: Response) => {
         for (let i = 0; i < employees.length; i++) {
             const emp = employees[i];
             const rowNum = emp._rowNumber ?? (i + 1);
-            const empNum = String(emp.employeeNumber || '').trim();
-            const email = String(emp.email || '').trim().toLowerCase();
+            const empNum = emp.employeeNumber ? String(emp.employeeNumber).trim() : '';
+            const email = emp.email ? String(emp.email).trim().toLowerCase() : '';
 
             if (empNum && existingEmpNumSet.has(empNum)) {
                 errors.push({ row: rowNum, reason: `Employee number '${empNum}' already exists in database` });
@@ -663,8 +666,11 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
             if (!emp.firstName || !emp.lastName) {
                 errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'First name and last name are required' });
             }
-            if (!emp.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.email)) {
-                errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid email is required' });
+            if (emp.email && emp.email.toString().trim() !== '') {
+                const trimmedEmail = emp.email.toString().trim();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+                    errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'Email format is invalid' });
+                }
             }
             if (!emp.dateOfBirth || emp.dateOfBirth.toString().trim() === '' || isNaN(Date.parse(emp.dateOfBirth.toString()))) {
                 errors.push({ row: rowNum, employeeNumber: empNum, status: 'failed', reason: 'A valid Date of Birth is required' });
@@ -726,7 +732,10 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                 }
 
                 // ── Acquire mutex, assign zkId, create employee ──────────────
-                const generatedPassword = generateRandomPassword(10);
+                const normalizedEmail = emp.email && String(emp.email).trim() !== ''
+                    ? String(emp.email).trim().toLowerCase()
+                    : null;
+                const generatedPassword = normalizedEmail ? generateRandomPassword(10) : getBirthdatePassword(emp.dateOfBirth);
                 const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
                 // No longer acquiring registration mutex for zkId during import
@@ -742,7 +751,7 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             suffix: emp.suffix || null,
                             gender: emp.gender || null,
                             dateOfBirth: new Date(emp.dateOfBirth),
-                            email: emp.email,
+                            email: normalizedEmail,
                             password: hashedPassword,
                             role: 'USER',
                             departmentId: emp.department
@@ -803,7 +812,7 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                     entityId: newEmployee.id,
                     performedBy: req.user?.employeeId,
                     details: `Bulk import: created employee ${newEmployee.firstName} ${newEmployee.lastName} (Staged)`,
-                    metadata: { email: emp.email, employeeNumber: empNum, source: 'bulk_import' },
+                    metadata: { email: normalizedEmail, employeeNumber: empNum, source: 'bulk_import' },
                     correlationId: req.correlationId
                 });
 

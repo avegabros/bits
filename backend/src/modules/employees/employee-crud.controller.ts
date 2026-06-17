@@ -7,7 +7,7 @@ import { enqueueGlobalUpsertUser, enqueueGlobalDeleteUser, processDeviceSyncQueu
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, buildChanges } from '../../shared/lib/auditHelpers';
 import bcrypt from 'bcryptjs';
-import { generateRandomPassword } from '../../shared/utils/password.utils';
+import { generateRandomPassword, getBirthdatePassword } from '../../shared/utils/password.utils';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
 import { validateShiftGap } from '../shifts/shift-conflict.service';
 import { getChronologicalShiftIds } from '../shifts/shift-ordering.service';
@@ -440,11 +440,21 @@ export const createEmployee = async (req: Request, res: Response) => {
             });
         }
 
-        // Validate email format and require it
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        // Email is optional. If provided, validate it.
+        if (email && email.trim() !== '') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'A valid email is required if provided'
+                });
+            }
+        }
+
+        // Birthdate is required
+        if (!dateOfBirth) {
             return res.status(400).json({
                 success: false,
-                message: 'A valid email is required to receive login credentials'
+                message: 'Date of birth is required'
             });
         }
 
@@ -476,11 +486,13 @@ export const createEmployee = async (req: Request, res: Response) => {
             });
         }
 
+        const normalizedEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : null;
+
         // Check for existing employee with same email, employee number
         const existingEmployee = await prisma.employee.findFirst({
             where: {
                 OR: [
-                    { email: email || undefined },
+                    { email: normalizedEmail || undefined },
                     { employeeNumber: employeeNumber || undefined },
                     { contactNumber: contactNumber || undefined },
                 ]
@@ -489,7 +501,7 @@ export const createEmployee = async (req: Request, res: Response) => {
 
         if (existingEmployee) {
             let duplicateField = 'information';
-            if (email && existingEmployee.email === email) duplicateField = 'email address';
+            if (normalizedEmail && existingEmployee.email === normalizedEmail) duplicateField = 'email address';
             else if (employeeNumber && existingEmployee.employeeNumber === employeeNumber) duplicateField = 'employee number';
             else if (contactNumber && existingEmployee.contactNumber === contactNumber) duplicateField = 'contact number';
 
@@ -537,10 +549,16 @@ export const createEmployee = async (req: Request, res: Response) => {
             }
         }>;
         let newEmployee: NewEmployeeResult | undefined;
-        const generatedPassword = generateRandomPassword(10);
-        const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+        let generatedPassword = '';
 
         try {
+            if (normalizedEmail) {
+                generatedPassword = generateRandomPassword(10);
+            } else {
+                generatedPassword = getBirthdatePassword(dateOfBirth);
+            }
+            const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
             const safeResult = await findNextSafeZkId();
             const nextZkId = safeResult.zkId;
 
@@ -554,7 +572,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                         suffix: suffix || null,
                         gender: gender || null,
                         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                        email,
+                        email: normalizedEmail,
                         password: hashedPassword,
                         role: 'USER',
                         departmentId: departmentId ? parseInt(departmentId, 10) : null,
@@ -649,11 +667,11 @@ export const createEmployee = async (req: Request, res: Response) => {
         // Fire-and-forget: sync to biometric device and send email
         setImmediate(async () => {
             // Send welcome email
-            if (email) {
+            if (normalizedEmail) {
                 try {
-                    await sendWelcomeEmail(email, `${firstName} ${lastName}`, generatedPassword);
+                    await sendWelcomeEmail(normalizedEmail, `${firstName} ${lastName}`, generatedPassword);
                 } catch (emailErr) {
-                    console.error(`[API] (background) Failed to send welcome email to ${email}:`, emailErr);
+                    console.error(`[API] (background) Failed to send welcome email to ${normalizedEmail}:`, emailErr);
                 }
             }
 
@@ -1065,10 +1083,10 @@ export const resetEmployeePassword = async (req: Request, res: Response) => {
             });
         }
 
-        // Check if employee exists and has an email
+        // Check if employee exists
         const employee = await prisma.employee.findUnique({
             where: { id: employeeId },
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true, dateOfBirth: true },
         });
 
         if (!employee) {
@@ -1078,14 +1096,29 @@ export const resetEmployeePassword = async (req: Request, res: Response) => {
             });
         }
 
-        if (!employee.email) {
-            return res.status(400).json({
-                success: false,
-                message: 'Employee does not have an email address configured',
-            });
+        let generatedPassword = '';
+        const hasEmail = employee.email && employee.email.trim() !== '';
+
+        if (hasEmail) {
+            generatedPassword = generateRandomPassword(10);
+        } else {
+            if (!employee.dateOfBirth) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Employee does not have a birthdate configured, which is required to generate the default password.',
+                });
+            }
+
+            try {
+                generatedPassword = getBirthdatePassword(employee.dateOfBirth);
+            } catch (err) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Failed to parse the employee birthdate to generate the default password.',
+                });
+            }
         }
 
-        const generatedPassword = generateRandomPassword(10);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
         // Update DB
@@ -1098,24 +1131,31 @@ export const resetEmployeePassword = async (req: Request, res: Response) => {
             }
         });
 
-        // Send email
-        const emailSent = await sendPasswordResetEmail(
-            employee.email,
-            `${employee.firstName} ${employee.lastName}`,
-            generatedPassword
-        );
+        if (hasEmail) {
+            // Send email
+            const emailSent = await sendPasswordResetEmail(
+                employee.email!,
+                `${employee.firstName} ${employee.lastName}`,
+                generatedPassword
+            );
 
-        if (!emailSent) {
-            return res.status(500).json({
-                success: false,
-                message: "Password was reset but the email could not be sent. Please verify SMTP configuration and try again.",
+            if (!emailSent) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Password was reset but the email could not be sent. Please verify SMTP configuration and try again.",
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: `Password reset successfully. Email sent to ${employee.email}.`,
+            });
+        } else {
+            return res.json({
+                success: true,
+                message: `Password reset successfully to the default birthdate-based password (${generatedPassword}).`,
             });
         }
-
-        res.json({
-            success: true,
-            message: `Password reset successfully. Email sent to ${employee.email}.`,
-        });
 
     } catch (error: unknown) {
         console.error('Error resetting password:', error);

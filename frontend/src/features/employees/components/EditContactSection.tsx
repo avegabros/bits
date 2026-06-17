@@ -21,7 +21,7 @@ export function EditContactSection({
     <div className="grid grid-cols-2 gap-3">
       {/* Email */}
       <div className="space-y-1">
-        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Email Address</label>
+        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Email Address (Optional)</label>
         <input
           type="email"
           value={editForm.email || ''}

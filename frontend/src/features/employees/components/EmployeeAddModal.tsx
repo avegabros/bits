@@ -148,13 +148,13 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
               </select>
             </div>
             <div>
-              <label className="text-slate-400 text-[10px] uppercase font-bold">Date of Birth</label>
+              <label className="text-slate-400 text-[10px] uppercase font-bold">Date of Birth *</label>
               <input type="date" className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.dateOfBirth ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.dateOfBirth} onChange={e => { setNewEmployee(p => ({ ...p, dateOfBirth: e.target.value })); setFormErrors(p => ({ ...p, dateOfBirth: '' })) }} />
               {formErrors.dateOfBirth && <p className="text-[11px] text-red-500 mt-1">{formErrors.dateOfBirth}</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-slate-400 text-[10px] uppercase font-bold">Email Address *</label><input type="email" placeholder="Email" className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.email ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.email} onChange={e => { setNewEmployee(p => ({ ...p, email: e.target.value })); setFormErrors(p => ({ ...p, email: '' })) }} onBlur={() => handleDuplicateBlur('email')} />{formErrors.email && <p className="text-[11px] text-red-500">{formErrors.email}</p>}</div>
+            <div><label className="text-slate-400 text-[10px] uppercase font-bold">Gmail Address / Email Address, optional</label><input type="email" placeholder="Email" className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.email ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.email} onChange={e => { setNewEmployee(p => ({ ...p, email: e.target.value })); setFormErrors(p => ({ ...p, email: '' })) }} onBlur={() => handleDuplicateBlur('email')} />{formErrors.email && <p className="text-[11px] text-red-500">{formErrors.email}</p>}</div>
             <div><label className="text-slate-400 text-[10px] uppercase font-bold">Contact Number *</label><input type="tel" placeholder="Contact" maxLength={13} className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.contactNumber ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.contactNumber} onChange={e => { setNewEmployee(p => ({ ...p, contactNumber: formatPhoneNumber(e.target.value) })); setFormErrors(p => ({ ...p, contactNumber: '' })) }} onBlur={() => handleDuplicateBlur('contactNumber')} />{formErrors.contactNumber && <p className="text-[11px] text-red-500">{formErrors.contactNumber}</p>}</div>
           </div>
 

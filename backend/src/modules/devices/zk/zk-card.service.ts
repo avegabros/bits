@@ -40,19 +40,20 @@ export const enrollEmployeeCard = async (
         }
 
         if (employee.employmentStatus === 'STAGED') {
-            const { generateRandomPassword } = require('../../../shared/utils/password.utils');
-            const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
-            const bcrypt = require('bcrypt');
-
-            const newPassword = generateRandomPassword(10);
-            employeeUpdates.password = await bcrypt.hash(newPassword, 10);
             employeeUpdates.employmentStatus = 'ACTIVE';
             console.log(`[CardEnroll] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
 
-            if (employee.email) {
+            if (employee.email && employee.email.trim() !== '') {
+                const { generateRandomPassword } = require('../../../shared/utils/password.utils');
+                const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
+                const bcrypt = require('bcrypt');
+
+                const newPassword = generateRandomPassword(10);
+                employeeUpdates.password = await bcrypt.hash(newPassword, 10);
+
                 setImmediate(async () => {
                     try {
-                        await sendWelcomeEmail(employee.email, fullName, newPassword);
+                        await sendWelcomeEmail(employee.email!, fullName, newPassword);
                     } catch (emailErr) {
                         console.error(`[CardEnroll] Failed to send welcome email to ${employee.email}`, emailErr);
                     }

@@ -791,22 +791,28 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
         const { sendWelcomeEmail } = require('../../../shared/lib/email.service');
         const bcrypt = require('bcrypt');
 
-        const newPassword = generateRandomPassword(10);
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        if (employee.email && employee.email.trim() !== '') {
+            const newPassword = generateRandomPassword(10);
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        console.log(`[BiometricSync] Promoting employee ${employeeId} from STAGED to ACTIVE.`);
-        await prisma.employee.update({
-            where: { id: employeeId },
-            data: { employmentStatus: 'ACTIVE', password: hashedPassword, updatedAt: new Date() }
-        });
+            console.log(`[BiometricSync] Promoting employee ${employeeId} from STAGED to ACTIVE (with email).`);
+            await prisma.employee.update({
+                where: { id: employeeId },
+                data: { employmentStatus: 'ACTIVE', password: hashedPassword, updatedAt: new Date() }
+            });
 
-        if (employee.email) {
             setImmediate(async () => {
                 try {
-                    await sendWelcomeEmail(employee.email, `${employee.firstName} ${employee.lastName}`, newPassword);
+                    await sendWelcomeEmail(employee.email!, `${employee.firstName} ${employee.lastName}`, newPassword);
                 } catch (emailErr) {
                     console.error(`[BiometricSync] Failed to send welcome email to ${employee.email}`, emailErr);
                 }
+            });
+        } else {
+            console.log(`[BiometricSync] Promoting employee ${employeeId} from STAGED to ACTIVE (no email - keeping default password).`);
+            await prisma.employee.update({
+                where: { id: employeeId },
+                data: { employmentStatus: 'ACTIVE', updatedAt: new Date() }
             });
         }
     }	

@@ -91,26 +91,40 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { email, password } = req.body;
+        let { email, employeeId, identifier, password } = req.body;
 
-        if (!email || !password) {
-            res.status(400).json({ success: false, message: 'Email and password are required' });
+        if (identifier) {
+            if (identifier.includes('@')) {
+                email = identifier;
+            } else {
+                employeeId = identifier;
+            }
+        }
+
+        if ((!email && !employeeId) || !password) {
+            res.status(400).json({ success: false, message: 'Email or Employee ID and password are required' });
             return;
         }
 
-        const employee = await prisma.employee.findFirst({ where: { email } });
+        let employee = null;
+        if (email) {
+            employee = await prisma.employee.findFirst({ where: { email } });
+        } else if (employeeId) {
+            employee = await prisma.employee.findFirst({ where: { employeeNumber: employeeId } });
+        }
 
         if (!employee || !employee.password) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
 
             // Log failed login — unknown user
+            const auditIdentifier = email || employeeId;
             void audit({
                 action: 'FAILED_LOGIN',
                 level: 'WARN',
                 entityType: 'Account',
                 source: 'admin-panel',
-                details: `Failed login attempt for email "${email}" — account not found`,
-                metadata: { email, reason: 'account_not_found', ip: req.ip },
+                details: `Failed login attempt for identifier "${auditIdentifier}" — account not found`,
+                metadata: { identifier: auditIdentifier, reason: 'account_not_found', ip: req.ip },
                 correlationId: req.correlationId
             });
             return;
@@ -129,7 +143,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 performedBy: employee.id,
                 source: 'admin-panel',
                 details: `Failed login attempt for ${employee.firstName} ${employee.lastName} — invalid password`,
-                metadata: { email: employee.email, reason: 'invalid_password', ip: req.ip },
+                metadata: { email: employee.email, employeeNumber: employee.employeeNumber, reason: 'invalid_password', ip: req.ip },
                 correlationId: req.correlationId
             });
             return;
@@ -151,7 +165,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 performedBy: employee.id,
                 source: 'admin-panel',
                 details: `Blocked login for deactivated account ${employee.firstName} ${employee.lastName}`,
-                metadata: { email: employee.email, reason: 'account_inactive', status: employee.employmentStatus, ip: req.ip },
+                metadata: { email: employee.email, employeeNumber: employee.employeeNumber, reason: 'account_inactive', status: employee.employmentStatus, ip: req.ip },
                 correlationId: req.correlationId
             });
             return;
@@ -234,7 +248,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         // Reset the rate limit counter for this IP+user on successful login
         // so accumulated failed attempts don't carry over.
-        const rateLimitKey = `${req.ip}:${email.toLowerCase()}`;
+        const inputIdentifier = email || employeeId;
+        const rateLimitKey = `${req.ip}:${inputIdentifier.toLowerCase()}`;
         loginLimiter.resetKey(rateLimitKey);
 
         void audit({
@@ -244,7 +259,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             performedBy: employee.id,
             source: 'admin-panel',
             details: `User ${employee.firstName} ${employee.lastName} logged in successfully`,
-            metadata: { email: employee.email },
+            metadata: { email: employee.email, employeeNumber: employee.employeeNumber },
             correlationId: req.correlationId
         });
 

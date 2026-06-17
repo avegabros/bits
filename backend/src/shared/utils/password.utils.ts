@@ -14,3 +14,31 @@ export const generateRandomPassword = (length: number = 10): string => {
     }
     return password;
 };
+
+/**
+ * Generates a password in MMDDYY format from a given date input.
+ * MM = 2-digit birth month (01-12)
+ * DD = 2-digit birth day (01-31)
+ * YY = last 2 digits of the birth year
+ */
+export const getBirthdatePassword = (dateInput: string | Date): string => {
+    if (typeof dateInput === 'string') {
+        const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+            const yy = match[1].slice(-2);
+            const mm = match[2];
+            const dd = match[3];
+            return `${mm}${dd}${yy}`;
+        }
+    }
+
+    const dateObj = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(dateObj.getTime())) {
+        throw new Error('Invalid date format');
+    }
+    const yy = String(dateObj.getUTCFullYear()).slice(-2);
+    const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getUTCDate()).padStart(2, '0');
+    return `${mm}${dd}${yy}`;
+};
+
