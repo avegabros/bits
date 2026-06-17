@@ -1,5 +1,5 @@
 import React from 'react'
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react'
+import { Eye, EyeOff, Lock, User } from 'lucide-react'
 import { useLogin } from '../hooks/useLogin'
 
 interface LoginFormProps {
@@ -8,8 +8,8 @@ interface LoginFormProps {
 
 export function LoginForm({ loginState }: LoginFormProps) {
   const {
-    email,
-    setEmail,
+    identifier,
+    setIdentifier,
     password,
     setPassword,
     showPassword,
@@ -32,17 +32,17 @@ export function LoginForm({ loginState }: LoginFormProps) {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <div className="relative">
-            <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-600" />
+            <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-600" />
             <input
-              type="email"
-              placeholder="Email"
-              value={email}
+              type="text"
+              placeholder="Email or Employee ID"
+              value={identifier}
               onChange={(e) => {
-                setEmail(e.target.value)
-                if (validationErrors.email) {
+                setIdentifier(e.target.value)
+                if (validationErrors.identifier) {
                   setValidationErrors({
                     ...validationErrors,
-                    email: '',
+                    identifier: '',
                   })
                 }
               }}
@@ -50,8 +50,8 @@ export function LoginForm({ loginState }: LoginFormProps) {
               className="w-full border-b-2 border-gray-500 bg-transparent py-3 pl-12 pr-4 text-gray-800 placeholder-gray-900 focus:border-red-600 focus:outline-none disabled:opacity-50"
             />
           </div>
-          {validationErrors.email && (
-            <p className="mt-2 text-xs text-red-600">{validationErrors.email}</p>
+          {validationErrors.identifier && (
+            <p className="mt-2 text-xs text-red-600">{validationErrors.identifier}</p>
           )}
         </div>
 

@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation'
 
 export function useLogin() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
@@ -13,11 +13,18 @@ export function useLogin() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
+    const trimmed = identifier.trim()
 
-    if (!email) {
-      newErrors.email = 'Email is required'
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email'
+    if (!trimmed) {
+      newErrors.identifier = 'Email or Employee ID is required'
+    } else if (trimmed.includes('@')) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        newErrors.identifier = 'Please enter a valid email address'
+      }
+    } else {
+      if (!/^[a-zA-Z0-9_-]{3,20}$/.test(trimmed)) {
+        newErrors.identifier = 'Employee ID must be 3-20 characters (letters, numbers, -, _)'
+      }
     }
 
     if (!password) {
@@ -45,7 +52,7 @@ export function useLogin() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
       })
 
       const data = await res.json()
@@ -99,8 +106,8 @@ export function useLogin() {
   }
 
   return {
-    email,
-    setEmail,
+    identifier,
+    setIdentifier,
     password,
     setPassword,
     showPassword,

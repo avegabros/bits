@@ -26,8 +26,8 @@ export const loginLimiter = rateLimit({
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     keyGenerator: (req, res) => {
-        const email = req.body?.email?.toLowerCase?.() || 'unknown';
-        return `${(ipKeyGenerator as (req: unknown, res: unknown) => string)(req, res)}:${email}`;
+        const identifier = (req.body?.identifier || req.body?.email || req.body?.employeeId || 'unknown').toString().toLowerCase();
+        return `${(ipKeyGenerator as (req: unknown, res: unknown) => string)(req, res)}:${identifier}`;
     },
     message: { success: false, message: 'Too many login attempts. Please try again in 15 minutes.', error: 'rate_limited' }
 });
