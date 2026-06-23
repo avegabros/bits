@@ -269,7 +269,7 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
         </div>
 
         {/* Action Selects and Dates */}
-        <div className="flex flex-wrap gap-2 items-center w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center w-full md:w-auto">
           {/* Department */}
           <Select
             value={filters.departmentId ? String(filters.departmentId) : 'all'}
@@ -304,41 +304,48 @@ export function OTMonitoringTab({ departments, role }: OTMonitoringTabProps) {
             </SelectContent>
           </Select>
 
-          {/* Date Selector */}
-          <div className="flex items-center gap-2 flex-1 sm:flex-none w-full sm:w-auto">
-            <input
-              type="date"
-              ref={dateInputRef}
-              className="absolute opacity-0 pointer-events-none"
-              value={filters.startDate}
-              onChange={(e) => setFilters(f => ({ ...f, startDate: e.target.value, endDate: e.target.value }))}
-            />
+          {/* Date Selector & Refresh Button Group */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Date Selector */}
+            <div className="flex items-center gap-2 flex-1 sm:flex-none w-full sm:w-auto">
+              <input
+                type="date"
+                ref={dateInputRef}
+                className="absolute opacity-0 pointer-events-none"
+                value={filters.startDate}
+                onChange={(e) => setFilters(f => ({ ...f, startDate: e.target.value, endDate: e.target.value }))}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
+                    dateInputRef.current.showPicker();
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-card border border-border rounded-xl text-xs font-bold text-foreground hover:bg-secondary transition-all shadow-sm h-10 w-full"
+              >
+                <Calendar className="w-4 h-4 text-rose-500" />
+                <span>
+                  {filters.startDate
+                    ? filters.startDate === getTodayDate()
+                      ? `Today, ${new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                      : new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+                    : 'Filter Date'}
+                </span>
+              </button>
+            </div>
+
+            {/* Refresh Button */}
             <button
-              onClick={() => {
-                if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
-                  dateInputRef.current.showPicker();
-                }
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-card border border-border rounded-xl text-xs font-bold text-foreground hover:bg-secondary transition-all shadow-sm h-10 w-full sm:w-auto"
+              type="button"
+              onClick={() => refresh()}
+              disabled={loading}
+              className="p-2 bg-card hover:bg-secondary border border-border text-foreground hover:text-rose-600 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer h-10 w-10 flex items-center justify-center shrink-0"
+              title="Refresh logs"
             >
-              <Calendar className="w-4 h-4 text-rose-500" />
-              <span>
-                {filters.startDate === getTodayDate()
-                  ? `Today, ${new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
-                  : new Date(filters.startDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-              </span>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-
-          {/* Refresh Button */}
-          <button
-            onClick={() => refresh()}
-            disabled={loading}
-            className="p-2 bg-card hover:bg-secondary border border-border text-foreground hover:text-rose-600 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
-            title="Refresh logs"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
         </div>
       </div>
 

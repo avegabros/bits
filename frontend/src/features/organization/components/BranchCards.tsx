@@ -25,30 +25,52 @@ export function BranchCards({
           {branches.map(branch => {
             const count = branchCounts[branch.name] || 0
             const companyLinks = branch.companies || []
+            const maxVisible = 2
+            const visibleLinks = companyLinks.slice(0, maxVisible)
+            const remainingCount = companyLinks.length - maxVisible
             return (
-              <div key={branch.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-all group">
-                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-black shrink-0 shadow-lg shadow-blue-500/20">
+              <div key={branch.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3 hover:shadow-md transition-all group">
+                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-black shrink-0 shadow-lg shadow-blue-500/20 mt-0.5">
                   <MapPin className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-700 text-sm truncate">{branch.name}</p>
                   <p className="text-xs text-slate-400">{count} {count === 1 ? 'employee' : 'employees'}</p>
-                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     {companyLinks.length > 0 ? (
-                      companyLinks.map(link => (
-                        <span key={link.companyId} className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-violet-500 bg-violet-50 px-1.5 py-0.5 rounded-md">
-                          <Building className="w-2.5 h-2.5" />
-                          {link.company.name}
-                        </span>
-                      ))
+                      <>
+                        {visibleLinks.map(link => (
+                          <span
+                            key={link.companyId}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-100/50 px-2 py-0.5 rounded-md shadow-sm truncate max-w-[130px]"
+                            title={link.company.name}
+                          >
+                            <Building className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{link.company.name}</span>
+                          </span>
+                        ))}
+                        {remainingCount > 0 && (
+                          <span className="relative group/tooltip inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-md shadow-sm cursor-help hover:bg-slate-100 transition-colors">
+                            <span>+{remainingCount} more</span>
+                            
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tooltip:block bg-slate-950 text-white text-[10px] p-2.5 rounded-lg shadow-xl w-52 z-30 font-medium leading-relaxed text-center pointer-events-none transition-all duration-200">
+                              <div className="font-bold border-b border-white/10 pb-1.5 mb-1.5 text-slate-300">Linked Companies</div>
+                              <div className="whitespace-pre-line text-left font-semibold text-white space-y-1">
+                                {companyLinks.slice(maxVisible).map(l => l.company.name).join('\n')}
+                              </div>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-950" />
+                            </div>
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span className="text-[10px] text-slate-300 italic">No company</span>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                   {count > 0 && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 mr-1">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                       <span className="text-[10px] font-bold text-emerald-500">Active</span>
                     </div>

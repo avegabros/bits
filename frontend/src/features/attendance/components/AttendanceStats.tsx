@@ -63,7 +63,7 @@ export function AttendanceStats({ stats, variant = 'generic' }: AttendanceStatsP
 
       {/* Mini Stats Bar - Hidden in Admin variant (moved to table card) */}
       {variant !== 'admin' && (
-        <div className="grid grid-cols-3 sm:flex sm:items-center gap-3 sm:gap-4 bg-white px-4 sm:px-5 py-3 rounded-2xl border border-slate-100 shadow-sm w-full sm:w-fit">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-4 bg-white px-4 sm:px-5 py-3 rounded-2xl border border-slate-100 shadow-sm w-full sm:w-fit">
           <div className="text-center">
             <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">On Time</p>
             <p className="text-xl font-black text-emerald-500">{stats.onTime}</p>

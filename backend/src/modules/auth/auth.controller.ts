@@ -440,6 +440,7 @@ export const me = async (req: Request, res: Response): Promise<void> => {
                 position: true,
                 employmentStatus: true,
                 needsPasswordChange: true,
+                profilePicture: true,
             }
         });
 

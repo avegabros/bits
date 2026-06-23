@@ -377,25 +377,31 @@
 
 /* ===== Auth / Login — Mobile-only responsive overrides ===== */
 @media (max-width: 767px) {
-  /* Container: edge-to-edge, no padding */
+  /* Container: centered with padding so the background gradient is visible */
   .auth-page {
-    padding: 0;
+    padding: 24px 16px;
     min-height: 100dvh;
-    align-items: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  /* Card: full viewport, seamless — no floating look */
+  /* Card: floating card with solid light glassmorphic background for readability */
   .auth-card-outer {
-    max-width: none;
-    width: 100vw;
-    min-height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
+    max-width: 400px;
+    width: 100%;
+    min-height: auto;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    overflow: hidden;
   }
 
   .auth-card-flex {
     flex-direction: column;
-    min-height: 100dvh;
+    min-height: auto;
   }
 
   /* Hide the dark brand panel entirely on mobile */
@@ -403,17 +409,17 @@
     display: none !important;
   }
 
-  /* Form panel — full screen, solid light background */
+  /* Form panel — transparent inside the floating card, with snug padding */
   .auth-form-panel {
     width: 100%;
-    flex: 1;
-    min-height: 100dvh;
-    padding: 48px 32px 32px;
+    flex: none;
+    min-height: auto;
+    padding: 40px 24px 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.97);
+    background: transparent;
     backdrop-filter: none;
   }
 

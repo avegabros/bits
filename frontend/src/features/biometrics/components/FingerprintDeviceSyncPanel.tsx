@@ -67,7 +67,7 @@ export function FingerprintDeviceSyncPanel({
             <p className="text-center text-sm text-slate-500 py-4">No active devices found in the system.</p>
           ) : (
             devices.map(device => (
-              <div key={device.deviceId} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+              <div key={device.deviceId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
                 <div className="flex items-center gap-3">
                   <Smartphone className={`w-4 h-4 ${device.enrolled ? 'text-red-500' : 'text-slate-300'}`} />
                   <div>
@@ -103,7 +103,7 @@ export function FingerprintDeviceSyncPanel({
                 </div>
 
                 {/* Actions per device */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0">
                   <label className="relative inline-flex items-center cursor-pointer mr-2">
                     <input
                       type="checkbox"

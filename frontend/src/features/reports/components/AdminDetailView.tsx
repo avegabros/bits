@@ -7,6 +7,7 @@ import {
     formatHrsMins,
 } from '@/features/reports/lib/formatters';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 import type { TableRowData } from '../hooks/useEmployeeModalData';
 
 export interface AdminDetailViewProps {
@@ -38,33 +39,34 @@ export function AdminDetailView({
     onClose,
     onExport,
 }: AdminDetailViewProps) {
+    const dragScrollRef = useHorizontalDragScroll();
     return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center">
-            <div className="bg-slate-50 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200/50">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-slate-50 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh] border border-slate-200/50">
                 {/* Modal Header */}
-                <div className="px-6 py-4 bg-white border-b border-slate-200/60 flex justify-between items-center shrink-0 relative">
+                <div className="pl-4 pr-12 sm:pl-6 sm:pr-14 py-4 bg-white border-b border-slate-200/60 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0 relative">
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-300" />
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
                         <div className="h-10 w-10 rounded-xl bg-slate-200/50 flex items-center justify-center shrink-0">
                             <Calendar className="w-5 h-5 text-slate-500" />
                         </div>
-                        <div>
-                            <h3 className="font-black text-slate-900 text-lg leading-tight tracking-tight uppercase">
+                        <div className="min-w-0">
+                            <h3 className="font-black text-slate-900 text-lg leading-tight tracking-tight uppercase truncate">
                                 {employee.name}
                             </h3>
                             <div className="flex items-center gap-2 mt-0.5">
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">
                                     {employee.department}
                                 </p>
-                                <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                <span className="h-1 w-1 rounded-full bg-slate-300 shrink-0" />
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">
                                     {employee.branch}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto">
                         {employee.shift && (
                             <div className="hidden md:flex flex-col items-end mr-4 pr-4 border-r border-slate-100">
                                 <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Active Shift</span>
@@ -75,28 +77,31 @@ export function AdminDetailView({
                         )}
                         <button
                             onClick={() => onExport(employee, records, exportSource)}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all duration-200 shadow-sm active:scale-95"
+                            className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all duration-200 shadow-sm active:scale-95 w-full sm:w-auto"
                         >
                             <Download className="w-3.5 h-3.5" />
                             Export Report
                         </button>
-                        <button
-                            onClick={onClose}
-                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
-                        >
-                            <XIcon className="w-5 h-5" />
-                        </button>
                     </div>
+
+                    {/* Absolute Close Button */}
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                        aria-label="Close modal"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {/* Critical Alerts */}
                 <div className="shrink-0">
                     {employee.hasAnomaly && (
-                        <div className="flex items-start gap-3 px-6 py-3 bg-orange-50 border-b border-orange-100/50">
-                            <div className="mt-0.5 p-1 bg-orange-100 rounded-md">
+                        <div className="flex items-start gap-3 px-4 sm:px-6 py-3 bg-orange-50 border-b border-orange-100/50">
+                            <div className="mt-0.5 p-1 bg-orange-100 rounded-md shrink-0">
                                 <AlertTriangle className="w-3.5 h-3.5 text-orange-600" />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-orange-900 uppercase tracking-tight">Shift Anomaly Detected</p>
                                 <p className="text-[11px] text-orange-700/80 mt-0.5 leading-relaxed">
                                     Check-ins recorded more than 4 hours outside assigned shift. Requires manual verification.
@@ -105,11 +110,11 @@ export function AdminDetailView({
                         </div>
                     )}
                     {employee.hasMissingCheckout && (
-                        <div className="flex items-start gap-3 px-6 py-3 bg-amber-50 border-b border-amber-100/50">
-                            <div className="mt-0.5 p-1 bg-amber-100 rounded-md">
+                        <div className="flex items-start gap-3 px-4 sm:px-6 py-3 bg-amber-50 border-b border-amber-100/50">
+                            <div className="mt-0.5 p-1 bg-amber-100 rounded-md shrink-0">
                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-amber-900 uppercase tracking-tight">Incomplete Attendance Records</p>
                                 <p className="text-[11px] text-amber-700/80 mt-0.5 leading-relaxed">
                                     Some entries are missing check-out timestamps. Employee total hours may be under-calculated.
@@ -122,8 +127,8 @@ export function AdminDetailView({
                 {/* Modal Body */}
                 <div className="overflow-y-auto flex-1 min-h-0">
                     {/* Summary Stats Grid */}
-                    <div className="bg-slate-50 p-6 border-b border-slate-200/60">
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                    <div className="bg-slate-50 p-4 sm:p-6 border-b border-slate-200/60">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
                             {[
                                 {
                                     label: 'Attendance',
@@ -175,9 +180,9 @@ export function AdminDetailView({
                     </div>
 
                     {/* Date Range & Legend */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 bg-slate-100/40 border-b border-slate-200/60 sticky top-0 z-20 backdrop-blur-md">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 py-4 bg-slate-100/40 border-b border-slate-200/60 sticky top-0 z-20 backdrop-blur-md">
                         <div className="flex items-center gap-2.5 px-3 py-1.5 bg-white rounded-full border border-slate-200/80 shadow-sm">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span className="text-[10px] font-black text-slate-500/80 uppercase tracking-widest">
                                 {new Date(startDate + 'T00:00:00Z').toLocaleDateString('en-US', {
                                     month: 'short',
@@ -195,7 +200,7 @@ export function AdminDetailView({
                             </span>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                             <div className="flex items-center gap-1.5">
                                 <span className="h-2 w-2 rounded-full bg-emerald-300/80" />
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">On Time</span>
@@ -212,8 +217,15 @@ export function AdminDetailView({
                     </div>
 
                     {/* Daily Attendance Table */}
-                    <table className="w-full text-left text-sm bg-white">
-                        <thead className="bg-slate-100/70 text-slate-400/80 font-black uppercase text-[9px] tracking-widest border-b border-slate-200/60 sticky top-[57px] z-10 backdrop-blur-md">
+                    <div
+                        ref={dragScrollRef}
+                        className="overflow-x-auto scrollbar-table"
+                        tabIndex={0}
+                        role="region"
+                        aria-label="Daily attendance records — scroll horizontally"
+                    >
+                    <table className="w-full text-left text-sm bg-white min-w-[820px]">
+                        <thead className="bg-slate-100/70 text-slate-400/80 font-black uppercase text-[9px] tracking-widest border-b border-slate-200/60 sticky top-0 z-10 backdrop-blur-md">
                             <tr>
                                 <SortableHeader label="Date" sortKey="loopDateStr" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-5 py-3" />
                                 <SortableHeader label="Check In" sortKey="checkInVal" currentSortKey={sortKeyStr} currentSortOrder={sortOrder} onSort={handleSort} className="px-5 py-3" />
@@ -417,14 +429,15 @@ export function AdminDetailView({
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 shrink-0 flex justify-between items-center">
+                <div className="px-4 sm:px-6 py-4 bg-slate-50 border-t border-slate-100 shrink-0 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                         {records.length} total attendance records
                     </span>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                             Working Days: <span className="text-slate-900">{employee.totalDays}</span>
                         </span>

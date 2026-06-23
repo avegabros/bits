@@ -10,32 +10,26 @@ interface DeviceCardProps {
     device: Device;
     testResult?: { success: boolean; message: string; info?: any };
     isTesting: boolean;
-    isConfirmingDelete: boolean;
     isToggling: boolean;
     isReconciling: boolean;
-    deletingId: number | null;
     onToggleSync: (device: Device) => void;
     onTest: (device: Device) => void;
     onConfirmReconcile: (device: Device) => void;
     onOpenEdit: (device: Device) => void;
-    onSetDeleteConfirm: (id: number | null) => void;
-    onDelete: (id: number) => void;
+    onDeleteClick: (device: Device) => void;
 }
 
 export function DeviceCard({
     device,
     testResult,
     isTesting,
-    isConfirmingDelete,
     isToggling,
     isReconciling,
-    deletingId,
     onToggleSync,
     onTest,
     onConfirmReconcile,
     onOpenEdit,
-    onSetDeleteConfirm,
-    onDelete
+    onDeleteClick
 }: DeviceCardProps) {
     return (
         <Card className="bg-card border-border overflow-hidden">
@@ -50,7 +44,7 @@ export function DeviceCard({
                     </div>
                     <div className="min-w-0">
                         <p className="font-bold text-foreground truncate">{device.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             <Badge
                                 variant="outline"
                                 className={`text-[10px] ${device.isActive
@@ -204,7 +198,7 @@ export function DeviceCard({
                     </Button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full">
                     {/* Edit */}
                     <Button
                         variant="outline"
@@ -217,35 +211,16 @@ export function DeviceCard({
                     </Button>
 
                     {/* Delete */}
-                    {isConfirmingDelete ? (
-                        <div className="flex gap-1.5">
-                            <Button
-                                size="sm"
-                                onClick={() => onDelete(device.id)}
-                                disabled={deletingId === device.id}
-                                className="bg-red-600 hover:bg-red-700 text-white text-xs px-3"
-                            >
-                                {deletingId === device.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Confirm'}
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onSetDeleteConfirm(null)} className="text-xs px-3 border-border"
-                            >
-                                Cancel
-                            </Button>
-                        </div>
-                    ) : (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onSetDeleteConfirm(device.id)}
-                            className="border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 text-sm px-3"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                    )}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDeleteClick(device)}
+                        className="border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 text-sm px-3 shrink-0"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                 </div>
+
             </div>
         </Card>
     );

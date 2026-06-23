@@ -86,7 +86,8 @@ export function AttendanceDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      {/* Header Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <CalendarDays className="w-6 h-6 text-red-600" /> My Attendance
@@ -94,56 +95,54 @@ export function AttendanceDashboard() {
           <p className="text-slate-500 text-sm mt-1">View your personal attendance history</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setIsOTModalOpen(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98]"
-          >
-            <Clock className="w-4 h-4" /> Request OT
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsOTModalOpen(true)}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98]"
+        >
+          <Clock className="w-4 h-4" /> Request OT
+        </button>
+      </div>
 
-        {/* Date Filter + Shift Selector */}
-        <div className="flex items-end gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex-wrap">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">From</label>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-red-500 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">To</label>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-red-500 transition-colors"
-            />
-          </div>
-          {/* Shift filter — only shows when the employee has multiple shifts */}
-          {uniqueShifts.length > 1 && (
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Shift</label>
-              <Select value={shiftFilter} onValueChange={setShiftFilter}>
-                <SelectTrigger className="w-40 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold" id="employee-shift-filter">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <SelectValue placeholder="Shift" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Shifts</SelectItem>
-                  {uniqueShifts.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+      {/* Date Filter + Shift Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto sm:self-start">
+        <div className="flex-1 sm:flex-none flex flex-col">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">From</label>
+          <input 
+            type="date" 
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full sm:w-auto text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-red-500 transition-colors"
+          />
         </div>
+        <div className="flex-1 sm:flex-none flex flex-col">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">To</label>
+          <input 
+            type="date" 
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full sm:w-auto text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-red-500 transition-colors"
+          />
+        </div>
+        {/* Shift filter — only shows when the employee has multiple shifts */}
+        {uniqueShifts.length > 1 && (
+          <div className="flex-1 sm:flex-none flex flex-col">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Shift</label>
+            <Select value={shiftFilter} onValueChange={setShiftFilter}>
+              <SelectTrigger className="w-full sm:w-40 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold" id="employee-shift-filter">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <SelectValue placeholder="Shift" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Shifts</SelectItem>
+                {uniqueShifts.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -151,9 +150,9 @@ export function AttendanceDashboard() {
            <div className="text-slate-400 font-bold">Loading records...</div>
         </div>
       ) : records.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 h-64 flex flex-col items-center justify-center gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 h-64 flex flex-col items-center justify-center gap-3 p-6 text-center">
           <CalendarDays className="w-12 h-12 text-slate-200" />
-          <p className="text-slate-500 font-semibold">No attendance records found for this period</p>
+          <p className="text-slate-500 font-semibold text-center px-4">No attendance records found for this period</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

@@ -45,18 +45,18 @@ export function DataTablePagination({
   }
 
   return (
-    <div className={`px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-4 flex-wrap ${className}`}>
+    <div className={`px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 ${className}`}>
       {/* Selection Info */}
-      <span className="text-xs text-slate-400 font-bold">
+      <span className="text-xs text-slate-400 font-bold text-center sm:text-left">
         <span className="hidden sm:inline">Showing </span>
         <span className="font-bold text-slate-700">{startRange}–{endRange}</span>
         {' '}of <span className="font-bold text-slate-700">{totalCount}</span> {entityName}
       </span>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Go-to-page input */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Go to</span>
+        <div className="hidden sm:flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Go to</span>
           <input
             type="number"
             min={1}
@@ -76,10 +76,10 @@ export function DataTablePagination({
             }}
             className="w-12 px-1.5 py-1 text-xs font-bold text-slate-700 text-center border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50"
           />
-          <span className="text-xs font-bold text-slate-500">/ {totalPages || 1}</span>
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap">/ {totalPages || 1}</span>
         </div>
 
-        <div className="h-4 w-px bg-slate-200 mx-1" />
+        <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1" />
 
         {/* Navigation Controls */}
         <div className="flex items-center gap-1">
@@ -104,7 +104,7 @@ export function DataTablePagination({
           </button>
 
           {/* Current / Total */}
-          <div className="px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-sm min-w-12 text-center">
+          <div className="px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-sm min-w-[48px] text-center">
             <span className="text-xs font-bold text-slate-700">{currentPage}</span>
           </div>
 

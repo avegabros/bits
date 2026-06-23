@@ -20,9 +20,9 @@ export function ProfileCard({
   return (
     <div className="bg-white border border-slate-200 overflow-hidden shadow-sm rounded-3xl">
       <div className="h-32 bg-brand" />
-      <div className="px-8 pb-8">
-        <div className="relative flex justify-between items-end -mt-12 mb-6">
-          <div className="h-24 w-24 rounded-3xl bg-brand-bright p-1 shadow-xl border border-slate-100 overflow-hidden">
+      <div className="px-4 sm:px-8 pb-6 sm:pb-8">
+        <div className="relative flex flex-col sm:flex-row justify-between items-center sm:items-end -mt-12 mb-6 gap-4">
+          <div className="h-24 w-24 rounded-3xl bg-brand-bright p-1 shadow-xl border border-slate-100 overflow-hidden shrink-0">
             <div className="h-full w-full rounded-2xl overflow-hidden relative">
               <Image
                 src="/images/av.jpg"
@@ -36,22 +36,22 @@ export function ProfileCard({
           {!isEditingProfile ? (
             <button
               onClick={() => setIsEditingProfile(true)}
-              className="px-6 py-2 border border-slate-400 text-slate-600 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 transition-all"
+              className="w-full sm:w-auto px-6 py-2.5 border border-slate-400 text-slate-600 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 transition-all text-center"
             >
               Edit Personal Info
             </button>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <button
                 onClick={onCancelClick}
-                className="px-6 py-2 border border-slate-400 text-slate-600 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 transition-all"
+                className="flex-1 sm:flex-none px-6 py-2.5 border border-slate-400 text-slate-600 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 transition-all text-center"
               >
                 Cancel
               </button>
               <button
                 onClick={onSave}
                 disabled={isSavingProfile}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95 disabled:opacity-50"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95 disabled:opacity-50"
               >
                 <Save size={14} /> {isSavingProfile ? 'Saving...' : 'Save'}
               </button>

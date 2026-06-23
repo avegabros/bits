@@ -32,7 +32,7 @@ export function EmployeePageHeader({
           {statusFilter === 'Active' ? 'Manage your active workforce' : 'Review offboarded personnel'}
         </p>
       </div>
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
         {statusFilter === 'Inactive' && (
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
             <AlertTriangle size={14} className="text-amber-500 shrink-0" />
@@ -42,7 +42,7 @@ export function EmployeePageHeader({
         {statusFilter === 'Active' && (
           <Button
             variant="outline"
-            className="border-border text-foreground hover:bg-red-700 hover:text-white gap-2 transition-all active:scale-95"
+            className="flex-1 sm:flex-none border-border text-foreground hover:bg-red-700 hover:text-white gap-2 transition-all active:scale-95"
             disabled={isExporting}
             onClick={onExport}
           >

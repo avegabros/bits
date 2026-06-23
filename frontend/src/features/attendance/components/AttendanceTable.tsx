@@ -73,7 +73,7 @@ export function AttendanceTable({
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-black text-foreground uppercase tracking-widest">Attendance Logs</h3>
           </div>
-          <div className="grid grid-cols-4 sm:flex sm:items-center gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-4">
             <div className="text-center">
               <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">On Time</p>
               <p className="text-lg sm:text-xl font-black text-emerald-500">{stats.onTime}</p>
