@@ -16,6 +16,7 @@ export function EmployeeTopbar({ onMenuClick }: EmployeeTopbarProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [userName, setUserName] = useState('')
+  const [profileImage, setProfileImage] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -25,6 +26,7 @@ export function EmployeeTopbar({ onMenuClick }: EmployeeTopbarProps) {
           const data = await res.json()
           const emp = data.employee ?? data
           setUserName(`${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}`)
+          setProfileImage(emp.profilePicture || null)
         }
       } catch {
         // Fallback or ignore
@@ -87,8 +89,16 @@ export function EmployeeTopbar({ onMenuClick }: EmployeeTopbarProps) {
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             className="flex items-center gap-2 group p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
-            <div className="h-9 w-9 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-200 group-hover:scale-105 transition-transform overflow-hidden">
-              <User size={18} />
+            <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-transform overflow-hidden relative shrink-0 ${
+              profileImage 
+                ? 'border-2 border-white shadow-sm bg-white' 
+                : 'bg-red-600 text-white shadow-lg shadow-red-200 group-hover:scale-105'
+            }`}>
+              {profileImage ? (
+                <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <User size={18} />
+              )}
             </div>
             <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -97,7 +107,11 @@ export function EmployeeTopbar({ onMenuClick }: EmployeeTopbarProps) {
             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in duration-200">
               <div className="px-4 py-3 border-b border-gray-50 text-center">
                 <div className="h-12 w-12 rounded-full bg-gray-100 mx-auto mb-2 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
-                  <User size={24} className="text-gray-400" />
+                  {profileImage ? (
+                    <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
+                  ) : (
+                    <User size={24} className="text-gray-400" />
+                  )}
                 </div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Signed in as</p>
                 <p className="text-sm font-black text-gray-800 tracking-tight">{userName}</p>

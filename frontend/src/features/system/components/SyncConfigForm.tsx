@@ -101,8 +101,8 @@ export function SyncConfigForm() {
                 </div>
 
                 {/* ── Sticky Save Bar ───────────────────────────────────── */}
-                <div className="fixed bottom-0 left-0 lg:left-64 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40">
-                    <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="sticky bottom-[-16px] md:bottom-[-24px] -mx-4 md:-mx-6 mt-12 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_12px_-1px_rgba(0,0,0,0.05)] z-40">
+                    <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6">
                         <div className="text-sm font-medium">
                             {isDirty ? (
                                 <span className="text-amber-600 flex items-center gap-2">

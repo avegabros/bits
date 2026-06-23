@@ -16,12 +16,17 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const canReview = role === 'manager' || role === 'admin';
-  const resolveTab = (param: string | null, canReview: boolean): 'pending' | 'history' | 'monitoring' => {
-    if (!canReview) return 'history';
+  const resolveTab = (param: string | null, currentRole: 'admin' | 'hr' | 'manager'): 'pending' | 'history' | 'monitoring' => {
+    if (currentRole === 'hr') {
+      if (param === 'history' || param === 'monitoring') return param;
+      return 'monitoring';
+    }
+    const hasReviewPrivilege = currentRole === 'manager' || currentRole === 'admin';
+    if (!hasReviewPrivilege) return 'history';
     if (param === 'history' || param === 'monitoring' || param === 'pending') return param;
     return 'pending';
   };
-  const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'monitoring'>(resolveTab(searchParams.get('tab'), canReview));
+  const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'monitoring'>(resolveTab(searchParams.get('tab'), role));
 
   const [historyFilter, setHistoryFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'DELETED'>('ALL');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -35,8 +40,8 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    setActiveTab(resolveTab(tabParam, canReview));
-  }, [searchParams, canReview]);
+    setActiveTab(resolveTab(tabParam, role));
+  }, [searchParams, role]);
 
   const basePath = role === 'hr' ? '/hr' : role === 'manager' ? '/manager' : '';
 
@@ -107,7 +112,7 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Clock size={14} />
+            <Clock size={14} className="hidden sm:block" />
             <span className="whitespace-nowrap">Pending</span>
           </button>
         )}
@@ -119,7 +124,7 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <Monitor size={14} />
+          <Monitor size={14} className="hidden sm:block" />
           <span className="whitespace-nowrap">Monitoring</span>
         </button>
         <button
@@ -130,7 +135,7 @@ export function OvertimeDashboard({ role }: OvertimeDashboardProps) {
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <History size={14} />
+          <History size={14} className="hidden sm:block" />
           <span className="whitespace-nowrap">History</span>
         </button>
       </div>

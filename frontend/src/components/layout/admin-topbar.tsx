@@ -48,6 +48,7 @@ export function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
           const data = await res.json()
           const emp = data.employee ?? data
           setUserName(`${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}`)
+          setProfileImage(emp.profilePicture || null)
         }
       } catch {
         setUserName('Admin')
@@ -156,7 +157,11 @@ export function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             className="flex items-center gap-2 group p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
-            <div className="h-9 w-9 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-200 group-hover:scale-105 transition-transform overflow-hidden">
+            <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-transform overflow-hidden relative shrink-0 ${
+              profileImage 
+                ? 'border-2 border-white shadow-sm bg-white' 
+                : 'bg-red-600 text-white shadow-lg shadow-red-200 group-hover:scale-105'
+            }`}>
               {profileImage ? (
                 <img src={profileImage || "/placeholder.svg"} alt="Profile" className="h-full w-full object-cover" />
               ) : (

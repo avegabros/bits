@@ -11,6 +11,7 @@ import { Plus, Server, RadioTower, Loader2, AlertCircle, RefreshCw } from 'lucid
 
 import { DeviceConfigureModal, Device, FormState } from '@/features/devices/components/DeviceConfigureModal'
 import { DeviceReconcileModal } from '@/features/devices/components/DeviceReconcileModal'
+import { DeviceDeleteConfirmModal } from '@/features/devices/components/DeviceDeleteConfirmModal'
 import { DeviceCard } from '@/features/devices/components/DeviceCard'
 
 const EMPTY_FORM: FormState = { name: '', ip: '', port: '4370', location: '' }
@@ -32,7 +33,7 @@ export default function DevicesPage() {
 
     // Delete confirm
     const [deletingId, setDeletingId] = useState<number | null>(null)
-    const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
 
     // Test connection state
     const [testingId, setTestingId] = useState<number | null>(null)
@@ -180,17 +181,18 @@ export default function DevicesPage() {
         }
     }
 
-    const handleDelete = async (id: number) => {
-        setDeletingId(id)
+    const handleDelete = async () => {
+        if (!deleteTarget) return
+        setDeletingId(deleteTarget.id)
         try {
-            const res = await fetch(`/api/devices/${id}`, {
+            const res = await fetch(`/api/devices/${deleteTarget.id}`, {
                 method: 'DELETE',
                 credentials: 'include'
             })
             const data = await res.json()
             if (data.success) {
                 showToast('success', 'Device Removed', data.message || 'Device removed')
-                setDeleteConfirmId(null)
+                setDeleteTarget(null)
                 fetchDevices()
             } else {
                 showToast('error', 'Delete Failed', data.message || 'Failed to delete device')
@@ -285,7 +287,7 @@ export default function DevicesPage() {
                         <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Manage ZKTeco device configurations</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 self-end sm:self-center">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
                     <Button variant="outline" size="sm" onClick={fetchDevices} className="gap-2 border-border">
                         <RefreshCw className="w-4 h-4" />
                         <span className="hidden sm:inline">Refresh</span>
@@ -346,16 +348,13 @@ export default function DevicesPage() {
                             device={device}
                             testResult={testResults[device.id]}
                             isTesting={testingId === device.id}
-                            isConfirmingDelete={deleteConfirmId === device.id}
                             isToggling={togglingId === device.id}
                             isReconciling={reconcilingId === device.id}
-                            deletingId={deletingId}
                             onToggleSync={handleToggleSync}
                             onTest={handleTest}
                             onConfirmReconcile={(d) => setReconcileTarget(d)}
                             onOpenEdit={openEdit}
-                            onSetDeleteConfirm={setDeleteConfirmId}
-                            onDelete={handleDelete}
+                            onDeleteClick={(d) => setDeleteTarget(d)}
                         />
                     ))}
                 </div>
@@ -377,6 +376,13 @@ export default function DevicesPage() {
                 reconcilingId={reconcilingId} 
                 onClose={() => setReconcileTarget(null)} 
                 onReconcile={handleReconcile} 
+            />
+
+            <DeviceDeleteConfirmModal 
+                device={deleteTarget} 
+                deleting={deletingId !== null} 
+                onClose={() => setDeleteTarget(null)} 
+                onConfirm={handleDelete} 
             />
 
             <ToastContainer toasts={toasts} onDismiss={dismissToast} />

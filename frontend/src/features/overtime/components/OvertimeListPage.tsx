@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOvertimeList } from '../hooks/useOvertimeList';
 import { CheckCircle, XCircle, Search, Clock, Calendar, UserPlus } from 'lucide-react';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface OvertimeListPageProps {
   role: 'admin' | 'manager' | 'hr';
@@ -75,17 +76,23 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
         </div>
 
         {/* Action Selects and Dates */}
-        <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full md:w-auto">
           {/* Department Select */}
           {departmentsList.length > 0 && (
-            <select 
-              value={filters.departmentId || ''} 
-              onChange={e => setFilters(f => ({ ...f, departmentId: e.target.value ? parseInt(e.target.value) : null }))}
-              className="flex-1 sm:flex-none h-11 px-4 text-sm border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all bg-white font-bold text-slate-700 cursor-pointer shadow-sm w-full sm:w-[180px] max-w-full"
+            <Select 
+              value={filters.departmentId ? String(filters.departmentId) : 'all'} 
+              onValueChange={val => setFilters(f => ({ ...f, departmentId: val === 'all' ? null : parseInt(val) }))}
             >
-              <option value="">All Departments</option>
-              {departmentsList.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
+              <SelectTrigger className="w-full sm:w-[180px] h-11 px-4 border border-slate-200 rounded-2xl bg-white font-bold text-slate-700 cursor-pointer shadow-sm">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200">
+                <SelectItem value="all">All Departments</SelectItem>
+                {departmentsList.map(d => (
+                  <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
 
           {/* Date Selector */}
@@ -280,7 +287,7 @@ export function OvertimeListPage({ role, statusFilter, hidePending, departments,
                   </div>
 
                   {/* Actions Block (Only visible for PENDING) */}
-                  {req.status === 'PENDING' && (
+                  {req.status === 'PENDING' && role !== 'hr' && (
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 w-full sm:w-auto mt-4 sm:mt-0">
                       <button
                         onClick={() => handleReview(req.id, 'APPROVED')}

@@ -46,7 +46,7 @@ export default function FingerprintDashboardModal({
 
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-red-600 px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-red-600 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
               <Fingerprint className="w-5 h-5 text-white" />
@@ -79,29 +79,44 @@ export default function FingerprintDashboardModal({
           />
         )}
 
-        {/* Last Device Exclusion Confirmation Overlay */}
-        {state.confirmLastExclusion !== null && (
+        {/* Device Exclusion Confirmation Overlay */}
+        {state.confirmExclusion !== null && (
           <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
             <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 mb-5 shadow-inner">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            <h4 className="text-xl font-black text-slate-800 mb-2">Unallow Last Device?</h4>
+            <h4 className="text-xl font-black text-slate-800 mb-2">
+              {state.confirmExclusion.isLast ? 'Cannot Exclude Last Device' : 'Exclude Device?'}
+            </h4>
             <p className="text-sm text-slate-500 mb-8 max-w-md leading-relaxed">
-              This is the last allowed device for this fingerprint/employee. Excluding this device will remove or delete all fingerprints from active synchronization. Do you want to continue?
+              {state.confirmExclusion.isLast
+                ? 'You cannot exclude the last device syncing this employee\'s fingerprints. To prevent accidental deletion, you must keep at least one device allowed. If you want to remove the fingerprints completely, please use the Delete button under Fingerprint Slots.'
+                : 'Excluding this device will delete the employee\'s fingerprints from it. If you want to include it again later, you will need to manually sync it again. Do you want to continue?'}
             </p>
-            <div className="flex gap-3 w-full max-w-xs">
-              <button
-                onClick={() => actions.setConfirmLastExclusion(null)}
-                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => actions.handleToggleExclusion(state.confirmLastExclusion!.deviceId, 'FINGERPRINT', true, true)}
-                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
-              >
-                Yes, Continue
-              </button>
+            <div className="flex gap-3 w-full max-w-xs justify-center">
+              {state.confirmExclusion.isLast ? (
+                <button
+                  onClick={() => actions.setConfirmExclusion(null)}
+                  className="px-8 py-3 bg-slate-800 hover:bg-slate-950 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-slate-800/10"
+                >
+                  Understood
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => actions.setConfirmExclusion(null)}
+                    className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => actions.handleToggleExclusion(state.confirmExclusion!.deviceId, 'FINGERPRINT', true, true)}
+                    className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+                  >
+                    Yes, Continue
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -138,7 +153,7 @@ export default function FingerprintDashboardModal({
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50">
           {state.loading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-red-500 mb-4" />

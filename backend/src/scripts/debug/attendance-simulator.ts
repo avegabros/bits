@@ -1,4 +1,9 @@
-import { prisma } from '../../shared/lib/prisma';
+  
+  
+  
+  
+  
+  import { prisma } from '../../shared/lib/prisma';
 import { processAttendanceLogs } from '../../modules/attendance/attendance-processor';
 import { toPHTDate } from '../../modules/attendance/attendance-utils';
 import * as fs from 'fs';
@@ -24,7 +29,11 @@ interface ShiftConfig {
     startTime: string;
     endTime: string;
     graceMinutes: number;
+    breakMinutes?: number;
+    breaks?: string | any[];
     workDays: string[];
+    halfDays?: string[];
+    halfDayHours?: number | null;
     sortOrder: number;
     isPrimary: boolean;
 }
@@ -72,6 +81,8 @@ const defaultConfig: SimulationConfig = {
             endTime: "12:00",
             graceMinutes: 15,
             workDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            halfDays: [],
+            halfDayHours: null,
             sortOrder: 1,
             isPrimary: false
         },
@@ -81,7 +92,10 @@ const defaultConfig: SimulationConfig = {
             startTime: "14:00",
             endTime: "16:00",
             graceMinutes: 15,
+            breakMinutes: 30,
             workDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            halfDays: [],
+            halfDayHours: null,
             sortOrder: 2,
             isPrimary: true
         }
@@ -162,11 +176,36 @@ async function main() {
     }
 
     // Reference Date and database dates
-    const refDate = new Date(config.referenceDate + "T00:00:00Z");
+    const cutoffMs = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    let refDate: Date;
+    let autoShifted = false;
+    
+    if (config.referenceDate === 'today' || new Date(config.referenceDate + "T00:00:00Z").getTime() < cutoffMs) {
+        refDate = new Date();
+        autoShifted = true;
+    } else {
+        refDate = new Date(config.referenceDate + "T00:00:00Z");
+    }
+    
     const dateOnly = toPHTDate(refDate);
+    const phtRefDate = new Date(dateOnly.getTime() + 8 * 60 * 60 * 1000);
+    const refDateStr = phtRefDate.toISOString().slice(0, 10);
+
+    // Map punches to use the new reference date date part
+    config.punches = config.punches.map(p => {
+        const tIndex = p.timestamp.indexOf('T');
+        if (tIndex !== -1) {
+            return { ...p, timestamp: refDateStr + p.timestamp.substring(tIndex) };
+        }
+        return p;
+    });
 
     console.log(`\n${colors.bright}${colors.cyan}=== STARTING SIMULATION ===${colors.reset}`);
-    console.log(`Reference Date: ${colors.yellow}${config.referenceDate}${colors.reset} (UTC: ${refDate.toISOString()})`);
+    if (autoShifted) {
+        console.log(`${colors.yellow}⚠️  Reference date ${config.referenceDate} is older than 48-hour cutoff. Auto-shifting to: ${refDateStr} to bypass the 48-hour cutoff filter.${colors.reset}`);
+    } else {
+        console.log(`Reference Date: ${colors.yellow}${refDateStr}${colors.reset} (UTC: ${refDate.toISOString()})`);
+    }
     console.log(`Simulation Mode: ${colors.yellow}${config.simulationMode}${colors.reset}`);
     if (noCleanup) {
         console.log(`${colors.magenta}⚠️  DB Cleanup Disabled: Test entities will remain in the DB.${colors.reset}`);
@@ -247,9 +286,12 @@ async function main() {
                 startTime: s.startTime,
                 endTime: s.endTime,
                 graceMinutes: s.graceMinutes,
-                breakMinutes: 0,
+                breakMinutes: s.breakMinutes !== undefined ? s.breakMinutes : 0,
+                breaks: s.breaks ? (typeof s.breaks === 'string' ? s.breaks : JSON.stringify(s.breaks)) : '[]',
                 isActive: true,
-                workDays: JSON.stringify(s.workDays)
+                workDays: JSON.stringify(s.workDays),
+                halfDays: s.halfDays ? JSON.stringify(s.halfDays) : '[]',
+                halfDayHours: s.halfDayHours !== undefined ? s.halfDayHours : null
             }
         });
         dbShifts.push(createdShift);
@@ -296,6 +338,12 @@ async function main() {
     // 6. Punch Simulation
     // Sort punches by chronological timestamp
     const sortedPunches = [...config.punches].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Auto-infer punch type if missing
+    for (let i = 0; i < sortedPunches.length; i++) {
+        if (!sortedPunches[i].type) {
+            sortedPunches[i].type = i % 2 === 0 ? 'IN' : 'OUT';
+        }
+    }
 
     console.log(`\nSimulating Punches...`);
     if (config.simulationMode === 'sequential') {
@@ -352,10 +400,90 @@ async function main() {
             console.log(`Shift Name:       ${att.shift?.name ?? 'Overtime Only'}`);
             console.log(`Check-In Time:    ${colors.cyan}${att.checkInTime.toISOString()}${colors.reset}`);
             console.log(`Check-Out Time:   ${att.checkOutTime ? colors.cyan + att.checkOutTime.toISOString() + colors.reset : colors.red + 'N/A (Open Record)' + colors.reset}`);
+            let isHalfDay = false;
+            if (att.shift) {
+                let halfDaysList: string[] = [];
+                try { halfDaysList = JSON.parse(att.shift.halfDays || '[]'); } catch { }
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const phtDate = new Date(new Date(att.date).getTime() + 8 * 60 * 60 * 1000);
+                const dayName = dayNames[phtDate.getUTCDay()];
+                isHalfDay = halfDaysList.includes(dayName);
+            }
+
+            // Calculate break details for display
+            let breakMinutes = 0;
+            let breakDeducted = 0;
+            let breakDetailsStr = 'None';
+            if (att.shift && !isHalfDay) {
+                const currentShift = att.shift;
+                breakMinutes = currentShift.breakMinutes ?? 0;
+                
+                // Parse breaks
+                let explicitBreaks: { start: Date, end: Date }[] = [];
+                const dateMs = new Date(att.date).getTime() + 8 * 60 * 60 * 1000;
+                const [startH, startM] = currentShift.startTime.split(':').map(Number);
+                const expectedStart = new Date(dateMs + (startH * 60 + startM) * 60 * 1000 - 8 * 60 * 60 * 1000);
+                const [endH, endM] = currentShift.endTime.split(':').map(Number);
+                let expectedEnd = new Date(dateMs + (endH * 60 + endM) * 60 * 1000 - 8 * 60 * 60 * 1000);
+                if (currentShift.isNightShift && expectedEnd.getTime() <= expectedStart.getTime()) {
+                    expectedEnd = new Date(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+                } else if (expectedEnd.getTime() <= expectedStart.getTime()) {
+                    expectedEnd = new Date(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+                }
+
+                try {
+                    const parsedBreaks = JSON.parse(currentShift.breaks || '[]');
+                    explicitBreaks = parsedBreaks.map((b: { start: string; end: string }) => {
+                        const [bhStart, bmStart] = b.start.split(':').map(Number);
+                        const [bhEnd, bmEnd] = b.end.split(':').map(Number);
+                        
+                        let bStart = new Date(dateMs + (bhStart * 60 + bmStart) * 60 * 1000 - 8 * 60 * 60 * 1000);
+                        let bEnd = new Date(dateMs + (bhEnd * 60 + bmEnd) * 60 * 1000 - 8 * 60 * 60 * 1000);
+                        
+                        if (currentShift.isNightShift && bhStart < startH) bStart = new Date(bStart.getTime() + 24 * 60 * 60 * 1000);
+                        if (currentShift.isNightShift && bhEnd < startH) bEnd = new Date(bEnd.getTime() + 24 * 60 * 60 * 1000);
+
+                        return { start: bStart, end: bEnd };
+                    });
+                } catch (e) { }
+
+                let effectiveBreaks = explicitBreaks;
+                if (explicitBreaks.length === 0 && breakMinutes > 0) {
+                    const shiftMidMs = expectedStart.getTime() + (expectedEnd.getTime() - expectedStart.getTime()) / 2;
+                    const halfBreakMs = (breakMinutes / 2) * 60 * 1000;
+                    effectiveBreaks = [{ start: new Date(shiftMidMs - halfBreakMs), end: new Date(shiftMidMs + halfBreakMs) }];
+                    breakDetailsStr = `${breakMinutes} mins (mid-shift auto-break)`;
+                } else if (explicitBreaks.length > 0) {
+                    const breakRanges = explicitBreaks.map(b => {
+                        const startStr = new Date(b.start.getTime() + 8 * 60 * 60 * 1000).toISOString().substr(11, 5);
+                        const endStr = new Date(b.end.getTime() + 8 * 60 * 60 * 1000).toISOString().substr(11, 5);
+                        return `${startStr}-${endStr}`;
+                    }).join(', ');
+                    breakDetailsStr = `Explicit breaks: ${breakRanges}`;
+                }
+
+                if (att.checkOutTime) {
+                    const lateMins = att.lateMinutes ?? 0;
+                    const effectiveCheckIn = new Date(expectedStart.getTime() + lateMins * 60 * 1000);
+                    const effectiveCheckOut = new Date(Math.min(att.checkOutTime.getTime(), expectedEnd.getTime()));
+                    
+                    effectiveBreaks.forEach(b => {
+                        const overlapStart = Math.max(effectiveCheckIn.getTime(), b.start.getTime());
+                        const overlapEnd = Math.min(effectiveCheckOut.getTime(), b.end.getTime());
+                        if (overlapEnd > overlapStart) {
+                            breakDeducted += (overlapEnd - overlapStart) / 60000;
+                        }
+                    });
+                }
+            }
+
             console.log(`Status:           ${colors.bright}${att.status === 'present' ? colors.green : colors.yellow}${att.status}${colors.reset}`);
+            console.log(`Half-Day:         ${isHalfDay ? colors.yellow + 'Yes' + (att.shift?.halfDayHours ? ` (${att.shift.halfDayHours} hrs)` : ' (Midpoint)') : colors.green + 'No'}${colors.reset}`);
             console.log(`Late Minutes:     ${att.lateMinutes > 0 ? colors.red + att.lateMinutes + ' mins' : colors.green + '0 mins'}${colors.reset}`);
             console.log(`Undertime Mins:   ${att.undertimeMinutes > 0 ? colors.red + att.undertimeMinutes + ' mins' : colors.green + '0 mins'}${colors.reset}`);
             console.log(`Overtime Mins:    ${att.overtimeMinutes > 0 ? colors.green + att.overtimeMinutes + ' mins' : '0 mins'}`);
+            console.log(`Break Config:     ${colors.cyan}${breakDetailsStr}${colors.reset}`);
+            console.log(`Break Deducted:   ${breakDeducted > 0 ? colors.yellow + breakDeducted + ' mins' : colors.green + '0 mins'}${colors.reset}`);
             console.log(`Total Hours:      ${colors.yellow}${att.totalHours} hrs${colors.reset}`);
             console.log(`Grace Period:     ${att.gracePeriodApplied ? colors.green + 'Applied' : 'Not Applied'}${colors.reset}`);
             console.log(`Early Out:        ${att.isEarlyOut ? colors.red + 'Yes' : colors.green + 'No'}${colors.reset}`);

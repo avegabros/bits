@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Clock, Calendar, CheckSquare, Square, UserPlus, AlertCircle } from 'lucide-react';
 import { apiFetch } from '@/lib/api/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AssignOvertimeModalProps {
   isOpen: boolean;
@@ -238,14 +239,20 @@ export function AssignOvertimeModal({ isOpen, onClose, role }: AssignOvertimeMod
                     />
                   </div>
                   {(role === 'admin' || role === 'hr') && departments.length > 0 && (
-                    <select
+                    <Select
                       value={selectedDepartment}
-                      onChange={e => setSelectedDepartment(e.target.value)}
-                      className="w-full sm:w-auto px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-colors min-w-[150px]"
+                      onValueChange={setSelectedDepartment}
                     >
-                      <option value="ALL">All Departments</option>
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                      <SelectTrigger className="w-full sm:w-[180px] bg-slate-50 border-slate-200 text-slate-700 h-10 rounded-lg text-sm font-semibold">
+                        <SelectValue placeholder="All Departments" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-slate-200">
+                        <SelectItem value="ALL">All Departments</SelectItem>
+                        {departments.map(d => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
 

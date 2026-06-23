@@ -21,7 +21,7 @@ export function CardEnrollmentForm({
 }: CardEnrollmentFormProps) {
   return (
     <div className="space-y-4">
-      <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col items-center text-center">
+      <div className="bg-white p-4 sm:p-6 rounded-2xl border shadow-sm flex flex-col items-center text-center">
         <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mb-4">
           <CreditCard className="w-8 h-8" />
         </div>
@@ -30,10 +30,10 @@ export function CardEnrollmentForm({
           Enter the RFID card number to register it globally for this employee across all active devices.
         </p>
 
-        <div className="w-full max-w-sm flex gap-2">
+        <div className="w-full max-w-sm flex flex-col sm:flex-row gap-2">
           <input
             type="text"
-            className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 focus:outline-none transition-all"
+            className="w-full sm:flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 focus:outline-none transition-all min-w-0"
             placeholder="Enter Card Number..."
             value={cardInput}
             onChange={(e) => onCardInputChange(e.target.value.replace(/\D/g, ''))}
@@ -41,7 +41,7 @@ export function CardEnrollmentForm({
           <button
             onClick={onGlobalEnroll}
             disabled={!cardInput || activeActions['globalEnroll']}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shrink-0 flex items-center justify-center min-w-[100px]"
+            className="w-full sm:w-auto px-6 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shrink-0 flex items-center justify-center sm:min-w-[100px]"
           >
             {activeActions['globalEnroll'] ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enroll'}
           </button>

@@ -52,7 +52,7 @@ export function DeviceConfigureModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
                 {/* Modal Header */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-secondary/20">

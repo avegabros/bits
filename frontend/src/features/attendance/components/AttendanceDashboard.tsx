@@ -72,7 +72,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input
             type="date"
             ref={dateInputRef}
@@ -86,7 +86,7 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
                 dateInputRef.current.showPicker()
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-secondary border border-border rounded-xl text-xs sm:text-sm font-bold text-foreground hover:bg-secondary/80 transition-all shadow-sm"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-secondary border border-border rounded-xl text-xs sm:text-sm font-bold text-foreground hover:bg-secondary/80 transition-all shadow-sm"
           >
             <CalendarIcon className="w-4 h-4 text-primary" />
             <span>
@@ -97,13 +97,13 @@ function AttendanceContent({ role }: AttendanceDashboardProps) {
           </button>
           <button
             onClick={exportToCSV}
-            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95"
           >
             <Download className="w-4 h-4" /> Export
           </button>
           <Link
-            href={role === 'admin' ? '/overtime?tab=pending' : '/hr/overtime?tab=pending'}
-            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+            href={role === 'admin' ? '/overtime?tab=pending' : '/hr/overtime?tab=monitoring'}
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
           >
             <Clock className="w-4 h-4" /> Manage OT
           </Link>

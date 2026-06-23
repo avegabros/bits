@@ -18,7 +18,7 @@ export function PasswordCard({
   strength,
 }: PasswordCardProps) {
   return (
-    <div className="bg-white border border-slate-200 p-8 shadow-sm rounded-3xl">
+    <div className="bg-white border border-slate-200 p-4 sm:p-8 shadow-sm rounded-3xl">
       <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
         <Lock size={16} className="text-red-500" /> Security & Password
       </h3>

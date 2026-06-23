@@ -93,6 +93,9 @@ export const getOvertimeRequests = async (req: Request, res: Response) => {
 // POST /api/attendance/overtime
 export const createOvertimeRequest = async (req: Request, res: Response) => {
     try {
+        if (req.user?.role === 'HR') {
+            return res.status(403).json({ success: false, message: 'Forbidden: HR is restricted to read-only access for overtime.' });
+        }
         const { employeeId, date, startTime, endTime, reason } = req.body;
 
         // If USER, they can only request for themselves
@@ -282,6 +285,9 @@ export const batchCreateOvertimeRequests = async (req: Request, res: Response) =
 // PATCH /api/attendance/overtime/:id
 export const updateOvertimeRequest = async (req: Request, res: Response) => {
     try {
+        if (req.user?.role === 'HR') {
+            return res.status(403).json({ success: false, message: 'Forbidden: HR is restricted to read-only access for overtime.' });
+        }
         const id = parseInt(req.params.id as string, 10);
         const { status, startTime, endTime, rejectionReason, reason, actualStartTime, actualEndTime } = req.body;
 
@@ -452,6 +458,9 @@ export const updateOvertimeRequest = async (req: Request, res: Response) => {
 // DELETE /api/attendance/overtime/:id
 export const deleteOvertimeRequest = async (req: Request, res: Response) => {
     try {
+        if (req.user?.role === 'HR') {
+            return res.status(403).json({ success: false, message: 'Forbidden: HR is restricted to read-only access for overtime.' });
+        }
         const id = parseInt(req.params.id as string, 10);
         const existing = await prisma.overtimeRequest.findUnique({ where: { id } });
         

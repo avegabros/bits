@@ -71,7 +71,7 @@ export function SyncStatusCard({ status, loading, onStatusRefresh }: SyncStatusC
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-slate-800 tracking-tight">Sync Engine</h2>
-                            <p className="text-xs text-slate-500 mt-0.5">Background device synchronization service</p>
+                            <p className="text-xs text-slate-600 mt-0.5">Background device synchronization service</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">

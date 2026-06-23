@@ -9,10 +9,29 @@ interface AccountStatusSidebarProps {
 
 export function AccountStatusSidebar({ userData, displayName, role }: AccountStatusSidebarProps) {
   const permissions = role === 'admin'
-    ? ['System Administration', 'User Management', 'Full Data Access', 'Report Generation']
+    ? [
+        'System Administration',
+        'User Account Management',
+        'Device & Sync Control',
+        'Employee Management',
+        'Attendance & Overtime Control',
+        'Report Generation'
+      ]
     : role === 'manager'
-    ? ['User Management', 'Attendance Management', 'Report Generation', 'Device Management']
-    : ['Attendance Monitoring', 'Attendance Correction', 'Report Generation', 'Employee Management']
+    ? [
+        'Department Employee View',
+        'Adjustment Request Approvals',
+        'Overtime Assignment & Control',
+        'Shifts & Holidays View'
+      ]
+    : [
+        'Employee Management',
+        'Attendance Correction',
+        'Shift & Holiday Management',
+        'Organization Management',
+        'Overtime Monitoring',
+        'Report Generation'
+      ]
 
   return (
     <div className="space-y-6">
