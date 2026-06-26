@@ -13,6 +13,8 @@ export type Employee = {
   role: string
   departmentId: number | null
   Department: { name: string } | null
+  sectionId: number | null
+  Section: { id: number; name: string } | null
   branchId: number | null
   Branch: { name: string } | null
   companyId: number | null
@@ -89,6 +91,7 @@ export type ImportRow = {
   email: string
   contactNumber: string
   department: string
+  section?: string
   branch: string
   hireDate?: string
   shiftCode?: string

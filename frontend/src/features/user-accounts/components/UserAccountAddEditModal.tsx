@@ -183,7 +183,7 @@ export function UserAccountAddEditModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="bg-white border-0 w-[calc(100%-2rem)] sm:max-w-md p-0 rounded-2xl overflow-hidden shadow-xl max-h-[90vh] flex flex-col">
+      <DialogContent showCloseButton={false} className="bg-white border-0 w-[calc(100%-2rem)] sm:max-w-md p-0 gap-0 rounded-2xl overflow-hidden shadow-xl max-h-[90vh] flex flex-col">
         <div className="bg-red-600 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
           <div>
             <DialogTitle className="text-white font-bold text-lg">

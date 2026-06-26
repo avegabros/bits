@@ -13,7 +13,7 @@ export function ShiftConflictModal({ isOpen, report, onClose }: ShiftConflictMod
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl border border-white/40 max-w-lg p-0 rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5">
+      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl border border-white/40 max-w-lg p-0 gap-0 flex flex-col rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5">
         
         {/* Header */}
         <div className="relative px-8 pt-8 pb-6 flex items-start justify-between shrink-0 bg-red-50/30">

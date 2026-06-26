@@ -26,7 +26,7 @@ export const employeeFormSchema = z.object({
       if (!date) return true;
       return new Date(date).getTime() <= new Date().getTime();
     }, { message: 'Date of Birth cannot be in the future' }),
-  hireDate: z.string().optional().refine((date) => {
+  hireDate: z.string().nullable().optional().refine((date) => {
     if (!date) return true;
     return new Date(date).getTime() <= new Date().getTime();
   }, { message: 'Date Hired cannot be in the future' })

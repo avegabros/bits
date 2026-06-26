@@ -50,7 +50,7 @@ export function AddOrganizationDialog({
           Add New
         </Button>
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-md p-0 rounded-2xl overflow-hidden shadow-xl max-sm:w-full max-sm:h-full max-sm:max-w-none max-sm:rounded-none max-sm:m-0">
+      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-md p-0 gap-0 flex flex-col rounded-2xl overflow-hidden shadow-xl max-sm:w-full max-sm:h-full max-sm:max-w-none max-sm:rounded-none max-sm:m-0">
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
           <div>
             <DialogTitle className="text-white font-bold text-lg">Add New</DialogTitle>

@@ -5,6 +5,14 @@ export interface Department {
   name: string
 }
 
+export interface Section {
+  id: number
+  name: string
+  departmentId: number
+  department?: { name: string }
+}
+
+
 export interface Company {
   id: number
   name: string

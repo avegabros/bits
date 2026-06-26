@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X as XIcon, Loader2, Check, Layers } from 'lucide-react'
 import type { Department, Section } from '../types'
 
@@ -19,7 +21,13 @@ export function EditDepartmentDialog({
   sections, editSectionIds, setEditSectionIds,
   editLoading, editError, onSave, onCancel,
 }: EditDepartmentDialogProps) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   if (!editingDept) return null
+  if (!mounted) return null
 
   const toggleSection = (sectionId: number) => {
     if (editSectionIds.includes(sectionId)) {
@@ -29,7 +37,7 @@ export function EditDepartmentDialog({
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
       <div className="bg-white border-0 rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
@@ -116,6 +124,7 @@ export function EditDepartmentDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
