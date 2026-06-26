@@ -52,8 +52,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
     const dbEmployees = await prisma.employee.findMany({
         where: { zkId: { not: null }, employmentStatus: 'ACTIVE' },
         select: { 
-            id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true,
-            EmployeeCardEnrollment: { where: { deviceId } }
+            id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true
         }
     });
     const dbByZkId = new Map(dbEmployees.map(e => [e.zkId!.toString(), e]));
@@ -123,6 +122,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
 
         // ── STEP C: Push DB-only employees to device ────────────────────────
         const cardExclusions = await getExcludedEmployeeIds(deviceId, 'CARD');
+        const fpExclusions = await getExcludedEmployeeIds(deviceId, 'FINGERPRINT');
         for (const emp of dbEmployees) {
             const zkId = emp.zkId!;
             const visibleId = zkId.toString();
@@ -155,8 +155,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
 
             const existsOnDevice = dUserByVisibleId || dUserByUid;
 
-            const expectedCard = emp.EmployeeCardEnrollment.length > 0
-                ? (cardExclusions.has(emp.id) ? 0 : (emp.cardNumber || 0)) : 0;
+            const expectedCard = (emp.cardNumber && !cardExclusions.has(emp.id)) ? emp.cardNumber : 0;
 
             if (!existsOnDevice) {
                 // Employee in DB but genuinely not on device.
@@ -170,9 +169,26 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                     try {
                         await enqueueUpsertUser(deviceId, { zkId, name: fullName, card: expectedCard, role: deviceRole });
                         report.pushed.push({ zkId, name: fullName });
-                        // Newly pushed user has no fingerprints yet
-                        report.needsEnrollment.push({ zkId, name: fullName });
                         console.log(`[Reconcile] ✓ Queued push of "${fullName}" to UID=${zkId}.`);
+
+                        // Queue all fingerprints registered in DB for this employee
+                        if (!fpExclusions.has(emp.id)) {
+                            const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
+                                where: { employeeId: emp.id },
+                                distinct: ['fingerIndex'],
+                                select: { fingerIndex: true }
+                            });
+                            if (enrollments.length > 0) {
+                                console.log(`[Reconcile] 🔄 Queuing pull of ${enrollments.length} fingerprint(s) for "${fullName}" (UID=${zkId})...`);
+                                for (const { fingerIndex } of enrollments) {
+                                    await enqueueFingerprintPull(deviceId, { zkId, employeeId: emp.id, fingerIndex });
+                                }
+                            } else {
+                                report.needsEnrollment.push({ zkId, name: fullName });
+                            }
+                        } else {
+                            console.log(`[Reconcile] ⏩ Skipping fingerprint pull for "${fullName}" — excluded.`);
+                        }
                     } catch (err: unknown) {
                         const msg = `Failed to queue push for "${fullName}": ${zkErrMsg(err)}`;
                         report.errors.push(msg);
@@ -198,14 +214,52 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                      console.log(`[Reconcile] 🔍 Would update card for "${fullName}" (UID=${zkId}): Device has ${actualCard}, expected ${expectedCard}...`);
                 }
 
-                try {
-                    const fingerCount = await zk.getFingerCount(dUser.uid);
-                    if (fingerCount === 0) {
-                        report.needsEnrollment.push({ zkId, name: fullName });
-                        console.log(`[Reconcile] ⚠ "${fullName}" (UID=${dUser.uid}) has 0 fingerprints — needs enrollment.`);
+                // Check missing fingerprints on device
+                if (!fpExclusions.has(emp.id)) {
+                    try {
+                        const dbFingers = await prisma.employeeFingerprintEnrollment.findMany({
+                            where: { employeeId: emp.id },
+                            distinct: ['fingerIndex'],
+                            select: { fingerIndex: true }
+                        });
+
+                        if (dbFingers.length > 0) {
+                            let deviceFingerCount = 0;
+                            for (const { fingerIndex } of dbFingers) {
+                                const hasFinger = await zk.hasFingerTemplate(dUser.uid, fingerIndex);
+                                if (hasFinger) {
+                                    deviceFingerCount++;
+                                } else {
+                                    if (!dryRun) {
+                                        console.log(`[Reconcile] 🔄 Finger index ${fingerIndex} missing for "${fullName}" (UID=${dUser.uid}). Queuing pull...`);
+                                        await enqueueFingerprintPull(deviceId, { zkId, employeeId: emp.id, fingerIndex });
+                                    } else {
+                                        console.log(`[Reconcile] 🔍 Would sync missing finger index ${fingerIndex} for "${fullName}" (UID=${dUser.uid}).`);
+                                    }
+                                }
+                            }
+                            
+                            // If they have fingers in DB but 0 were found on device, mark as needs enrollment
+                            if (deviceFingerCount === 0) {
+                                report.needsEnrollment.push({ zkId, name: fullName });
+                            }
+                        } else {
+                            // If they have 0 fingers in DB, query device finger count to see if they need enrollment
+                            try {
+                                const fingerCount = await zk.getFingerCount(dUser.uid);
+                                if (fingerCount === 0) {
+                                    report.needsEnrollment.push({ zkId, name: fullName });
+                                    console.log(`[Reconcile] ⚠ "${fullName}" (UID=${dUser.uid}) has 0 fingerprints — needs enrollment.`);
+                                }
+                            } catch {
+                                // getFingerCount is best-effort; non-critical
+                            }
+                        }
+                    } catch (err: unknown) {
+                        console.error(`[Reconcile] Failed checking fingerprints for "${fullName}":`, zkErrMsg(err));
                     }
-                } catch {
-                    // getFingerCount is best-effort; non-critical
+                } else {
+                    console.log(`[Reconcile] ⏩ Skipping fingerprint checks for "${fullName}" — excluded.`);
                 }
             }
         }
@@ -215,36 +269,6 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
             // NOTE: We intentionally do NOT set isActive here.
             // The healthCheckScheduler is the single source of truth for device connectivity.
             await prisma.device.update({ where: { id: deviceId }, data: { lastReconciledAt: new Date(), updatedAt: new Date() } });
-
-            // Fire async fingerprint queueing for users that were newly pushed or found missing fingerprints
-            if (report.needsEnrollment.length > 0) {
-                console.log(`[Reconcile] 🔄 Queuing fingerprint pulls for ${report.needsEnrollment.length} user(s)...`);
-                
-                const fpExclusions = await getExcludedEmployeeIds(deviceId, 'FINGERPRINT');
-
-                for (const { zkId } of report.needsEnrollment) {
-                    try {
-                        const emp = await prisma.employee.findUnique({ where: { zkId }, select: { id: true } });
-                        if (!emp) continue;
-
-                        if (fpExclusions.has(emp.id)) {
-                            console.log(`[Reconcile] ⏩ Skipping fingerprint pull for zkId=${zkId} — excluded.`);
-                            continue;
-                        }
-
-                        const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
-                            where: { employeeId: emp.id },
-                            distinct: ['fingerIndex']
-                        });
-
-                        for (const { fingerIndex } of enrollments) {
-                            await enqueueFingerprintPull(deviceId, { zkId, employeeId: emp.id, fingerIndex });
-                        }
-                    } catch (err: unknown) {
-                        console.error(`[Reconcile] Failed to queue fingerprint for zkId ${zkId}:`, zkErrMsg(err));
-                    }
-                }
-            }
 
             // Immediately trigger queue execution in the background
             setImmediate(() => {

@@ -13,6 +13,41 @@ import { validateShiftGap } from '../shifts/shift-conflict.service';
 import { getChronologicalShiftIds } from '../shifts/shift-ordering.service';
 import { reassignSameDayShifts } from '../attendance/attendance.service';
 
+function calculateFingerprintSyncStatus(
+    enrollments: { deviceId?: number; device?: { id: number }; fingerIndex: number }[],
+    exclusions: { deviceId: number }[],
+    activeDeviceIds: number[]
+): 'none' | 'synced' | 'partial' {
+    const enrolledFingerIndices = Array.from(new Set(enrollments.map(e => e.fingerIndex)));
+    if (enrolledFingerIndices.length === 0) {
+        return 'none';
+    }
+
+    const excludedDeviceIds = new Set(exclusions.map(e => e.deviceId));
+    const eligibleDeviceIds = activeDeviceIds.filter(id => !excludedDeviceIds.has(id));
+
+    if (eligibleDeviceIds.length === 0) {
+        return 'synced';
+    }
+
+    let isFullySynced = true;
+    for (const fingerIndex of enrolledFingerIndices) {
+        for (const deviceId of eligibleDeviceIds) {
+            const hasEnrollment = enrollments.some(e => {
+                const depId = e.deviceId ?? e.device?.id;
+                return depId === deviceId && e.fingerIndex === fingerIndex;
+            });
+            if (!hasEnrollment) {
+                isFullySynced = false;
+                break;
+            }
+        }
+        if (!isFullySynced) break;
+    }
+
+    return isFullySynced ? 'synced' : 'partial';
+}
+
 // GET /api/employees/:id - Get a single employee by ID (for profile view)
 export const getEmployeeById = async (req: Request, res: Response) => {
     try {
@@ -80,6 +115,10 @@ export const getEmployeeById = async (req: Request, res: Response) => {
                         },
                     },
                 },
+                DeviceBiometricExclusion: {
+                    where: { type: 'FINGERPRINT' },
+                    select: { deviceId: true },
+                },
                 EmployeeFingerprintEnrollment: {
                     select: {
                         id: true,
@@ -119,9 +158,23 @@ export const getEmployeeById = async (req: Request, res: Response) => {
             }
         }
 
+        const activeDevices = await prisma.device.findMany({
+            where: { syncEnabled: true },
+            select: { id: true }
+        });
+        const activeDeviceIds = activeDevices.map(d => d.id);
+        const fingerprintSyncStatus = calculateFingerprintSyncStatus(
+            (employee as any).EmployeeFingerprintEnrollment || [],
+            (employee as any).DeviceBiometricExclusion || [],
+            activeDeviceIds
+        );
+
         res.json({
             success: true,
-            employee,
+            employee: {
+                ...employee,
+                fingerprintSyncStatus,
+            },
         });
     } catch (error) {
         console.error('Error fetching employee:', error);
@@ -224,7 +277,13 @@ export const getAllEmployees = async (req: Request, res: Response) => {
             EmployeeFingerprintEnrollment: {
                 select: {
                     id: true,
+                    deviceId: true,
+                    fingerIndex: true,
                 },
+            },
+            DeviceBiometricExclusion: {
+                where: { type: 'FINGERPRINT' },
+                select: { deviceId: true },
             },
         };
 
@@ -242,9 +301,27 @@ export const getAllEmployees = async (req: Request, res: Response) => {
             })
         ]);
 
+        const activeDevices = await prisma.device.findMany({
+            where: { syncEnabled: true },
+            select: { id: true }
+        });
+        const activeDeviceIds = activeDevices.map(d => d.id);
+
+        const mappedEmployees = employees.map(emp => {
+            const fingerprintSyncStatus = calculateFingerprintSyncStatus(
+                (emp as any).EmployeeFingerprintEnrollment || [],
+                (emp as any).DeviceBiometricExclusion || [],
+                activeDeviceIds
+            );
+            return {
+                ...emp,
+                fingerprintSyncStatus,
+            };
+        });
+
         res.json({
             success: true,
-            employees,
+            employees: mappedEmployees,
             meta: {
                 total,
                 page,

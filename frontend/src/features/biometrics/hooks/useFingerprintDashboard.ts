@@ -34,7 +34,7 @@ export interface FingerprintDashboardState {
   allDevices: { id: number; name: string; isActive: boolean; syncEnabled: boolean }[]
   summary: FingerprintSummary
   syncingDevice: number | null
-  syncResult: { success: boolean; message: string } | null
+  syncResult: { success: boolean; message: string; type?: 'success' | 'warning' | 'error' } | null
   showDevicePicker: number | null
   selectedDeviceId: number | null
   confirmExclusion: { deviceId: number; isLast: boolean } | null
@@ -64,7 +64,7 @@ export function useFingerprintDashboard(
 
   // Action states
   const [syncingDevice, setSyncingDevice] = useState<number | null>(null)
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; type?: 'success' | 'warning' | 'error' } | null>(null)
   const [showDevicePicker, setShowDevicePicker] = useState<number | null>(null)
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null)
   const [confirmExclusion, setConfirmExclusion] = useState<{ deviceId: number; isLast: boolean } | null>(null)
@@ -110,13 +110,14 @@ export function useFingerprintDashboard(
       const data = await res.json()
       setSyncResult({
         success: data.success,
+        type: data.type || (data.success ? 'success' : 'error'),
         message: data.message || (data.success ? 'Sync complete' : 'Sync failed')
       })
       if (data.success) {
         await fetchStatus()
       }
     } catch {
-      setSyncResult({ success: false, message: 'Network error during sync' })
+      setSyncResult({ success: false, type: 'error', message: 'Network error during sync' })
     } finally {
       setSyncingDevice(null)
     }

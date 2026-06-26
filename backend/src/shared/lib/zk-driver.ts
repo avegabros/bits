@@ -205,6 +205,24 @@ export class ZKDriver {
     }
 
     /**
+     * Check if a specific fingerprint template is enrolled for a given UID and finger index.
+     * Returns true if a template exists on the device, false otherwise.
+     */
+    async hasFingerTemplate(uid: number, fingerIndex: number): Promise<boolean> {
+        if (!this.zkInstance) throw new Error('Not connected');
+        const { COMMANDS } = require('node-zklib/constants');
+        try {
+            const buf = Buffer.alloc(3);
+            buf.writeUInt16LE(uid, 0);
+            buf.writeUInt8(fingerIndex, 2);
+            const result = await this.zkInstance.executeCmd(COMMANDS.CMD_USERTEMP_RRQ, buf);
+            return !!(result && result.length > 8);
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Refresh device data — commits newly written users/templates to active memory.
      * Must be called after setUser so CMD_STARTENROLL can find the new user.
      */

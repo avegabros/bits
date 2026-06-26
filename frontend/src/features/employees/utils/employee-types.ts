@@ -26,6 +26,7 @@ export type Employee = {
   dateOfBirth: string | null
   employmentStatus: 'ACTIVE' | 'STAGED' | 'INACTIVE' | 'TERMINATED'
   profilePicture: string | null
+  fingerprintSyncStatus?: 'none' | 'synced' | 'partial'
   shiftId?: number | null
   Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string; workDays?: string; halfDays?: string; graceMinutes?: number; breakMinutes?: number; isNightShift?: boolean } | null
   EmployeeShift?: {
