@@ -8,6 +8,11 @@ export const getAllDepartments = async (req: Request, res: Response) => {
         const departments = await prisma.department.findMany({
             orderBy: {
                 name: 'asc'
+            },
+            include: {
+                Section: {
+                    select: { id: true, name: true }
+                }
             }
         });
         res.json({
@@ -26,7 +31,7 @@ export const getAllDepartments = async (req: Request, res: Response) => {
 // POST /api/departments
 export const createDepartment = async (req: Request, res: Response) => {
     try {
-        const { name } = req.body;
+        const { name, sectionIds } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Department name is required' });
         }
@@ -35,7 +40,24 @@ export const createDepartment = async (req: Request, res: Response) => {
         if (existing) {
             return res.status(400).json({ success: false, message: 'Department already exists' });
         }
-        const department = await prisma.department.create({ data: { name: trimmedName, updatedAt: new Date() } });
+        const department = await prisma.department.create({
+            data: { name: trimmedName, updatedAt: new Date() },
+            include: { Section: { select: { id: true, name: true } } }
+        });
+
+        // Reassign selected sections to this new department
+        if (Array.isArray(sectionIds) && sectionIds.length > 0) {
+            await prisma.section.updateMany({
+                where: { id: { in: sectionIds } },
+                data: { departmentId: department.id, updatedAt: new Date() }
+            });
+        }
+
+        // Re-fetch with updated sections
+        const updatedDepartment = await prisma.department.findUnique({
+            where: { id: department.id },
+            include: { Section: { select: { id: true, name: true } } }
+        });
 
         void auditCreate({
             entityType: 'Department',
@@ -48,7 +70,7 @@ export const createDepartment = async (req: Request, res: Response) => {
             'Name': department.name
         });
 
-        res.status(201).json({ success: true, department });
+        res.status(201).json({ success: true, department: updatedDepartment });
     } catch (error) {
         console.error('Error creating department:', error);
         res.status(500).json({ success: false, message: 'Failed to create department' });
@@ -62,7 +84,7 @@ export const renameDepartment = async (req: Request, res: Response) => {
         if (isNaN(id)) {
             return res.status(400).json({ success: false, message: 'Invalid department ID' });
         }
-        const { name } = req.body;
+        const { name, sectionIds } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Department name is required' });
         }
@@ -71,14 +93,51 @@ export const renameDepartment = async (req: Request, res: Response) => {
         if (existing && existing.id !== id) {
             return res.status(409).json({ success: false, message: 'Department name already exists' });
         }
-        const target = await prisma.department.findUnique({ where: { id } });
+        const target = await prisma.department.findUnique({
+            where: { id },
+            include: { Section: { select: { id: true } } }
+        });
         if (!target) {
             return res.status(404).json({ success: false, message: 'Department not found' });
         }
 
+        // Handle section assignments if provided
+        if (Array.isArray(sectionIds)) {
+            const currentSectionIds = target.Section.map(s => s.id);
+            const toAdd = sectionIds.filter((sid: number) => !currentSectionIds.includes(sid));
+            const toRemove = currentSectionIds.filter(sid => !sectionIds.includes(sid));
+
+            // Check for active employees in sections being removed
+            if (toRemove.length > 0) {
+                const activeInRemoved = await prisma.employee.count({
+                    where: {
+                        sectionId: { in: toRemove },
+                        employmentStatus: 'ACTIVE'
+                    }
+                });
+                if (activeInRemoved > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `⚠️ Cannot remove section(s) with ${activeInRemoved} active employee(s). Please reassign employees first.`
+                    });
+                }
+                // Delete empty sections being removed
+                await prisma.section.deleteMany({ where: { id: { in: toRemove } } });
+            }
+
+            // Reassign sections being added to this department
+            if (toAdd.length > 0) {
+                await prisma.section.updateMany({
+                    where: { id: { in: toAdd } },
+                    data: { departmentId: id, updatedAt: new Date() }
+                });
+            }
+        }
+
         const department = await prisma.department.update({
             where: { id },
-            data: { name: trimmedName, updatedAt: new Date() }
+            data: { name: trimmedName, updatedAt: new Date() },
+            include: { Section: { select: { id: true, name: true } } }
         });
 
         const changes = [];

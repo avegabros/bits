@@ -136,6 +136,8 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    height: 100%;
+    overflow: hidden;
   }
 
   * {
@@ -144,6 +146,8 @@
 
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
   }
 
   /* UI Consistency Fix - Apply pointer to all interactive elements globally */

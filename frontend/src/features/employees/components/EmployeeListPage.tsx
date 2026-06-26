@@ -61,7 +61,7 @@ export function EmployeeListPage({ role, statusFilter = 'Active' }: EmployeeList
           companies={list.companyNames}
         />
 
-        <EmployeeFiltersBar role={role} filters={list.filters} departments={list.departments} branches={list.filteredBranches} shifts={list.shifts} />
+        <EmployeeFiltersBar role={role} filters={list.filters} departments={list.departments} sections={list.sections} branches={list.filteredBranches} shifts={list.shifts} />
 
         <div className="rounded-2xl shadow-md overflow-hidden bg-white border border-border">
           <EmployeeTable

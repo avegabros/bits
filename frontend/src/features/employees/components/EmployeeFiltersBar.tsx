@@ -9,6 +9,8 @@ interface FilterState {
   setSearchTerm: (v: string) => void;
   selectedDept: string;
   setSelectedDept: (v: string) => void;
+  selectedSection: string;
+  setSelectedSection: (v: string) => void;
   selectedBranch: string;
   setSelectedBranch: (v: string) => void;
   selectedShift: string;
@@ -20,15 +22,23 @@ interface FilterState {
 interface EmployeeFiltersBarProps {
   filters: FilterState;
   departments: { id: number; name: string }[];
+  sections: { id: number; name: string; departmentId: number }[];
   branches: { id: number; name: string }[];
   shifts: { id: number; name: string }[];
   role?: 'admin' | 'hr' | 'manager';
 }
 
-export function EmployeeFiltersBar({ filters, departments, branches, shifts, role = 'admin' }: EmployeeFiltersBarProps) {
+export function EmployeeFiltersBar({ filters, departments, sections, branches, shifts, role = 'admin' }: EmployeeFiltersBarProps) {
+  const filteredSections = React.useMemo(() => {
+    if (!filters.selectedDept || filters.selectedDept === 'all') return sections;
+    const dept = departments.find(d => d.name === filters.selectedDept);
+    if (!dept) return [];
+    return sections.filter(s => s.departmentId === dept.id);
+  }, [sections, departments, filters.selectedDept]);
+
   return (
     <Card className="bg-card border-border p-4">
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -43,6 +53,19 @@ export function EmployeeFiltersBar({ filters, departments, branches, shifts, rol
           <SelectContent>
             <SelectItem value="all">{role === 'manager' ? 'All Assigned Departments' : 'All Departments'}</SelectItem>
             {departments.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.selectedSection}
+          onValueChange={filters.setSelectedSection}
+          disabled={filters.selectedDept === 'all'}
+        >
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder={filters.selectedDept === 'all' ? 'Select dept first' : 'Section'} />
+          </SelectTrigger>
+          <SelectContent className="bg-white border-slate-200">
+            <SelectItem value="all">All Sections</SelectItem>
+            {filteredSections.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filters.selectedBranch} onValueChange={filters.setSelectedBranch}>

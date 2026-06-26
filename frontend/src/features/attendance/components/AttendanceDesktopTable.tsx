@@ -94,7 +94,7 @@ export function AttendanceDesktopTable({
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground leading-tight uppercase tracking-tight">{row.employeeName}</p>
-                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-0.5">{row.department}{row.branchName ? ` · ${row.branchName}` : ''}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-0.5">{row.department}{row.sectionName && row.sectionName !== '—' ? ` · ${row.sectionName}` : ''}{row.branchName ? ` · ${row.branchName}` : ''}</p>
                   </div>
                 </td>
                 <td className="px-2 py-3 text-center">
@@ -166,13 +166,13 @@ export function AttendanceDesktopTable({
                     <div className="flex flex-col items-center gap-2">
                       {row.subRecords.map((sr, idx) => (
                         <div key={idx} className="flex flex-col items-center h-[34px] justify-center">
-                          <span className={`${sr.status === 'late' ? 'text-yellow-500' : sr.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</span>
+                          <span className={`${sr.status === 'late' ? 'text-yellow-500' : (sr.status === 'present' || sr.status === 'IN_PROGRESS') ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center">
-                      <span className={`${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</span>
+                      <span className={`${row.status === 'late' ? 'text-yellow-500' : (row.status === 'present' || row.status === 'IN_PROGRESS') ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</span>
                       {row.gracePeriodApplied && (
                         <span className="text-[9px] text-slate-400 mt-0.5" title="Check-in was late but within allowed grace period">Grace Period</span>
                       )}

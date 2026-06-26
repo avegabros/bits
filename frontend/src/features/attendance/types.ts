@@ -4,6 +4,7 @@ export interface AttendanceRecord {
   employeeName: string;
   profilePicture?: string | null;
   department: string;
+  sectionName?: string | null;
   branchName: string;
   companyName?: string | null;
   date: string;

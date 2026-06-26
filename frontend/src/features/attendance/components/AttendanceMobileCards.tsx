@@ -75,7 +75,7 @@ export function AttendanceMobileCards({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-foreground text-sm truncate uppercase tracking-tight">{row.employeeName}</p>
-                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{row.department} • {row.branchName}</p>
+                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{row.department}{row.sectionName && row.sectionName !== '—' ? ` • ${row.sectionName}` : ''} • {row.branchName}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -117,13 +117,13 @@ export function AttendanceMobileCards({
                 <div className="flex flex-col gap-2">
                   {row.subRecords.map((sr, idx) => (
                     <div key={idx}>
-                      <p className={`font-mono font-black text-sm ${sr.status === 'late' ? 'text-yellow-500' : sr.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</p>
+                      <p className={`font-mono font-black text-sm ${sr.status === 'late' ? 'text-yellow-500' : (sr.status === 'present' || sr.status === 'IN_PROGRESS') ? 'text-emerald-500' : 'text-muted-foreground'}`}>{sr.checkIn}</p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <>
-                  <p className={`font-mono font-black text-sm ${row.status === 'late' ? 'text-yellow-500' : row.status === 'present' ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</p>
+                  <p className={`font-mono font-black text-sm ${row.status === 'late' ? 'text-yellow-500' : (row.status === 'present' || row.status === 'IN_PROGRESS') ? 'text-emerald-500' : 'text-muted-foreground'}`}>{row.checkIn}</p>
                   {row.checkIn !== '—' && (
                     <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
                       <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />

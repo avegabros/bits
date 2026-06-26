@@ -847,7 +847,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (branchId !== undefined) {
             updateData.branchId = branchId ? parseInt(branchId, 10) : null;
         }
-        if (hireDate !== undefined && hireDate !== '') {
+        if (hireDate !== undefined && hireDate !== null && hireDate !== '') {
             updateData.hireDate = new Date(hireDate);
         }
         if (shiftId !== undefined) updateData.shiftId = shiftId ? parseInt(shiftId, 10) : null;

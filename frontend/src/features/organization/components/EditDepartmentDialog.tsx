@@ -1,10 +1,13 @@
-import { X as XIcon, Loader2 } from 'lucide-react'
-import type { Department } from '../types'
+import { X as XIcon, Loader2, Check, Layers } from 'lucide-react'
+import type { Department, Section } from '../types'
 
 interface EditDepartmentDialogProps {
   editingDept: Department | null
   editName: string
   setEditName: (name: string) => void
+  sections: Section[]
+  editSectionIds: number[]
+  setEditSectionIds: (ids: number[]) => void
   editLoading: boolean
   editError: string | null
   onSave: () => void
@@ -13,9 +16,18 @@ interface EditDepartmentDialogProps {
 
 export function EditDepartmentDialog({
   editingDept, editName, setEditName,
+  sections, editSectionIds, setEditSectionIds,
   editLoading, editError, onSave, onCancel,
 }: EditDepartmentDialogProps) {
   if (!editingDept) return null
+
+  const toggleSection = (sectionId: number) => {
+    if (editSectionIds.includes(sectionId)) {
+      setEditSectionIds(editSectionIds.filter(id => id !== sectionId))
+    } else {
+      setEditSectionIds([...editSectionIds, sectionId])
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
@@ -23,7 +35,7 @@ export function EditDepartmentDialog({
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
           <div>
             <h3 className="text-white font-bold text-lg">Edit Department</h3>
-            <p className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">Rename department</p>
+            <p className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">Update department details</p>
           </div>
           <button onClick={onCancel} className="text-white/80 hover:text-white transition-colors">
             <XIcon className="w-5 h-5" />
@@ -39,6 +51,50 @@ export function EditDepartmentDialog({
               onChange={e => setEditName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && onSave()}
             />
+          </div>
+          <div>
+            <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1.5">
+              <Layers className="w-3 h-3" /> Assigned Sections
+            </label>
+            <p className="text-[10px] text-slate-300 mb-2">Select which sections belong to this department</p>
+            {sections.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No sections created yet</p>
+            ) : (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {sections.map(s => {
+                  const isChecked = editSectionIds.includes(s.id)
+                  const isOwnedByOther = s.departmentId !== editingDept.id && isChecked === false
+                  const ownerLabel = s.department?.name && s.departmentId !== editingDept.id
+                    ? ` (${s.department.name})`
+                    : ''
+                  return (
+                    <label
+                      key={s.id}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-red-200 bg-red-50'
+                          : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${
+                        isChecked ? 'bg-red-500 border-red-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isChecked && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={isChecked}
+                        onChange={() => toggleSection(s.id)}
+                      />
+                      <span className={`text-sm font-medium ${isChecked ? 'text-red-700' : 'text-slate-500'}`}>
+                        {s.name}{ownerLabel}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
           {editError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{editError}</p>}
         </div>

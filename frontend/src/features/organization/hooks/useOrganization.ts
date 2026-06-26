@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/useToast'
-import type { Department, Branch, Company } from '../types'
+import type { Department, Branch, Company, Section } from '../types'
 
 export function useOrganization() {
   const [departments, setDepartments] = useState<Department[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [deptCounts, setDeptCounts] = useState<Record<string, number>>({})
+  const [sectionCounts, setSectionCounts] = useState<Record<string, number>>({})
   const [branchCounts, setBranchCounts] = useState<Record<string, number>>({})
   const [allEmployees, setAllEmployees] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,17 +26,26 @@ export function useOrganization() {
 
   // Add dialog
   const [isAddOpen, setIsAddOpen] = useState(false)
-  const [addType, setAddType] = useState<'department' | 'branch' | 'company'>('department')
+  const [addType, setAddType] = useState<'department' | 'branch' | 'company' | 'section'>('department')
   const [newName, setNewName] = useState('')
   const [newAddress, setNewAddress] = useState('')
+  const [newSectionDeptId, setNewSectionDeptId] = useState<string>('')
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [newDeptSectionIds, setNewDeptSectionIds] = useState<number[]>([])
 
   // Edit department dialog
   const [editingDept, setEditingDept] = useState<Department | null>(null)
   const [editName, setEditName] = useState('')
+  const [editSectionIds, setEditSectionIds] = useState<number[]>([])
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+
+  // Edit section dialog
+  const [editingSection, setEditingSection] = useState<Section | null>(null)
+  const [editSectionName, setEditSectionName] = useState('')
+  const [editSectionLoading, setEditSectionLoading] = useState(false)
+  const [editSectionError, setEditSectionError] = useState<string | null>(null)
 
   // Edit branch dialog
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
@@ -52,6 +63,7 @@ export function useOrganization() {
 
   // Delete confirmation
   const [confirmDeleteDept, setConfirmDeleteDept] = useState<Department | null>(null)
+  const [confirmDeleteSection, setConfirmDeleteSection] = useState<Section | null>(null)
   const [confirmDeleteBranch, setConfirmDeleteBranch] = useState<Branch | null>(null)
   const [confirmDeleteCompany, setConfirmDeleteCompany] = useState<Company | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -67,17 +79,19 @@ export function useOrganization() {
     const load = async () => {
       setLoading(true)
       try {
-        const [deptRes, branchRes, companyRes, empRes] = await Promise.all([
+        const [deptRes, sectionRes, branchRes, companyRes, empRes] = await Promise.all([
           fetch('/api/departments', { credentials: 'include' }),
+          fetch('/api/sections', { credentials: 'include' }),
           fetch('/api/branches', { credentials: 'include' }),
           fetch('/api/companies', { credentials: 'include' }),
           fetch('/api/employees', { credentials: 'include' }),
         ])
-        const [deptData, branchData, companyData, empData] = await Promise.all([
-          deptRes.json(), branchRes.json(), companyRes.json(), empRes.json(),
+        const [deptData, sectionData, branchData, companyData, empData] = await Promise.all([
+          deptRes.json(), sectionRes.json(), branchRes.json(), companyRes.json(), empRes.json(),
         ])
 
         if (deptData.success) setDepartments(deptData.departments)
+        if (sectionData.success) setSections(sectionData.sections)
         if (branchData.success) setBranches(branchData.branches)
         if (companyData.success) setCompanies(companyData.companies)
         if (empData.success) {
@@ -87,12 +101,15 @@ export function useOrganization() {
           setAllEmployees(activeEmps)
 
           const dCounts: Record<string, number> = {}
+          const sCounts: Record<string, number> = {}
           const bCounts: Record<string, number> = {}
           activeEmps.forEach((e: any) => {
             if (e.Department?.name) dCounts[e.Department.name] = (dCounts[e.Department.name] || 0) + 1
+            if (e.Section?.name) sCounts[e.Section.name] = (sCounts[e.Section.name] || 0) + 1
             if (e.Branch?.name) bCounts[e.Branch.name] = (bCounts[e.Branch.name] || 0) + 1
           })
           setDeptCounts(dCounts)
+          setSectionCounts(sCounts)
           setBranchCounts(bCounts)
         }
       } catch {
@@ -117,6 +134,41 @@ export function useOrganization() {
 
   const totalEmployees = allEmployees.length
 
+  // ── Refresh departments and sections helper ──
+  const refreshDeptsAndSections = async () => {
+    try {
+      const [deptRes, sectionRes, empRes] = await Promise.all([
+        fetch('/api/departments', { credentials: 'include' }),
+        fetch('/api/sections', { credentials: 'include' }),
+        fetch('/api/employees', { credentials: 'include' }),
+      ])
+      const [deptData, sectionData, empData] = await Promise.all([
+        deptRes.json(), sectionRes.json(), empRes.json(),
+      ])
+      if (deptData.success) setDepartments(deptData.departments)
+      if (sectionData.success) setSections(sectionData.sections)
+      if (empData.success) {
+        const activeEmps = (empData.employees || []).filter((e: any) =>
+          e.employmentStatus === 'ACTIVE'
+        )
+        setAllEmployees(activeEmps)
+        const dCounts: Record<string, number> = {}
+        const sCounts: Record<string, number> = {}
+        const bCounts: Record<string, number> = {}
+        activeEmps.forEach((e: any) => {
+          if (e.Department?.name) dCounts[e.Department.name] = (dCounts[e.Department.name] || 0) + 1
+          if (e.Section?.name) sCounts[e.Section.name] = (sCounts[e.Section.name] || 0) + 1
+          if (e.Branch?.name) bCounts[e.Branch.name] = (bCounts[e.Branch.name] || 0) + 1
+        })
+        setDeptCounts(dCounts)
+        setSectionCounts(sCounts)
+        setBranchCounts(bCounts)
+      }
+    } catch {
+      // silently fail on refresh
+    }
+  }
+
   // ── Add ──
   const handleAdd = async () => {
     const trimmed = newName.trim()
@@ -134,20 +186,37 @@ export function useOrganization() {
         setCompanies(prev => [...prev, data.company].sort((a, b) => a.name.localeCompare(b.name)))
         setNewName(''); setNewAddress(''); setIsAddOpen(false)
         showToast('success', 'Company Created', `${trimmed} has been added successfully`)
+      } else if (addType === 'section') {
+        if (!newSectionDeptId) {
+          setAddError('Department is required for creating a section')
+          return
+        }
+        const res = await fetch('/api/sections', {
+          method: 'POST', headers: authHeaders(), credentials: 'include',
+          body: JSON.stringify({ name: trimmed, departmentId: parseInt(newSectionDeptId, 10) }),
+        })
+        const data = await res.json()
+        if (!data.success) { setAddError(data.message || 'Failed to create'); return }
+        setSections(prev => [...prev, data.section].sort((a, b) => a.name.localeCompare(b.name)))
+        setNewName(''); setNewSectionDeptId(''); setIsAddOpen(false)
+        showToast('success', 'Section Created', `${trimmed} has been added successfully`)
       } else {
         const endpoint = addType === 'department' ? '/api/departments' : '/api/branches'
+        const body = addType === 'department'
+          ? { name: trimmed, sectionIds: newDeptSectionIds }
+          : { name: trimmed }
         const res = await fetch(endpoint, {
           method: 'POST', headers: authHeaders(), credentials: 'include',
-          body: JSON.stringify({ name: trimmed }),
+          body: JSON.stringify(body),
         })
         const data = await res.json()
         if (!data.success) { setAddError(data.message || 'Failed to create'); return }
         if (addType === 'department') {
-          setDepartments(prev => [...prev, data.department].sort((a, b) => a.name.localeCompare(b.name)))
+          await refreshDeptsAndSections()
         } else {
           setBranches(prev => [...prev, data.branch].sort((a, b) => a.name.localeCompare(b.name)))
         }
-        setNewName(''); setIsAddOpen(false)
+        setNewName(''); setNewDeptSectionIds([]); setIsAddOpen(false)
         showToast('success', addType === 'department' ? 'Department Created' : 'Branch Created', `${trimmed} has been added successfully`)
       }
     } catch {
@@ -165,30 +234,49 @@ export function useOrganization() {
     try {
       const res = await fetch(`/api/departments/${editingDept.id}`, {
         method: 'PUT', headers: authHeaders(), credentials: 'include',
-        body: JSON.stringify({ name: editName.trim() }),
+        body: JSON.stringify({ name: editName.trim(), sectionIds: editSectionIds }),
       })
       const data = await res.json()
-      if (!data.success) { setEditError(data.message || 'Failed to rename'); return }
-      setDepartments(prev =>
-        prev.map(d => d.id === editingDept.id ? data.department : d)
+      if (!data.success) { setEditError(data.message || 'Failed to update'); return }
+      await refreshDeptsAndSections()
+      setEditingDept(null)
+      showToast('success', 'Department Updated', `Department updated to ${data.department.name}`)
+    } catch { setEditError('Network error. Please try again.') }
+    finally { setEditLoading(false) }
+  }
+
+  // ── Rename section ──
+  const handleEditSectionSave = async () => {
+    if (!editingSection || !editSectionName.trim()) return
+    setEditSectionLoading(true)
+    setEditSectionError(null)
+    try {
+      const res = await fetch(`/api/sections/${editingSection.id}`, {
+        method: 'PUT', headers: authHeaders(), credentials: 'include',
+        body: JSON.stringify({ name: editSectionName.trim() }),
+      })
+      const data = await res.json()
+      if (!data.success) { setEditSectionError(data.message || 'Failed to rename'); return }
+      setSections(prev =>
+        prev.map(s => s.id === editingSection.id ? data.section : s)
           .sort((a, b) => a.name.localeCompare(b.name))
       )
-      if (deptCounts[editingDept.name]) {
-        setDeptCounts(prev => {
+      if (sectionCounts[editingSection.name]) {
+        setSectionCounts(prev => {
           const next = { ...prev }
-          next[data.department.name] = next[editingDept.name] || 0
-          delete next[editingDept.name]
+          next[data.section.name] = next[editingSection.name] || 0
+          delete next[editingSection.name]
           return next
         })
       }
       setAllEmployees(prev =>
-        prev.map(e => e.departmentId === editingDept.id
-          ? { ...e, Department: { name: data.department.name } } : e)
+        prev.map(e => e.sectionId === editingSection.id
+          ? { ...e, Section: { id: data.section.id, name: data.section.name } } : e)
       )
-      setEditingDept(null)
-      showToast('success', 'Department Renamed', `Department renamed to ${data.department.name}`)
-    } catch { setEditError('Network error. Please try again.') }
-    finally { setEditLoading(false) }
+      setEditingSection(null)
+      showToast('success', 'Section Renamed', `Section renamed to ${data.section.name}`)
+    } catch { setEditSectionError('Network error. Please try again.') }
+    finally { setEditSectionLoading(false) }
   }
 
   // ── Edit branch (rename + sync company assignments) ──
@@ -308,6 +396,23 @@ export function useOrganization() {
     finally { setDeleteLoading(false) }
   }
 
+  // ── Delete section ──
+  const handleDeleteSection = async () => {
+    if (!confirmDeleteSection) return
+    setDeleteLoading(true); setDeleteError(null)
+    try {
+      const res = await fetch(`/api/sections/${confirmDeleteSection.id}`, {
+        method: 'DELETE', headers: authHeaders(), credentials: 'include',
+      })
+      const data = await res.json()
+      if (!data.success) { setDeleteError(data.message || 'Failed to delete'); return }
+      setSections(prev => prev.filter(s => s.id !== confirmDeleteSection.id))
+      setConfirmDeleteSection(null)
+      showToast('success', 'Section Removed', `${confirmDeleteSection.name} has been removed`)
+    } catch { setDeleteError('Network error. Please try again.') }
+    finally { setDeleteLoading(false) }
+  }
+
   // ── Delete branch ──
   const handleDeleteBranch = async () => {
     if (!confirmDeleteBranch) return
@@ -347,16 +452,21 @@ export function useOrganization() {
   }
 
   return {
-    departments, branches, companies, deptCounts, branchCounts, allEmployees,
+    departments, sections, branches, companies, deptCounts, sectionCounts, branchCounts, allEmployees,
     loading, apiError, totalEmployees, filteredDepts,
     currentPage, setCurrentPage, rowsPerPage,
     searchTerm, setSearchTerm, branchFilter, setBranchFilter,
     viewMode, setViewMode,
     isAddOpen, setIsAddOpen, addType, setAddType,
     newName, setNewName, newAddress, setNewAddress,
+    newSectionDeptId, setNewSectionDeptId,
+    newDeptSectionIds, setNewDeptSectionIds,
     addLoading, addError, setAddError, handleAdd,
     editingDept, setEditingDept, editName, setEditName,
+    editSectionIds, setEditSectionIds,
     editLoading, editError, setEditError, handleEditSave,
+    editingSection, setEditingSection, editSectionName, setEditSectionName,
+    editSectionLoading, editSectionError, setEditSectionError, handleEditSectionSave,
     editingBranch, setEditingBranch, editBranchName, setEditBranchName,
     editBranchCompanyIds, setEditBranchCompanyIds,
     editBranchLoading, editBranchError, setEditBranchError, handleEditBranchSave,
@@ -365,10 +475,11 @@ export function useOrganization() {
     editCompanyAddress, setEditCompanyAddress,
     editCompanyLoading, editCompanyError, setEditCompanyError, handleEditCompanySave,
     confirmDeleteDept, setConfirmDeleteDept,
+    confirmDeleteSection, setConfirmDeleteSection,
     confirmDeleteBranch, setConfirmDeleteBranch,
     confirmDeleteCompany, setConfirmDeleteCompany,
     deleteLoading, deleteError, setDeleteError,
-    handleDeleteDept, handleDeleteBranch, handleDeleteCompany,
+    handleDeleteDept, handleDeleteSection, handleDeleteBranch, handleDeleteCompany,
     toasts, showToast, dismissToast,
   }
 }

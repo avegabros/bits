@@ -9,3 +9,11 @@ export interface CreateBranchRequest {
 }
 
 export type UpdateBranchRequest = Partial<CreateBranchRequest>;
+
+export interface CreateSectionRequest {
+    name: string;
+    departmentId: number;
+}
+
+export type UpdateSectionRequest = Partial<Pick<CreateSectionRequest, 'name'>>;
+

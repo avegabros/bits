@@ -59,6 +59,9 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
                         Department: {
                             select: { name: true }
                         },
+                        Section: {
+                            select: { name: true }
+                        },
                         Branch: { select: { name: true } },
                     }
                 },
@@ -228,7 +231,8 @@ export const getTodayLogs = async () => {
         include: {
             employee: {
                 include: {
-                    Department: { select: { name: true } }
+                    Department: { select: { name: true } },
+                    Section: { select: { name: true } }
                 }
             }
         },

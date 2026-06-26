@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import { useToast } from '@/hooks/useToast'
@@ -18,6 +18,7 @@ interface RawAttendanceLog {
     lastName: string
     suffix?: string
     Department?: { name: string }
+    Section?: { name: string }
     Branch?: { name: string }
     Shift?: { shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string }
     profilePicture?: string | null
@@ -59,6 +60,7 @@ interface RawEmployee {
   lastName: string
   branchId?: number | null
   Department?: { name: string }
+  Section?: { name: string }
   Branch?: { name: string }
   Company?: { id: number; name: string } | null
   Shift?: { name?: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string }
@@ -99,6 +101,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [branchFilter, setBranchFilter] = useState('All Branches')
   const allDeptLabel = role === 'manager' ? 'All Assigned Departments' : 'All Departments'
   const [deptFilter, setDeptFilter] = useState(allDeptLabel)
+  const [sectionFilter, setSectionFilter] = useState('All Sections')
   const [shiftFilter, setShiftFilter] = useState('All Shifts')
 
   // ── Data State ────────────────────────────────────────────────────────────
@@ -109,6 +112,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [companiesList, setCompaniesList] = useState<{ id: number; name: string }[]>([])
   const [companyFilter, setCompanyFilter] = useState('All Companies')
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
+  const [sectionsList, setSectionsList] = useState<{ id: number; name: string; departmentId: number }[]>([])
   const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, restDay: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
   const [availableShifts, setAvailableShifts] = useState<string[]>(['All Shifts'])
 
@@ -147,6 +151,15 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     : branchesList.filter(b => b.companies?.some(link => link.company.name === companyFilter))
   const branches = ['All Branches', ...filteredBranchesList.map(b => b.name)]
   const departments = [allDeptLabel, ...departmentsList.map(d => d.name)]
+
+  const filteredSectionsList = useMemo(() => {
+    if (deptFilter === allDeptLabel) return sectionsList;
+    const dept = departmentsList.find(d => d.name === deptFilter);
+    if (!dept) return [];
+    return sectionsList.filter(s => s.departmentId === dept.id);
+  }, [sectionsList, departmentsList, deptFilter, allDeptLabel]);
+
+  const sections = ['All Sections', ...filteredSectionsList.map(s => s.name)]
   const statuses = [
     { value: 'all', label: 'All Status' },
     { value: 'present', label: 'On Time' },
@@ -175,7 +188,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   }, [searchQuery])
 
   // ⚠️ FILTER RESET: page resets to 1 on any filter or date change
-  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, shiftFilter])
+  useEffect(() => { setCurrentPage(1) }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, sectionFilter, companyFilter, shiftFilter])
 
   // Fetch branches — on mount only
   useEffect(() => {
@@ -204,6 +217,20 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     run()
   }, [role])
 
+  // Fetch sections — on mount only
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const res = await fetch('/api/sections', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && data.sections) setSectionsList(data.sections)
+        }
+      } catch { /* ignore */ }
+    }
+    run()
+  }, [])
+
   // Fetch companies — on mount only
   useEffect(() => {
     const run = async () => {
@@ -217,6 +244,11 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     }
     run()
   }, [])
+
+  // Reset section filter when department changes
+  useEffect(() => {
+    setSectionFilter('All Sections')
+  }, [deptFilter])
 
   // Reset branch filter when company changes
   useEffect(() => {
@@ -326,6 +358,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
             employeeName: emp?.firstName ? `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}` : 'Unknown',
             profilePicture: emp?.profilePicture,
             department: emp?.Department?.name || 'General',
+            sectionName: emp?.Section?.name || '—',
             branchName: emp?.Branch?.name || '—',
             date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
             checkIn: isPendingManualCreation ? '—' : (log.checkInTime ? checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
@@ -455,6 +488,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
                     employeeName: `${e.firstName} ${e.lastName}`,
                     profilePicture: e.profilePicture,
                     department: e.Department?.name || 'General',
+                    sectionName: e.Section?.name || '—',
                     branchName: e.Branch?.name || '—',
                     companyName: e.Company?.name ?? null,
                     date: selectedDate,
@@ -493,6 +527,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         }
         if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
         if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
+        if (sectionFilter !== 'All Sections') full = full.filter(r => r.sectionName === sectionFilter)
 
         // Extract available shifts from the filtered (by department/branch/etc) list before applying shiftFilter.
         // NOTE: 'OT Approved' is intentionally excluded from the tab list — clicking the OT Approved badge
@@ -568,7 +603,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         // inflate or deflate any stat counter (present, late, absent, hours, etc.).
         const statsRecords = full.filter(r => !isPendingManualCreation(r))
         setStats({
-          onTime: statsRecords.filter(r => r.status === 'present').length,
+          onTime: statsRecords.filter(r => r.status === 'present' || r.status === 'IN_PROGRESS').length,
           late: statsRecords.filter(r => r.status === 'late').length,
           absent: statsRecords.filter(r => r.status === 'absent').length,
           restDay: statsRecords.filter(r => r.status === 'rest_day').length,
@@ -593,7 +628,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         setLoading(false)
       }
     }
-  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, companyFilter, shiftFilter, branchesList])
+  }, [selectedDate, statusFilter, debouncedSearch, branchFilter, deptFilter, sectionFilter, companyFilter, shiftFilter, branchesList, sectionsList])
 
   // SSE stream — teardown is managed internally by useAttendanceStream
   const handleStreamRecord = useCallback((payload: AttendanceStreamPayload) => {
@@ -828,8 +863,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     const formattedDate = `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`
     const branchLabel = branchFilter === 'All Branches' ? 'All Branches' : branchFilter
     const deptLabel = deptFilter === allDeptLabel ? allDeptLabel : deptFilter
+    const sectionLabel = sectionFilter === 'All Sections' ? 'All Sections' : sectionFilter
 
-    const presentCount = records.filter(r => r.status === 'present').length
+    const presentCount = records.filter(r => r.status === 'present' || r.status === 'IN_PROGRESS').length
     const lateCount = records.filter(r => r.status === 'late').length
     const absentCount = records.filter(r => r.status === 'absent').length
     const incompleteCount = records.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout').length
@@ -838,6 +874,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     allRows.push(['BITS Attendance Report'])
     allRows.push(['Branch', branchLabel])
     allRows.push(['Department', deptLabel])
+    allRows.push(['Section', sectionLabel])
     allRows.push(['Date', formattedDate])
     if (isHolidayDate) allRows.push(['⚠️ This date is a Holiday'])
     allRows.push(['Generated', new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })])
@@ -850,13 +887,13 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     if (isHolidayDate) allRows.push(['Note', '⚠️ This is a holiday — absent tracking is suspended for this date'])
     allRows.push(['Missing Checkout', incompleteCount])
     allRows.push([])
-    allRows.push(['#', 'Employee', 'Branch', 'Department', 'Shift', 'Check In', 'Check Out', 'Checkout Source', 'Hours Worked', 'Late By', 'Overtime', 'Undertime', 'Status'])
+    allRows.push(['#', 'Employee', 'Branch', 'Department', 'Section', 'Shift', 'Check In', 'Check Out', 'Checkout Source', 'Hours Worked', 'Late By', 'Overtime', 'Undertime', 'Status'])
 
     sortedRecords.forEach((r, i) => {
       const statusLabel = r.isAnomaly ? 'Anomaly' : r.displayStatus === 'IN_PROGRESS' ? 'In Progress' : r.displayStatus === 'missing_checkout' ? 'Missing Checkout' : (isHolidayDate && r.status === 'absent') ? 'Holiday' : r.status === 'rest_day' ? 'Rest Day' : r.status.charAt(0).toUpperCase() + r.status.slice(1)
       const checkoutSourceLabel = r.checkoutSource === 'device' ? '' : r.checkoutSource === 'manual' ? 'Manual' : r.checkoutSource === 'auto_closed' ? 'Auto-Closed' : r.displayStatus === 'missing_checkout' ? 'Missing' : ''
       allRows.push([
-        i + 1, r.employeeName, r.branchName, r.department, r.shiftCode || r.shiftName || (r.approvedOts && r.approvedOts.length > 0 ? 'OT Approved' : 'No Shift'),
+        i + 1, r.employeeName, r.branchName, r.department, r.sectionName || '', r.shiftCode || r.shiftName || (r.approvedOts && r.approvedOts.length > 0 ? 'OT Approved' : 'No Shift'),
         r.checkIn,
         r.isShiftActive ? 'ACTIVE' : r.checkOut,
         r.isShiftActive ? '' : checkoutSourceLabel,
@@ -885,13 +922,13 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         entityType: 'Attendance',
         source: role === 'admin' ? 'admin-panel' : 'hr-panel',
         details: `Exported attendance records (${records.length} rows) for ${selectedDate}`,
-        filters: { branch: branchLabel, date: selectedDate, department: deptFilter !== allDeptLabel ? deptFilter : undefined, status: statusFilter !== 'all' ? statusFilter : undefined },
+        filters: { branch: branchLabel, date: selectedDate, department: deptFilter !== allDeptLabel ? deptFilter : undefined, section: sectionFilter !== 'All Sections' ? sectionFilter : undefined, status: statusFilter !== 'all' ? statusFilter : undefined },
         recordCount: records.length,
         fileFormat: 'xlsx',
         fileName,
       }),
     }).catch(() => { })
-  }, [selectedDate, branchFilter, deptFilter, records, sortedRecords, stats, statusFilter, role])
+  }, [selectedDate, branchFilter, deptFilter, sectionFilter, records, sortedRecords, stats, statusFilter, role])
 
   // ── Return ───────────────────────────────────────────────────────────────
 
@@ -902,13 +939,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     statusFilter, setStatusFilter,
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
+    sectionFilter, setSectionFilter,
     companyFilter, setCompanyFilter,
     shiftFilter, setShiftFilter,
     // Refs
     dateInputRef, dragScrollRef,
     // Data
     records, loading, error, stats,
-    companies, branches, departments, statuses, shifts: availableShifts,
+    companies, branches, departments, sections, statuses, shifts: availableShifts,
     // Sort
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     // Pagination

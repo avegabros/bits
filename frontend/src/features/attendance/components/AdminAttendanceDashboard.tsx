@@ -19,11 +19,12 @@ function AdminAttendanceContent() {
     statusFilter, setStatusFilter,
     branchFilter, setBranchFilter,
     deptFilter, setDeptFilter,
+    sectionFilter, setSectionFilter,
     companyFilter, setCompanyFilter,
     shiftFilter, setShiftFilter,
     dateInputRef,
     records, loading, error, stats,
-    branches, companies, departments, statuses, shifts,
+    branches, companies, departments, sections, statuses, shifts,
     sortedRecords, sortKeyStr, sortOrder, handleSort,
     currentPage, setCurrentPage, totalPages, rowsPerPage,
     editingLog, setEditingLog,
@@ -138,10 +139,13 @@ function AdminAttendanceContent() {
             setBranchFilter={setBranchFilter}
             deptFilter={deptFilter}
             setDeptFilter={setDeptFilter}
+            sectionFilter={sectionFilter}
+            setSectionFilter={setSectionFilter}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
             branches={branches}
             departments={departments}
+            sections={sections}
             statuses={statuses}
             shiftFilter={shiftFilter}
             setShiftFilter={setShiftFilter}

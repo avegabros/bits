@@ -51,6 +51,7 @@ export type AuditEntity =
     | 'Attendance'
     | 'Shift'
     | 'Department'
+    | 'Section'
     | 'Branch'
     | 'Company'
     | 'Holiday'
