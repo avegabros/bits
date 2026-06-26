@@ -27,6 +27,7 @@ export interface DeviceLog {
     deviceUserId: string;
     recordTime: Date;
     status: number;
+    verifyMode: number;
 }
 
 export class ZKDriver {
@@ -598,7 +599,8 @@ export class ZKDriver {
             .map((log) => ({
                 deviceUserId: String(log.deviceUserId),
                 recordTime: new Date(log.recordTime as string | number),
-                status: (log.status as number) || 0
+                status: (log.status as number) || 0,
+                verifyMode: (log.verifyMode as number) || 0
             }));
     }
 }

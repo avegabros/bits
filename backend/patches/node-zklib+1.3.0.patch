@@ -1,3 +1,15 @@
+diff --git a/node_modules/node-zklib/utils.js b/node_modules/node-zklib/utils.js
+index 97ce15b..3c166b5 100644
+--- a/node_modules/node-zklib/utils.js
++++ b/node_modules/node-zklib/utils.js
+@@ -152,6 +152,7 @@ module.exports.decodeRecordData40 = (recordData)=>{
+         .split('\0')
+         .shift(),
+         recordTime: parseTimeToDate(recordData.readUInt32LE(27)),
++        verifyMode: recordData.readUInt8(26),
+       }
+       return record
+ }
 diff --git a/node_modules/node-zklib/zklibtcp.js b/node_modules/node-zklib/zklibtcp.js
 index 194a9d8..00fd01f 100644
 --- a/node_modules/node-zklib/zklibtcp.js

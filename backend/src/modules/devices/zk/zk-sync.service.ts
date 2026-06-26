@@ -7,6 +7,19 @@ import { auditBatch } from '../../../shared/lib/auditHelpers';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { tryAcquireDeviceLock, releaseDeviceLock } from './zk-lock.service';
 
+function getAuthMethodFromVerifyMode(verifyMode: number): string {
+    switch (verifyMode) {
+        case 1:
+        case 2:
+            return 'FINGERPRINT';
+        case 4:
+            return 'CARD';
+        case 3:
+            return 'PASSWORD';
+        default:
+            return 'FINGERPRINT';
+    }
+}
 
 export interface SyncZkDataResult {
     success: boolean;
@@ -180,6 +193,7 @@ async function syncSingleDevice(dbDevice: {
                         employeeId: employee.id,
                         status: log.status,
                         deviceId: dbDevice.id,
+                        authMethod: getAuthMethodFromVerifyMode(log.verifyMode)
                     },
                 });
                 newCount++;

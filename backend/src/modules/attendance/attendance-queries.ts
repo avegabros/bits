@@ -156,6 +156,8 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,
             checkOutDeviceName: record.checkOutDevice?.name || null,
+            checkInAuthMethod: record.checkInAuthMethod || null,
+            checkOutAuthMethod: record.checkOutAuthMethod || null,
             checkInTimePH: formatToPhilippineTime(record.checkInTime),
             checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null,
             isEarlyPunch: (record.notes ?? '').includes('Early punch'),

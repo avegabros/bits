@@ -20,6 +20,8 @@ model Attendance {
   notes                String?
   checkInDeviceId      Int?
   checkOutDeviceId     Int?
+  checkInAuthMethod    String?
+  checkOutAuthMethod   String?
   checkoutSource       String?
   lateMinutes          Int                    @default(0)
   undertimeMinutes     Int                    @default(0)
@@ -89,6 +91,7 @@ model AttendanceLog {
   status      Int
   employeeId  Int
   deviceId    Int?
+  authMethod  String?
   createdAt   DateTime  @default(now())
   processedAt DateTime?
   Device      Device?   @relation(fields: [deviceId], references: [id])

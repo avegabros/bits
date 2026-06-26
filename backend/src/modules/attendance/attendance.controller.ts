@@ -299,7 +299,9 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                      status: 'pending',
                      notes: `[Pending] Manual creation requested by HR. | Manual Edit: ${String(reason).trim()}`,
                      checkoutSource: null,
-                     shiftId: resolvedShift?.id ?? null
+                     shiftId: resolvedShift?.id ?? null,
+                     checkInAuthMethod: 'MANUAL',
+                     checkOutAuthMethod: effectiveCheckOut ? 'MANUAL' : null
                  }
              });
 
@@ -357,7 +359,9 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                 status: calculatedStatus,
                 notes: `Manual Edit: ${String(reason).trim()}`,
                 checkoutSource: effectiveCheckOut ? 'manual' : null,
-                shiftId: resolvedShift?.id ?? null
+                shiftId: resolvedShift?.id ?? null,
+                checkInAuthMethod: 'MANUAL',
+                checkOutAuthMethod: effectiveCheckOut ? 'MANUAL' : null
             }
         });
 
@@ -1158,6 +1162,7 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       const oldVal = isManualCreation ? null : (existing.checkInTime ? existing.checkInTime.toISOString() : null);
       updateData.checkInTime = adjustment.requestedCheckIn;
       updateData.checkin_updated = new Date();
+      updateData.checkInAuthMethod = 'MANUAL';
       auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn.toISOString() });
     }
 
@@ -1166,6 +1171,7 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
       updateData.checkOutTime = adjustment.requestedCheckOut;
       updateData.checkout_updated = new Date();
       updateData.checkoutSource = 'manual';
+      updateData.checkOutAuthMethod = 'MANUAL';
       auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: adjustment.requestedCheckOut.toISOString() });
     } else if (adjustment.requestedCheckOut === null && existing.checkOutTime) {
        // if they explicitly wanted to clear the checkout time? Unlikely but just in case

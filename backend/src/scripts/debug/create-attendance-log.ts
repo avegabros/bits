@@ -55,6 +55,7 @@ Options:
   --date <YYYY-MM-DD>     Log date (defaults to today)
   --punches <HH:MM,...>   Comma-separated list of punch times (e.g. --punches "08:00,17:00")
   --deviceId <id>         Associate logs with a specific device ID
+  --auth <method>         Authentication method (FINGERPRINT, CARD, PASSWORD, MANUAL)
   --process               Automatically run reconciliation process
   --help                  Show this help message
 `);
@@ -91,6 +92,7 @@ async function main() {
     const punches: { time: string }[] = [];
     let selectedDeviceId: number | null = null;
     let autoProcess = false;
+    let authMethod = 'FINGERPRINT';
 
     // Check if arguments were passed for non-interactive run
     const hasArgs = args.employeeId || args.email || args.zkId || args.employeeNumber;
@@ -149,6 +151,18 @@ async function main() {
             const deviceExists = await prisma.device.findUnique({ where: { id: selectedDeviceId } });
             if (!deviceExists) {
                 console.warn(`${colors.yellow}Warning: Device with ID ${selectedDeviceId} does not exist in DB.${colors.reset}`);
+            }
+        }
+
+        // 5. Auth Method
+        if (args.auth) {
+            const requestedAuth = String(args.auth).toUpperCase();
+            if (['FINGERPRINT', 'CARD', 'PASSWORD', 'MANUAL'].includes(requestedAuth)) {
+                authMethod = requestedAuth;
+                console.log(`Auth Method: ${authMethod}`);
+            } else {
+                console.error(`${colors.red}Error: Invalid auth method. Use FINGERPRINT, CARD, PASSWORD, or MANUAL.${colors.reset}`);
+                process.exit(1);
             }
         }
 
@@ -292,6 +306,22 @@ async function main() {
             console.log('No active devices found in the database. Logs will be created without device association.');
         }
 
+        // 4.5. Auth Method Selection
+        console.log('\nSelect authentication method:');
+        console.log('  [1] Fingerprint (default)');
+        console.log('  [2] RFID Card');
+        console.log('  [3] Password');
+        console.log('  [4] Manual');
+        const authChoiceStr = await askQuestion('Select method [1-4, default 1]: ');
+        const authChoice = authChoiceStr === '' ? 1 : parseInt(authChoiceStr, 10);
+        if (authChoice === 2) {
+            authMethod = 'CARD';
+        } else if (authChoice === 3) {
+            authMethod = 'PASSWORD';
+        } else if (authChoice === 4) {
+            authMethod = 'MANUAL';
+        }
+
         // 5. 48-hour cutoff warning
         const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
         let hasCutoffWarning = false;
@@ -324,6 +354,7 @@ async function main() {
             console.log(` - Punch #${idx + 1}: PHT: ${dateStr} ${p.time} | UTC: ${utcTime.toISOString()}`);
         });
         console.log(`Device ID: ${selectedDeviceId ?? 'None'}`);
+        console.log(`Auth Method: ${authMethod}`);
 
         const confirm = await askQuestion('\nInsert these logs into database? (y/n, default y): ');
         if (confirm.toLowerCase() === 'n') {
@@ -360,6 +391,7 @@ async function main() {
                 timestamp,
                 status: 0, // Default status for raw punches
                 deviceId: selectedDeviceId,
+                authMethod,
                 createdAt: new Date()
             }
         });

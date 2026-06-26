@@ -31,6 +31,8 @@ export interface AttendanceRecord {
   displayStatus?: string;
   checkInDevice?: string | null;
   checkOutDevice?: string | null;
+  checkInAuthMethod?: string | null;
+  checkOutAuthMethod?: string | null;
   checkoutSource?: string | null;
   isEdited?: boolean;
   isPending?: boolean;

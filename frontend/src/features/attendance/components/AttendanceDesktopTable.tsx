@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { AlertCircle, Edit2, Fingerprint, PenLine, AlertTriangle, Trash2, Clock } from 'lucide-react'
+import { AlertCircle, Edit2, Fingerprint, PenLine, AlertTriangle, Trash2, Clock, CreditCard } from 'lucide-react'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { fmtHours, formatLate, fmtMins } from '../utils/attendance-formatters'
 import { AttendanceRecord } from '../types'
@@ -177,10 +177,21 @@ export function AttendanceDesktopTable({
                         <span className="text-[9px] text-slate-400 mt-0.5" title="Check-in was late but within allowed grace period">Grace Period</span>
                       )}
                       {row.checkIn !== '—' && (
-                        <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
-                          <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
-                          <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
-                        </div>
+                        row.checkInAuthMethod === 'MANUAL' ? (
+                          <div title="Manually set" className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
+                            <PenLine className="w-2.5 h-2.5 text-amber-500 shrink-0 opacity-80" />
+                            <span className="text-[9px] text-amber-600 font-bold truncate leading-none pt-px">Manual</span>
+                          </div>
+                        ) : (
+                          <div title={row.checkInDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
+                            {row.checkInAuthMethod === 'CARD' ? (
+                              <CreditCard className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                            ) : (
+                              <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                            )}
+                            <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkInDevice ?? 'Manual'}</span>
+                          </div>
+                        )
                       )}
                     </div>
                   )}
@@ -257,7 +268,11 @@ export function AttendanceDesktopTable({
                           </div>
                         ) : (
                           <div title={row.checkOutDevice ?? 'Manual'} className="inline-flex items-center gap-1 mt-1 bg-secondary/60 hover:bg-secondary border border-border/50 px-1.5 py-0.5 rounded-md transition-colors w-fit max-w-[130px]">
-                            <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                            {row.checkOutAuthMethod === 'CARD' ? (
+                              <CreditCard className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                            ) : (
+                              <Fingerprint className="w-2.5 h-2.5 text-primary shrink-0 opacity-80" />
+                            )}
                             <span className="text-[9px] text-muted-foreground font-bold truncate leading-none pt-px">{row.checkOutDevice ?? 'Manual'}</span>
                           </div>
                         )

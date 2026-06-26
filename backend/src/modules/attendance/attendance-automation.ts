@@ -144,6 +144,7 @@ export const autoCheckoutEmployees = async (): Promise<number> => {
                 data: {
                     checkOutTime: autoCheckoutTime,
                     notes: `Auto checkout — estimated shift end (${shiftLabel})`,
+                    checkOutAuthMethod: 'SYSTEM',
                     updatedAt: new Date()
                 }
             });

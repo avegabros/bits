@@ -821,6 +821,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 checkInTime: log.timestamp,
                                 status: checkInStatus,
                                 checkInDeviceId: log.deviceId,
+                                checkInAuthMethod: log.authMethod,
                                 lateMinutes: checkInMetrics.lateMinutes,
                                 undertimeMinutes: checkInMetrics.undertimeMinutes,
                                 overtimeMinutes: checkInMetrics.overtimeMinutes,
@@ -959,6 +960,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             updateData.checkOutTime = log.timestamp;
                             updateData.checkOutDeviceId = log.deviceId;
                             updateData.checkoutSource = 'device';
+                            updateData.checkOutAuthMethod = log.authMethod;
 
                             if (existingAtt.status === 'incomplete' || existingAtt.checkOutTime) {
                                 updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts);
@@ -1025,6 +1027,8 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 status: calculatedStatus,
                                 checkInDeviceId: log.deviceId,
                                 checkOutDeviceId: log.deviceId,
+                                checkInAuthMethod: 'MANUAL',
+                                checkOutAuthMethod: log.authMethod,
                                 checkoutSource: 'device',
                                 lateMinutes: checkMetrics.lateMinutes,
                                 undertimeMinutes: checkMetrics.undertimeMinutes,
@@ -1126,6 +1130,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             checkInTime: log.timestamp,
                             status: checkInStatus,
                             checkInDeviceId: log.deviceId,
+                            checkInAuthMethod: log.authMethod,
                             lateMinutes: checkInMetrics.lateMinutes,
                             undertimeMinutes: checkInMetrics.undertimeMinutes,
                             overtimeMinutes: checkInMetrics.overtimeMinutes,
@@ -1222,6 +1227,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                                 updatedAt: new Date(),
                                 checkOutDeviceId: log.deviceId,
                                 checkoutSource: 'device',
+                                checkOutAuthMethod: log.authMethod,
                             };
 
                             if (existingAttendance.status === 'incomplete') {
@@ -1298,6 +1304,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             updatedAt: new Date(),
                             checkOutDeviceId: log.deviceId,
                             checkoutSource: 'device',
+                            checkOutAuthMethod: log.authMethod,
                         };
 
                         if (existingAttendance.status === 'incomplete') {
