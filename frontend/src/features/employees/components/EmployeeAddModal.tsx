@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, Plus, X as XIcon, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,13 +21,33 @@ const SUFFIX_OPTIONS = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V'] as const;
 export function EmployeeAddModal({ departments, branches, companies, shifts, onSave, isOpen, setIsOpen }: EmployeeAddModalProps) {
   const [newEmployee, setNewEmployee] = useState({
     employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', shiftIds: [] as number[]
+    contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', sectionId: '', shiftIds: [] as number[]
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});;
   const [isRegistering, setIsRegistering] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
+  const [sections, setSections] = useState<any[]>([]);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/sections', { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setSections(data.sections);
+          }
+        })
+        .catch(err => console.error('Error fetching sections:', err));
+    }
+  }, [isOpen]);
+
+  const filteredSections = useMemo(() => {
+    if (!newEmployee.departmentId) return [];
+    const deptId = parseInt(newEmployee.departmentId, 10);
+    return sections.filter((s: any) => s.departmentId === deptId);
+  }, [sections, newEmployee.departmentId]);
 
   /** Parse workDays JSON and return compact day abbreviations */
   const parseDays = (workDays?: string): string[] => {
@@ -70,7 +90,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
   const resetForm = () => {
     setNewEmployee({
       employeeNumber: '', firstName: '', lastName: '', middleName: '', suffix: '',
-      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', shiftIds: []
+      contactNumber: '', departmentId: '', branchId: '', email: '', hireDate: '', shiftId: '', gender: '', dateOfBirth: '', position: '', sectionId: '', shiftIds: []
     });
     setSelectedCompanyId('');
     setFormErrors({});
@@ -86,6 +106,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
     const dataToValidate = {
       ...newEmployee,
       departmentId: newEmployee.departmentId ? parseInt(newEmployee.departmentId) : undefined,
+      sectionId: newEmployee.sectionId ? parseInt(newEmployee.sectionId) : undefined,
       branchId: newEmployee.branchId ? parseInt(newEmployee.branchId) : undefined,
       shiftId: newEmployee.shiftId ? parseInt(newEmployee.shiftId) : undefined,
       shiftIds: newEmployee.shiftIds,
@@ -117,7 +138,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
       <DialogTrigger asChild>
         <Button className="flex-1 sm:flex-none bg-primary hover:bg-primary/90 gap-2"><Plus className="w-4 h-4" /> Add Employee</Button>
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-lg p-0 rounded-2xl overflow-hidden shadow-xl">
+      <DialogContent showCloseButton={false} className="bg-white border-0 max-w-lg p-0 gap-0 flex flex-col rounded-2xl overflow-hidden shadow-xl">
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between shrink-0">
           <div>
             <DialogTitle className="text-white font-bold text-lg">New Employee Registration</DialogTitle>
@@ -199,7 +220,25 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
             </div>
           </div>
 
-          <div><label className="text-slate-400 text-[10px] uppercase font-bold">Department *</label><select className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.departmentId ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.departmentId} onChange={e => { setNewEmployee(p => ({ ...p, departmentId: e.target.value })); setFormErrors(p => ({ ...p, departmentId: '' })) }}><option value="">Select Dept</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>{formErrors.departmentId && <p className="text-[11px] text-red-500">{formErrors.departmentId}</p>}</div>
+          <div><label className="text-slate-400 text-[10px] uppercase font-bold">Department *</label><select className={`mt-1 w-full px-3 py-2 rounded-lg border ${formErrors.departmentId ? 'border-red-400' : 'border-slate-200'} text-sm outline-none`} value={newEmployee.departmentId} onChange={e => { setNewEmployee(p => ({ ...p, departmentId: e.target.value, sectionId: '' })); setFormErrors(p => ({ ...p, departmentId: '' })) }}><option value="">Select Dept</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>{formErrors.departmentId && <p className="text-[11px] text-red-500">{formErrors.departmentId}</p>}</div>
+
+          {newEmployee.departmentId && (
+            <div>
+              <label className="text-slate-400 text-[10px] uppercase font-bold">Section (optional)</label>
+              <select
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none"
+                value={newEmployee.sectionId}
+                onChange={e => setNewEmployee(p => ({ ...p, sectionId: e.target.value }))}
+              >
+                <option value="">Select Section (optional)</option>
+                {filteredSections.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div><label className="text-slate-400 text-[10px] uppercase font-bold">Position</label><input placeholder="e.g. Software Engineer" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" value={newEmployee.position} onChange={e => setNewEmployee(p => ({ ...p, position: e.target.value }))} /></div>
 

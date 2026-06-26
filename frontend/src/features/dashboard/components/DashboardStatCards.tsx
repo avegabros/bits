@@ -14,7 +14,7 @@ export interface DashboardStatCardsProps {
 
 export function DashboardStatCards({ role, totalEmployees, totalPresent, totalLate, totalAbsent }: DashboardStatCardsProps) {
     const router = useRouter();
-    const basePath = role === 'admin' ? '' : '/hr';
+    const basePath = role === 'admin' ? '' : role === 'manager' ? '/manager' : '/hr';
 
     const stats = [
         { label: 'Employees', value: totalEmployees, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', accent: 'border-blue-100', path: `${basePath}/employees` },

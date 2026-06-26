@@ -27,6 +27,7 @@ export interface DeviceLog {
     deviceUserId: string;
     recordTime: Date;
     status: number;
+    verifyMode: number;
 }
 
 export class ZKDriver {
@@ -202,6 +203,24 @@ export class ZKDriver {
             }
         }
         return count;
+    }
+
+    /**
+     * Check if a specific fingerprint template is enrolled for a given UID and finger index.
+     * Returns true if a template exists on the device, false otherwise.
+     */
+    async hasFingerTemplate(uid: number, fingerIndex: number): Promise<boolean> {
+        if (!this.zkInstance) throw new Error('Not connected');
+        const { COMMANDS } = require('node-zklib/constants');
+        try {
+            const buf = Buffer.alloc(3);
+            buf.writeUInt16LE(uid, 0);
+            buf.writeUInt8(fingerIndex, 2);
+            const result = await this.zkInstance.executeCmd(COMMANDS.CMD_USERTEMP_RRQ, buf);
+            return !!(result && result.length > 8);
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -580,7 +599,8 @@ export class ZKDriver {
             .map((log) => ({
                 deviceUserId: String(log.deviceUserId),
                 recordTime: new Date(log.recordTime as string | number),
-                status: (log.status as number) || 0
+                status: (log.status as number) || 0,
+                verifyMode: (log.verifyMode as number) || 0
             }));
     }
 }

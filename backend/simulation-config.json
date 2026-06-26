@@ -1,16 +1,16 @@
 {
-  "referenceDate": "2026-06-19",
+  "referenceDate": "2026-06-25",
   "employee": {
     "firstName": "Simulated",
     "lastName": "Employee"
   },
   "shifts": [
     {
-      "shiftCode": "S_MORN",
-      "name": "Morning Shift (9-12)",
-      "startTime": "08:00",
-      "endTime": "17:30",
-      "graceMinutes": 30,
+      "shiftCode": "S_NIGHT",
+      "name": "Night Shift (22-06)",
+      "startTime": "8:00",
+      "endTime": "12:00",
+      "graceMinutes": 15,
       "workDays": [
         "Mon",
         "Tue",
@@ -20,37 +20,43 @@
         "Sat",
         "Sun"
       ],
-      "halfDays": [
-        "Fri"
-      ],
-      "halfDayHours": 4,
-      "breakMinutes": 60,
+      "halfDays": [],
+      "breakMinutes": 0,
       "breaks": [
         {
-          "start": "12:00",
-          "end": "13:30"
+          "start": null,
+          "end": null
         }
       ],
       "sortOrder": 1,
-      "isPrimary": true
+      "isPrimary": true,
+      "isNightShift": true
     }
   ],
+  "_comment": "overtimes format: { 'startTime': 'HH:MM', 'endTime': 'HH:MM', 'status': 'APPROVED' | 'PENDING', 'reason': 'text' }",
   "overtimes": [
     {
-      "startTime": "19:30",
-      "endTime": "20:00",
+      "startTime": "12:00",
+      "endTime": "14:00",
       "status": "APPROVED",
-      "reason": "Simulated Overtime Work"
+      "reason": "Night shift post-shift OT"
     }
   ],
   "punches": [
     {
-      "timestamp": "2026-06-19T08:00:00+08:00"
+      "timestamp": "2026-06-25T08:50:00+08:00"
     },
     {
-      "timestamp": "2026-06-19T12:35:00+08:00"
+      "timestamp": "2026-06-25T12:10:00+08:00"
+    },
+    {
+      "timestamp": "2026-06-25T13:00:00+08:00"
+    },
+    {
+      "timestamp": "2026-06-25T15:00:00+08:00"
     }
   ],
+  
   "syncConfigOverrides": {
     "globalMinCheckoutMinutes": 120,
     "minShiftGapMinutes": 30,

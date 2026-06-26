@@ -28,7 +28,7 @@ export function ShiftFormModal({
 }: ShiftFormModalProps) {
   return (
     <Dialog open={isFormOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl p-0 fixed top-0 left-0 translate-x-0 translate-y-0 w-full h-dvh max-w-none rounded-none border-none shadow-none ring-0 flex flex-col sm:fixed sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:max-w-lg sm:h-auto sm:rounded-[2rem] sm:border sm:border-white/40 sm:shadow-[0_20px_50px_rgba(0,0,0,0.15)] sm:ring-1 sm:ring-black/5 overflow-hidden">
+      <DialogContent showCloseButton={false} className="bg-white/90 backdrop-blur-2xl p-0 gap-0 fixed top-0 left-0 translate-x-0 translate-y-0 w-full h-dvh max-w-none rounded-none border-none shadow-none ring-0 flex flex-col sm:fixed sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:max-w-lg sm:h-auto sm:rounded-[2rem] sm:border sm:border-white/40 sm:shadow-[0_20px_50px_rgba(0,0,0,0.15)] sm:ring-1 sm:ring-black/5 overflow-hidden">
         <div className="relative px-6 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 flex items-start justify-between shrink-0">
           <div className="space-y-1">
             <DialogTitle className="text-slate-900 font-poppins font-bold text-xl sm:text-2xl tracking-tight">

@@ -19,3 +19,4 @@ export * from './attendance-queries';
 export * from './attendance.types';
 export * from './attendance-conflict.service';
 export * from './overtime-validation.service';
+export * from './attendance-reassignment.service';

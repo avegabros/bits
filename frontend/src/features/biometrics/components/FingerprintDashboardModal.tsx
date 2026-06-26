@@ -171,20 +171,25 @@ export default function FingerprintDashboardModal({
               </div>
 
               {/* Sync Result */}
-              {state.syncResult && (
-                <div className={`flex items-start gap-3 p-4 rounded-2xl border ${
-                  state.syncResult.success
-                    ? 'bg-green-50 text-green-800 border-green-200'
-                    : 'bg-red-50 text-red-800 border-red-200'
-                }`}>
-                  {state.syncResult.success ? (
-                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                  )}
-                  <p className="text-sm font-medium">{state.syncResult.message}</p>
-                </div>
-              )}
+              {state.syncResult && (() => {
+                const type = state.syncResult.type || (state.syncResult.success ? 'success' : 'error');
+                const bgClass = type === 'success'
+                  ? 'bg-green-50 text-green-800 border-green-200'
+                  : type === 'warning'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-red-50 text-red-800 border-red-200';
+                
+                return (
+                  <div className={`flex items-start gap-3 p-4 rounded-2xl border ${bgClass}`}>
+                    {type === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                    )}
+                    <p className="text-sm font-medium">{state.syncResult.message}</p>
+                  </div>
+                );
+              })()}
 
               {/* Fingerprint Slots */}
               <FingerprintSlotList

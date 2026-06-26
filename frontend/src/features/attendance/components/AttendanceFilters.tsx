@@ -9,6 +9,9 @@ interface AttendanceFiltersProps {
   setBranchFilter: (val: string) => void;
   deptFilter: string;
   setDeptFilter: (val: string) => void;
+  sectionFilter?: string;
+  setSectionFilter?: (val: string) => void;
+  sections?: string[];
   statusFilter: string;
   setStatusFilter: (val: string) => void;
   branches: string[];
@@ -28,6 +31,9 @@ export function AttendanceFilters({
   setBranchFilter,
   deptFilter,
   setDeptFilter,
+  sectionFilter,
+  setSectionFilter,
+  sections,
   statusFilter,
   setStatusFilter,
   branches,
@@ -72,6 +78,22 @@ export function AttendanceFilters({
             ))}
           </SelectContent>
         </Select>
+        {sectionFilter !== undefined && setSectionFilter !== undefined && sections !== undefined && (
+          <Select
+            value={sectionFilter}
+            onValueChange={setSectionFilter}
+            disabled={deptFilter === 'all'}
+          >
+            <SelectTrigger className="w-full sm:w-52 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">
+              <SelectValue placeholder={deptFilter === 'all' ? 'Select dept first' : 'Section'} />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              {sections.map(s => (
+                <SelectItem key={s} value={s}>{s.toUpperCase()}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {/* Shift Filter Dropdown removed */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-36 bg-card border-border font-bold text-xs uppercase tracking-widest text-foreground">

@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X as XIcon, Loader2 } from 'lucide-react'
 import type { Company } from '../types'
 
@@ -19,10 +21,16 @@ export function EditCompanyDialog({
   editCompanyAddress, setEditCompanyAddress,
   editCompanyLoading, editCompanyError, onSave, onCancel,
 }: EditCompanyDialogProps) {
-  if (!editingCompany) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
-  return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
+  if (!editingCompany) return null
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
       <div className="bg-white border-0 rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
           <div>
@@ -74,6 +82,7 @@ export function EditCompanyDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

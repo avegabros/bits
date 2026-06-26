@@ -105,7 +105,7 @@ async function createTestEmployee(suffix: string) {
 }
 
 async function createShift(code: string, name: string, start: string, end: string, grace: number, workDays: string[], isNight = false) {
-    const existing = await prisma.shift.findFirst({ where: { shiftCode: code } });
+    const existing = await prisma.shift.findFirst({ where: { OR: [{ shiftCode: code }, { name }] } });
     if (existing) await prisma.shift.delete({ where: { id: existing.id } });
     return prisma.shift.create({
         data: {

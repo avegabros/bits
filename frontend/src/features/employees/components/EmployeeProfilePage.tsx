@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, Mail, Phone, MapPin, Calendar, Building2, Clock,
+  ArrowLeft, Mail, Phone, MapPin, Calendar, Building2, Layers, Clock,
   Fingerprint, CreditCard, Edit2, User, Briefcase, Hash, Shield,
   RadioTower, BadgeCheck
 } from 'lucide-react'
@@ -112,10 +112,14 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
     if (!editingEmployee) return
     setIsSaving(true)
     try {
+      // Strip null / empty hireDate so the backend doesn't receive null for a
+      // string-typed field (Zod: "expected string, received null").
+      const payload = { ...editForm }
+      if (!payload.hireDate) delete (payload as Record<string, unknown>).hireDate
       const res = await fetch(`/api/employees/${editingEmployee.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (data.success) {
@@ -175,6 +179,9 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
                 {employee.Department?.name && (
                   <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {employee.Department.name}</span>
                 )}
+                {employee.Section?.name && (
+                  <span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {employee.Section.name}</span>
+                )}
                 {employee.Branch?.name && (
                   <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {employee.Branch.name}</span>
                 )}
@@ -229,6 +236,7 @@ export function EmployeeProfilePage({ employeeId, role }: EmployeeProfilePagePro
             <InfoRow icon={Hash} label="Employee Number" value={employee.employeeNumber} mono />
             <InfoRow icon={Hash} label="ZK ID (Biometric)" value={employee.zkId} mono />
             <InfoRow icon={Building2} label="Department" value={employee.Department?.name} />
+            <InfoRow icon={Layers} label="Section" value={employee.Section?.name} />
             <InfoRow icon={MapPin} label="Branch" value={employee.Branch?.name} />
             <InfoRow icon={Shield} label="Role" value={employee.role} />
           </div>

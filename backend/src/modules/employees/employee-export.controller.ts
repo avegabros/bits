@@ -67,6 +67,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 contactNumber: true,
                 Company: { select: { name: true } },
                 Department: { select: { name: true } },
+                Section: { select: { name: true } },
                 Branch: { select: { name: true } },
                 hireDate: true,
                 Shift: { select: { shiftCode: true } },
@@ -91,6 +92,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
             { header: 'Contact Number', key: 'contactNumber', width: 18 },
             { header: 'Company', key: 'company', width: 20 },
             { header: 'Department', key: 'department', width: 18 },
+            { header: 'Section', key: 'section', width: 18 },
             { header: 'Branch', key: 'branch', width: 16 },
             { header: 'Hire Date', key: 'hireDate', width: 16 },
             { header: 'Shift Code', key: 'shiftCode', width: 14 },
@@ -122,6 +124,7 @@ export const exportEmployees = async (req: Request, res: Response) => {
                 contactNumber: emp.contactNumber || '',
                 company: emp.Company?.name || '',
                 department: emp.Department?.name || '',
+                section: emp.Section?.name || '',
                 branch: emp.Branch?.name || '',
                 hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
                 shiftCode: emp.EmployeeShift?.length ? emp.EmployeeShift.map(es => es.shift.shiftCode).join(',') : (emp.Shift?.shiftCode || ''),
@@ -196,6 +199,7 @@ export const exportTemplate = async (req: Request, res: Response) => {
             { header: 'Company', key: 'company', width: 24, required: true, hint: 'Select from dropdown (see Reference Lists)' },
             { header: 'Branch', key: 'branch', width: 18, required: true, hint: 'Select from dropdown (filtered by Company)' },
             { header: 'Department', key: 'department', width: 20, required: true, hint: 'Select from dropdown (see Reference Lists)' },
+            { header: 'Section', key: 'section', width: 20, required: false, hint: 'Optional. Section name if applicable' },
             { header: 'Hire Date', key: 'hireDate', width: 16, required: true, hint: 'MM-DD-YYYY format (required)' },
             { header: 'Shift Code', key: 'shiftCode', width: 16, required: false, hint: 'Optional. Select from dropdown (see Reference Lists)' },
         ];
@@ -757,6 +761,15 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                             departmentId: emp.department
                                 ? (await prisma.department.findFirst({
                                     where: { name: { equals: emp.department, mode: 'insensitive' } },
+                                    select: { id: true }
+                                }))?.id ?? null
+                                : null,
+                            sectionId: emp.section && emp.department
+                                ? (await prisma.section.findFirst({
+                                    where: {
+                                        name: { equals: emp.section, mode: 'insensitive' },
+                                        department: { name: { equals: emp.department, mode: 'insensitive' } }
+                                    },
                                     select: { id: true }
                                 }))?.id ?? null
                                 : null,

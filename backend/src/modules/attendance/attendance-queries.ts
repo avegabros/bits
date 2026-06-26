@@ -59,6 +59,9 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
                         Department: {
                             select: { name: true }
                         },
+                        Section: {
+                            select: { name: true }
+                        },
                         Branch: { select: { name: true } },
                     }
                 },
@@ -153,6 +156,8 @@ export const getAttendanceRecords = async (filters: AttendanceFilters = {}, page
             ...record,
             checkInDeviceName: record.checkInDevice?.name || null,
             checkOutDeviceName: record.checkOutDevice?.name || null,
+            checkInAuthMethod: record.checkInAuthMethod || null,
+            checkOutAuthMethod: record.checkOutAuthMethod || null,
             checkInTimePH: formatToPhilippineTime(record.checkInTime),
             checkOutTimePH: record.checkOutTime ? formatToPhilippineTime(record.checkOutTime) : null,
             isEarlyPunch: (record.notes ?? '').includes('Early punch'),
@@ -228,7 +233,8 @@ export const getTodayLogs = async () => {
         include: {
             employee: {
                 include: {
-                    Department: { select: { name: true } }
+                    Department: { select: { name: true } },
+                    Section: { select: { name: true } }
                 }
             }
         },

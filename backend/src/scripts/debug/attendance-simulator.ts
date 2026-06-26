@@ -23,6 +23,12 @@ const colors = {
     white: '\x1b[37m'
 };
 
+// Helper to format UTC Date to local Philippine Time ISO string (e.g. YYYY-MM-DDTHH:mm:ss+08:00)
+function formatToLocalISO(date: Date): string {
+    const localTime = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+    return localTime.toISOString().slice(0, 19) + '+08:00';
+}
+
 interface ShiftConfig {
     shiftCode: string;
     name: string;
@@ -36,6 +42,7 @@ interface ShiftConfig {
     halfDayHours?: number | null;
     sortOrder: number;
     isPrimary: boolean;
+    isNightShift?: boolean;
 }
 
 interface OvertimeConfig {
@@ -177,27 +184,39 @@ async function main() {
 
     // Reference Date and database dates
     const cutoffMs = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    
+    // Parse the original reference date from config. If "today", use today's date string.
+    const originalRefStr = (config.referenceDate === 'today') 
+        ? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        : config.referenceDate;
+
+    const originalRefDate = new Date(originalRefStr + "T00:00:00+08:00");
+    
     let refDate: Date;
     let autoShifted = false;
     
-    if (config.referenceDate === 'today' || new Date(config.referenceDate + "T00:00:00Z").getTime() < cutoffMs) {
+    if (config.referenceDate === 'today' || originalRefDate.getTime() < cutoffMs) {
         refDate = new Date();
         autoShifted = true;
     } else {
-        refDate = new Date(config.referenceDate + "T00:00:00Z");
+        refDate = originalRefDate;
     }
     
     const dateOnly = toPHTDate(refDate);
     const phtRefDate = new Date(dateOnly.getTime() + 8 * 60 * 60 * 1000);
     const refDateStr = phtRefDate.toISOString().slice(0, 10);
 
-    // Map punches to use the new reference date date part
+    // Calculate shift in milliseconds: targetRefDatePHT - originalRefDate
+    const targetRefDatePHT = new Date(refDateStr + "T00:00:00+08:00");
+    const dateShiftMs = targetRefDatePHT.getTime() - originalRefDate.getTime();
+
+    // Map punches to preserve their relative day difference from the original reference date
     config.punches = config.punches.map(p => {
-        const tIndex = p.timestamp.indexOf('T');
-        if (tIndex !== -1) {
-            return { ...p, timestamp: refDateStr + p.timestamp.substring(tIndex) };
-        }
-        return p;
+        const originalPunchTime = new Date(p.timestamp);
+        const shiftedPunchTime = new Date(originalPunchTime.getTime() + dateShiftMs);
+        const phtTime = new Date(shiftedPunchTime.getTime() + 8 * 60 * 60 * 1000);
+        const timestampPHT = phtTime.toISOString().slice(0, 19) + '+08:00';
+        return { ...p, timestamp: timestampPHT };
     });
 
     console.log(`\n${colors.bright}${colors.cyan}=== STARTING SIMULATION ===${colors.reset}`);
@@ -291,7 +310,8 @@ async function main() {
                 isActive: true,
                 workDays: JSON.stringify(s.workDays),
                 halfDays: s.halfDays ? JSON.stringify(s.halfDays) : '[]',
-                halfDayHours: s.halfDayHours !== undefined ? s.halfDayHours : null
+                halfDayHours: s.halfDayHours !== undefined ? s.halfDayHours : null,
+                isNightShift: !!s.isNightShift
             }
         });
         dbShifts.push(createdShift);
@@ -322,6 +342,10 @@ async function main() {
 
     // 5. Create Approved Overtime requests
     for (const ot of config.overtimes) {
+        if (!ot.startTime || !ot.endTime) {
+            console.log(`${colors.yellow}⚠️  Skipping OT Request: startTime or endTime is null/missing in config.${colors.reset}`);
+            continue;
+        }
         await prisma.overtimeRequest.create({
             data: {
                 employeeId: employee.id,
@@ -383,8 +407,9 @@ async function main() {
 
     // 7. Fetch results & Display
     const finalAttendance = await prisma.attendance.findMany({
-        where: { employeeId: employee.id, date: dateOnly },
-        include: { shift: true }
+        where: { employeeId: employee.id },
+        include: { shift: true },
+        orderBy: { date: 'asc' }
     });
 
     console.log(`\n${colors.bright}${colors.cyan}=== SIMULATION RESULTS ===${colors.reset}`);
@@ -398,8 +423,8 @@ async function main() {
             console.log(`--------------------------------------------------`);
             console.log(`Shift Code:       ${colors.green}${att.shift?.shiftCode ?? 'OT-Only (NULL)'}${colors.reset}`);
             console.log(`Shift Name:       ${att.shift?.name ?? 'Overtime Only'}`);
-            console.log(`Check-In Time:    ${colors.cyan}${att.checkInTime.toISOString()}${colors.reset}`);
-            console.log(`Check-Out Time:   ${att.checkOutTime ? colors.cyan + att.checkOutTime.toISOString() + colors.reset : colors.red + 'N/A (Open Record)' + colors.reset}`);
+            console.log(`Check-In Time:    ${colors.cyan}${formatToLocalISO(att.checkInTime)}${colors.reset}`);
+            console.log(`Check-Out Time:   ${att.checkOutTime ? colors.cyan + formatToLocalISO(att.checkOutTime) + colors.reset : colors.red + 'N/A (Open Record)' + colors.reset}`);
             let isHalfDay = false;
             if (att.shift) {
                 let halfDaysList: string[] = [];

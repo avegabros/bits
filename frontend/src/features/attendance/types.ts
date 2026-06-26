@@ -4,6 +4,7 @@ export interface AttendanceRecord {
   employeeName: string;
   profilePicture?: string | null;
   department: string;
+  sectionName?: string | null;
   branchName: string;
   companyName?: string | null;
   date: string;
@@ -30,6 +31,8 @@ export interface AttendanceRecord {
   displayStatus?: string;
   checkInDevice?: string | null;
   checkOutDevice?: string | null;
+  checkInAuthMethod?: string | null;
+  checkOutAuthMethod?: string | null;
   checkoutSource?: string | null;
   isEdited?: boolean;
   isPending?: boolean;

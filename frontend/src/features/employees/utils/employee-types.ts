@@ -13,6 +13,8 @@ export type Employee = {
   role: string
   departmentId: number | null
   Department: { name: string } | null
+  sectionId: number | null
+  Section: { id: number; name: string } | null
   branchId: number | null
   Branch: { name: string } | null
   companyId: number | null
@@ -24,6 +26,7 @@ export type Employee = {
   dateOfBirth: string | null
   employmentStatus: 'ACTIVE' | 'STAGED' | 'INACTIVE' | 'TERMINATED'
   profilePicture: string | null
+  fingerprintSyncStatus?: 'none' | 'synced' | 'partial'
   shiftId?: number | null
   Shift?: { id: number; name: string; shiftCode: string; startTime: string; endTime: string; workDays?: string; halfDays?: string; graceMinutes?: number; breakMinutes?: number; isNightShift?: boolean } | null
   EmployeeShift?: {
@@ -89,6 +92,7 @@ export type ImportRow = {
   email: string
   contactNumber: string
   department: string
+  section?: string
   branch: string
   hireDate?: string
   shiftCode?: string

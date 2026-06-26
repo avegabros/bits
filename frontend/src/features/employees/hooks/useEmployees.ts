@@ -12,6 +12,7 @@ interface UseEmployeesProps {
 export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmployeesProps = {}) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [companies, setCompanies] = useState<{ id: number; name: string; logo?: string | null; address?: string | null }[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
@@ -19,6 +20,7 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedSection, setSelectedSection] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -47,19 +49,22 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
   const fetchDependencies = useCallback(async () => {
     try {
       const deptUrl = role === 'manager' ? '/api/me/departments' : '/api/departments';
-      const [deptRes, branchRes, shiftRes, companyRes] = await Promise.all([
+      const [deptRes, sectionRes, branchRes, shiftRes, companyRes] = await Promise.all([
         fetch(deptUrl, { credentials: 'include' }),
+        fetch('/api/sections', { credentials: 'include' }),
         fetch('/api/branches'),
         fetch('/api/shifts', { credentials: 'include' }),
         fetch('/api/companies'),
       ]);
-      const [deptData, branchData, shiftData, companyData] = await Promise.all([
+      const [deptData, sectionData, branchData, shiftData, companyData] = await Promise.all([
         deptRes.ok ? deptRes.json() : { success: false, departments: [] },
+        sectionRes.ok ? sectionRes.json() : { success: false, sections: [] },
         branchRes.ok ? branchRes.json() : { success: false, branches: [] },
         shiftRes.ok ? shiftRes.json() : { success: false, shifts: [] },
         companyRes.ok ? companyRes.json() : { success: false, companies: [] },
       ]);
       if (deptData.success) setDepartments(deptData.departments);
+      if (sectionData.success) setSections(sectionData.sections);
       if (branchData.success) setBranches(branchData.branches);
       if (shiftData.success) setShifts(shiftData.shifts.filter(Boolean));
       if (companyData.success) setCompanies(companyData.companies);
@@ -88,6 +93,11 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
     setSelectedBranch('all');
   }, [selectedCompany]);
 
+  // Reset section filter when department changes
+  useEffect(() => {
+    setSelectedSection('all');
+  }, [selectedDept]);
+
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
       const fullName = formatFullName(emp.firstName, emp.middleName, emp.lastName, emp.suffix).toLowerCase();
@@ -109,12 +119,13 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
       // Direct company match — null-company employees only show under "All Companies"
       const matchesCompany = selectedCompany === 'All Companies' || emp.Company?.name === selectedCompany;
       const matchesDept = selectedDept === 'all' || emp.Department?.name === selectedDept;
+      const matchesSection = selectedSection === 'all' || emp.Section?.name === selectedSection;
       const matchesBranch = selectedBranch === 'all' || emp.Branch?.name === selectedBranch;
       const matchesShift = selectedShift === 'all' || emp.Shift?.name === selectedShift || (emp.EmployeeShift?.some(es => es.shift?.name === selectedShift) || false);
       const matchesStatus = selectedStatus === 'all' || emp.employmentStatus === selectedStatus;
-      return matchesSearch && matchesCompany && matchesDept && matchesBranch && matchesShift && matchesStatus;
+      return matchesSearch && matchesCompany && matchesDept && matchesSection && matchesBranch && matchesShift && matchesStatus;
     });
-  }, [employees, searchTerm, selectedCompany, selectedDept, selectedBranch, selectedShift, selectedStatus]);
+  }, [employees, searchTerm, selectedCompany, selectedDept, selectedSection, selectedBranch, selectedShift, selectedStatus]);
 
   const tableSort = useTableSort<Employee>({ initialData: filteredEmployees });
 
@@ -176,6 +187,7 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
     employees: filteredEmployees,
     rawEmployees: employees,
     departments,
+    sections,
     branches,
     filteredBranches,
     companies,
@@ -188,6 +200,8 @@ export function useEmployees({ statusFilter = 'ACTIVE', role = 'admin' }: UseEmp
       setSearchTerm,
       selectedDept,
       setSelectedDept,
+      selectedSection,
+      setSelectedSection,
       selectedBranch,
       setSelectedBranch,
       selectedShift,

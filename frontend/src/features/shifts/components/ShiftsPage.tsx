@@ -68,13 +68,15 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Shift Management</h1>
           <p className="text-slate-500 text-sm font-medium">Define and manage employee work shift schedules.</p>
         </div>
-        <button
-          onClick={s.openCreate}
-          className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 self-start lg:self-center"
-        >
-          <Plus size={18} />
-          New Shift
-        </button>
+        {role !== 'manager' && (
+          <button
+            onClick={s.openCreate}
+            className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2 self-start lg:self-center"
+          >
+            <Plus size={18} />
+            New Shift
+          </button>
+        )}
       </div>
 
       {/* Summary Stats */}
@@ -102,7 +104,7 @@ export default function ShiftsPage({ role }: ShiftsPageProps) {
           handleSort={handleSort}
           onEdit={s.openEdit}
           onDelete={s.setDeleteTarget}
-          isReadOnly={false}
+          isReadOnly={role === 'manager'}
         />
       </div>
 

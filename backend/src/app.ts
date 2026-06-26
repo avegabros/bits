@@ -19,6 +19,8 @@ import logsRoutes from './modules/logs/logs.routes';
 import shiftRoutes from './modules/shifts/shift.routes';
 import holidayRoutes from './modules/holidays/holiday.routes';
 import companyRoutes from './modules/organization/company.routes';
+import sectionRoutes from './modules/organization/section.routes';
+
 
 import timeRoutes from './modules/system/time.routes';
 import meRoutes from './modules/me/me.routes';
@@ -65,6 +67,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
+app.use('/api/sections', sectionRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/system', systemRoutes);

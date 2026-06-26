@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, Building, MapPin, Users, Search, LayoutGrid, List, Loader2 } from 'lucide-react'
+import { Building2, Building, MapPin, Users, Search, LayoutGrid, List, Loader2, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -9,9 +9,10 @@ import { DataTablePagination } from '@/components/ui/DataTablePagination'
 import ToastContainer from '@/components/ui/ToastContainer'
 
 import { useOrganization } from '../hooks/useOrganization'
-import type { Department, Company } from '../types'
+import type { Department, Company, Section } from '../types'
 import { DeleteConfirmDialog } from './DeleteConfirmDialog'
 import { EditDepartmentDialog } from './EditDepartmentDialog'
+import { EditSectionDialog } from './EditSectionDialog'
 import { EditBranchDialog } from './EditBranchDialog'
 import { EditCompanyDialog } from './EditCompanyDialog'
 import { AddOrganizationDialog } from './AddOrganizationDialog'
@@ -19,6 +20,7 @@ import { CompanyCards } from './CompanyCards'
 import { BranchCards } from './BranchCards'
 import { DepartmentGrid } from './DepartmentGrid'
 import { DepartmentTable } from './DepartmentTable'
+import { SectionCards } from './SectionCards'
 
 interface OrganizationPageProps {
   role: 'admin' | 'hr'
@@ -40,6 +42,8 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
   const openEditDept = (dept: Department) => {
     org.setEditingDept(dept)
     org.setEditName(dept.name)
+    const assignedIds = org.sections.filter(s => s.departmentId === dept.id).map(s => s.id)
+    org.setEditSectionIds(assignedIds)
     org.setEditError(null)
   }
 
@@ -73,23 +77,37 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
     org.setDeleteError(null)
   }
 
+  const openEditSection = (section: Section) => {
+    org.setEditingSection(section)
+    org.setEditSectionName(section.name)
+    org.setEditSectionError(null)
+  }
+
+  const openDeleteSection = (section: Section) => {
+    org.setConfirmDeleteSection(section)
+    org.setDeleteError(null)
+  }
+
   return (
     <div className="space-y-6">
 
       {/* ── Delete Confirmation ── */}
       <DeleteConfirmDialog
         confirmDeleteDept={org.confirmDeleteDept}
+        confirmDeleteSection={org.confirmDeleteSection}
         confirmDeleteBranch={org.confirmDeleteBranch}
         confirmDeleteCompany={org.confirmDeleteCompany}
         deleteLoading={org.deleteLoading}
         deleteError={org.deleteError}
         onCancel={() => {
           org.setConfirmDeleteDept(null)
+          org.setConfirmDeleteSection(null)
           org.setConfirmDeleteBranch(null)
           org.setConfirmDeleteCompany(null)
           org.setDeleteError(null)
         }}
         onDeleteDept={org.handleDeleteDept}
+        onDeleteSection={org.handleDeleteSection}
         onDeleteBranch={org.handleDeleteBranch}
         onDeleteCompany={org.handleDeleteCompany}
       />
@@ -99,10 +117,24 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
         editingDept={org.editingDept}
         editName={org.editName}
         setEditName={org.setEditName}
+        sections={org.sections}
+        editSectionIds={org.editSectionIds}
+        setEditSectionIds={org.setEditSectionIds}
         editLoading={org.editLoading}
         editError={org.editError}
         onSave={org.handleEditSave}
         onCancel={() => { org.setEditingDept(null); org.setEditError(null) }}
+      />
+
+      {/* ── Edit Section Dialog ── */}
+      <EditSectionDialog
+        editingSection={org.editingSection}
+        editName={org.editSectionName}
+        setEditName={org.setEditSectionName}
+        editLoading={org.editSectionLoading}
+        editError={org.editSectionError}
+        onSave={org.handleEditSectionSave}
+        onCancel={() => { org.setEditingSection(null); org.setEditSectionError(null) }}
       />
 
       {/* ── Edit Branch Dialog ── */}
@@ -154,6 +186,12 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
           setNewName={org.setNewName}
           newAddress={org.newAddress}
           setNewAddress={org.setNewAddress}
+          departments={org.departments}
+          newSectionDeptId={org.newSectionDeptId}
+          setNewSectionDeptId={org.setNewSectionDeptId}
+          sections={org.sections}
+          newDeptSectionIds={org.newDeptSectionIds}
+          setNewDeptSectionIds={org.setNewDeptSectionIds}
           addLoading={org.addLoading}
           addError={org.addError}
           setAddError={org.setAddError}
@@ -227,6 +265,27 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
         onEditBranch={openEditBranch}
         onDeleteBranch={openDeleteBranch}
       />
+
+      {/* ── Sections Section ── */}
+      <div className="pt-6 border-t border-slate-200">
+        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-slate-400" />
+          Sections
+        </h3>
+
+        {org.loading ? (
+          <div className="flex items-center gap-2 text-slate-400 text-sm py-6">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading sections...
+          </div>
+        ) : (
+          <SectionCards
+            sections={org.sections}
+            sectionCounts={org.sectionCounts}
+            onEditSection={openEditSection}
+            onDeleteSection={openDeleteSection}
+          />
+        )}
+      </div>
 
       {/* ── Search + Filter + View Toggle ── */}
       <Card className="bg-white border-slate-200 p-3 sm:p-4">

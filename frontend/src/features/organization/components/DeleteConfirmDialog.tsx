@@ -1,31 +1,47 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Department, Branch, Company } from '../types'
+import type { Department, Section, Branch, Company } from '../types'
 
 interface DeleteConfirmDialogProps {
   confirmDeleteDept: Department | null
+  confirmDeleteSection: Section | null
   confirmDeleteBranch: Branch | null
   confirmDeleteCompany?: Company | null
   deleteLoading: boolean
   deleteError: string | null
   onCancel: () => void
   onDeleteDept: () => void
+  onDeleteSection: () => void
   onDeleteBranch: () => void
   onDeleteCompany?: () => void
 }
 
 export function DeleteConfirmDialog({
-  confirmDeleteDept, confirmDeleteBranch, confirmDeleteCompany,
+  confirmDeleteDept, confirmDeleteSection, confirmDeleteBranch, confirmDeleteCompany,
   deleteLoading, deleteError,
-  onCancel, onDeleteDept, onDeleteBranch, onDeleteCompany,
+  onCancel, onDeleteDept, onDeleteSection, onDeleteBranch, onDeleteCompany,
 }: DeleteConfirmDialogProps) {
-  if (!confirmDeleteDept && !confirmDeleteBranch && !confirmDeleteCompany) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
-  const entityType = confirmDeleteDept ? 'Department' : confirmDeleteBranch ? 'Branch' : 'Company'
-  const entityName = confirmDeleteDept?.name || confirmDeleteBranch?.name || confirmDeleteCompany?.name
-  const onDelete = confirmDeleteDept ? onDeleteDept : confirmDeleteBranch ? onDeleteBranch : (onDeleteCompany ?? (() => {}))
+  if (!confirmDeleteDept && !confirmDeleteSection && !confirmDeleteBranch && !confirmDeleteCompany) return null
+  if (!mounted) return null
 
-  return (
+  const entityType = confirmDeleteDept ? 'Department' : confirmDeleteSection ? 'Section' : confirmDeleteBranch ? 'Branch' : 'Company'
+  const entityName = confirmDeleteDept?.name || confirmDeleteSection?.name || confirmDeleteBranch?.name || confirmDeleteCompany?.name
+  const onDelete = confirmDeleteDept
+    ? onDeleteDept
+    : confirmDeleteSection
+    ? onDeleteSection
+    : confirmDeleteBranch
+    ? onDeleteBranch
+    : (onDeleteCompany ?? (() => {}))
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
         <div className="flex items-center gap-3 mb-4">
@@ -70,6 +86,7 @@ export function DeleteConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

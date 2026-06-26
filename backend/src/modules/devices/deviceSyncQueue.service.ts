@@ -4,11 +4,12 @@ import {
     acquireDeviceLock, 
     releaseDeviceLock, 
     zkErrMsg, 
-    connectWithRetry,
-    tryAcquireDeviceLock
+    connectWithRetry
 } from './zk';
 import { audit } from '../../shared/lib/auditLogger';
 import deviceEmitter from '../../shared/events/deviceEmitter';
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
@@ -254,7 +255,7 @@ export async function enqueueGlobalDeleteFinger(
 // Queue Runner
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 6;
 
 /**
  * Execute a single queue task idempotently.
@@ -343,10 +344,7 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
 
             // 2. Iterate and securely extract template
             for (const srcDb of sourceDevices) {
-                if (!tryAcquireDeviceLock(srcDb.id)) {
-                    console.warn(`[SyncQueue] Source device ${srcDb.name} is busy. Skipping for now.`);
-                    continue; // try next candidate (or fail and retry queue task later)
-                }
+                await acquireDeviceLock(srcDb.id);
 
                 const srcZk = getDriver(srcDb.ip, srcDb.port);
                 try {
@@ -362,6 +360,7 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
                     console.warn(`[SyncQueue] Failed reading finger from source device ${srcDb.name}: ${zkErrMsg(err)}`);
                 } finally {
                     try { await srcZk.disconnect(); } catch { /* ignore */ }
+                    await sleep(300);
                     releaseDeviceLock(srcDb.id);
                 }
             }
@@ -445,6 +444,9 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
 
         for (const task of pendingTasks) {
             try {
+                if (processedCount > 0) {
+                    await sleep(300);
+                }
                 await executeTask(task, zk);
                 
                 await prisma.deviceSyncTask.update({

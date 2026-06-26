@@ -181,14 +181,26 @@ export function EmployeeTable({
                               </button>
                                   {(() => {
                                     const status = enrollStatus[employee.id] || 'idle'
-                                    const hasFingerprints = (employee.EmployeeFingerprintEnrollment?.length ?? 0) > 0
                                     if (status === 'loading') {
                                       return (<button disabled className="p-2 rounded-lg bg-blue-50 text-blue-400 cursor-wait" title="Enrolling..."><Fingerprint className="w-4 h-4 animate-pulse" /></button>)
                                     }
+                                    
+                                    const syncStatus = employee.fingerprintSyncStatus || 'none';
+                                    let btnColorClass = 'text-slate-400 hover:text-red-600 hover:bg-red-100';
+                                    let tooltipTitle = 'Manage Fingerprints';
+                                    
+                                    if (syncStatus === 'synced') {
+                                      btnColorClass = 'text-red-600 hover:text-red-700 hover:bg-red-50';
+                                      tooltipTitle = 'Fingerprints Enrolled';
+                                    } else if (syncStatus === 'partial') {
+                                      btnColorClass = 'text-amber-500 hover:text-amber-600 hover:bg-amber-50';
+                                      tooltipTitle = 'Fingerprint not fully synchronized to all devices.';
+                                    }
+
                                     return (
                                       <button onClick={() => { onFingerprintOpen(employee.id, `${employee.firstName} ${employee.lastName}`) }}
-                                        className={`p-2 rounded-lg transition-all active:scale-90 ${hasFingerprints ? 'text-red-600 hover:text-red-700 hover:bg-red-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-100'}`} 
-                                        title={hasFingerprints ? "Fingerprints Enrolled" : "Manage Fingerprints"}>
+                                        className={`p-2 rounded-lg transition-all active:scale-90 ${btnColorClass}`} 
+                                        title={tooltipTitle}>
                                         <Fingerprint className="w-4 h-4" />
                                       </button>
                                     )

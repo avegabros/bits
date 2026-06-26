@@ -1,10 +1,11 @@
-import { prisma } from '../../../shared/lib/prisma';
+    import { prisma } from '../../../shared/lib/prisma';
 import { ZKDriver } from '../../../shared/lib/zk-driver';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { acquireDeviceLock, releaseDeviceLock, acquireInteractiveDeviceLock } from './zk-lock.service';
 import { getExcludedDeviceIds } from '../biometric-exclusion.service';
 
 const FINGER_MAP: { [key: number]: string } = { 5: 'Right Thumb', 6: 'Right Index', 7: 'Right Middle', 8: 'Right Ring', 9: 'Right Little', 4: 'Left Thumb', 3: 'Left Index', 2: 'Left Middle', 1: 'Left Ring', 0: 'Left Little' };
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 import { audit } from '../../../shared/lib/auditLogger';
 interface SyncResult { success: boolean; message?: string; error?: string; newLogs?: number; count?: number; results?: Record<string, unknown>[]; }
 
@@ -522,6 +523,9 @@ export const syncEmployeeFingerprints = async (
 ): Promise<{
     success: boolean;
     message: string;
+    type?: 'success' | 'warning' | 'error';
+    totalPushed?: number;
+    totalFailed?: number;
     results: Array<{ deviceId: number; deviceName: string; status: 'synced' | 'skipped' | 'failed' | 'offline'; error?: string }>;
 }> => {
     const employee = await prisma.employee.findUnique({
@@ -582,35 +586,21 @@ export const syncEmployeeFingerprints = async (
     );
 
     // ── STEP 2: Enumerate finger slots ───────────────────────────────────
-    const results: Array<{ deviceId: number; deviceName: string; status: 'synced' | 'skipped' | 'failed' | 'offline'; error?: string }> = [];
+    const results: Array<{ 
+        deviceId: number; 
+        deviceName: string; 
+        status: 'synced' | 'skipped' | 'failed' | 'offline'; 
+        error?: string;
+        pushed?: number;
+        failed?: number;
+    }> = [];
 
     for (const targetDevice of allDevices) {
-        // Which fingerIndices does this device already have in the DB?
-        const enrolledOnTarget = new Set(
-            enrollments
-                .filter(e => e.deviceId === targetDevice.id)
-                .map(e => e.fingerIndex)
-        );
-
-        // Which fingerIndices are MISSING on this device?
-        const missingFingers = allFingerIndices.filter(fi => !enrolledOnTarget.has(fi));
-
-        if (missingFingers.length === 0) {
-            results.push({ deviceId: targetDevice.id, deviceName: targetDevice.name, status: 'skipped' });
-            console.log(`[SyncFingers] "${targetDevice.name}": all ${allFingerIndices.length} finger(s) already enrolled — skipping.`);
-            continue;
-        }
-
-        console.log(
-            `[SyncFingers] "${targetDevice.name}": missing finger(s) [${missingFingers.join(', ')}] — syncing.`
-        );
-
-        // ── STEP 3: Sync missing templates ──────────────────────────────────
-        let pushed = 0;
-        const slotErrors: string[] = [];
-
         await acquireInteractiveDeviceLock(targetDevice.id);
         const tgtZk = getDriver(targetDevice.ip, targetDevice.port);
+
+        let pushed = 0;
+        const slotErrors: string[] = [];
 
         try {
             await connectWithRetry(tgtZk, 1);
@@ -626,76 +616,166 @@ export const syncEmployeeFingerprints = async (
                 console.log(`[SyncFingers] Created user record on "${targetDevice.name}".`);
             }
 
+            // Which fingerIndices does this device already have in the DB?
+            const enrolledOnTarget = new Set(
+                enrollments
+                    .filter(e => e.deviceId === targetDevice.id)
+                    .map(e => e.fingerIndex)
+            );
+
+            // Determine missing finger indices by probing the device OR checking database enrollment records
+            const missingFingers: number[] = [];
+            for (const fi of allFingerIndices) {
+                const dbHasRecord = enrolledOnTarget.has(fi);
+                const deviceHasFinger = await tgtZk.hasFingerTemplate(employee.zkId, fi);
+                
+                if (!deviceHasFinger) {
+                    missingFingers.push(fi);
+                } else if (!dbHasRecord) {
+                    const fingerLabel = FINGER_MAP[fi] || `Finger ${fi}`;
+                    await prisma.employeeFingerprintEnrollment.upsert({
+                        where: {
+                            employeeId_deviceId_fingerIndex: {
+                                employeeId, deviceId: targetDevice.id, fingerIndex: fi,
+                            },
+                        },
+                        update: { enrolledAt: new Date() },
+                        create: { employeeId, deviceId: targetDevice.id, fingerIndex: fi, fingerLabel },
+                    });
+                }
+            }
+
+            if (missingFingers.length === 0) {
+                results.push({ deviceId: targetDevice.id, deviceName: targetDevice.name, status: 'skipped', pushed: 0, failed: 0 });
+                console.log(`[SyncFingers] "${targetDevice.name}": all ${allFingerIndices.length} finger(s) already enrolled on device — skipping.`);
+                continue;
+            }
+
+            console.log(
+                `[SyncFingers] "${targetDevice.name}": missing finger(s) [${missingFingers.join(', ')}] — syncing.`
+            );
+
+            // ── STEP 3: Sync missing templates ──────────────────────────────────
+            const sourceToFingersMap = new Map<number, Set<number>>();
             for (const fingerIndex of missingFingers) {
-                // Find source devices for this fingerIndex (excluding the target itself)
                 const candidateIds = (fingerToSources.get(fingerIndex) || [])
                     .filter(id => id !== targetDevice.id);
-
-                if (candidateIds.length === 0) {
-                    slotErrors.push(`Finger ${fingerIndex}: no source device`);
-                    continue;
+                for (const srcId of candidateIds) {
+                    if (!sourceToFingersMap.has(srcId)) {
+                        sourceToFingersMap.set(srcId, new Set());
+                    }
+                    sourceToFingersMap.get(srcId)!.add(fingerIndex);
                 }
+            }
 
-                // Try each candidate until we get the template
-                let templateData: Buffer | null = null;
-                for (const srcDeviceId of candidateIds) {
-                    const srcDevice = allDevices.find(d => d.id === srcDeviceId);
-                    if (!srcDevice) continue;
+            const remainingFingers = new Set(missingFingers);
+            const retrievedTemplates = new Map<number, Buffer>();
 
-                    await acquireInteractiveDeviceLock(srcDeviceId);
-                    const srcZk = getDriver(srcDevice.ip, srcDevice.port);
+            while (remainingFingers.size > 0) {
+                let bestSourceId: number | null = null;
+                let bestFingersToFetch: number[] = [];
 
-                    try {
-                        await connectWithRetry(srcZk, 1);
-                        const raw = await srcZk.getFingerTemplate(employee.zkId, fingerIndex);
-                        if (raw && raw.length > 0) {
-                            templateData = Buffer.alloc(raw.length);
-                            raw.copy(templateData);
-                            raw.fill(0);
-                            console.log(
-                                `[SyncFingers] Read finger ${fingerIndex} (${templateData.length}B) from "${srcDevice.name}".`
-                            );
-                            break;
-                        }
-                    } catch (err: unknown) {
-                        console.warn(
-                            `[SyncFingers] Failed to read finger ${fingerIndex} from "${srcDevice.name}": ${zkErrMsg(err)}`
-                        );
-                    } finally {
-                        try { await srcZk.disconnect(); } catch { /* ignore */ }
-                        releaseDeviceLock(srcDeviceId);
+                for (const [srcId, fingersSet] of sourceToFingersMap.entries()) {
+                    const activeFingers = [...fingersSet].filter(f => remainingFingers.has(f));
+                    if (activeFingers.length > bestFingersToFetch.length) {
+                        bestFingersToFetch = activeFingers;
+                        bestSourceId = srcId;
                     }
                 }
 
+                if (!bestSourceId || bestFingersToFetch.length === 0) {
+                    break;
+                }
+
+                const srcDevice = rawDevices.find(d => d.id === bestSourceId);
+                if (srcDevice) {
+                    await acquireInteractiveDeviceLock(bestSourceId);
+                    const srcZk = getDriver(srcDevice.ip, srcDevice.port);
+                    let connected = false;
+                    try {
+                        await connectWithRetry(srcZk, 1);
+                        connected = true;
+                        for (const fingerIndex of bestFingersToFetch) {
+                            const raw = await srcZk.getFingerTemplate(employee.zkId, fingerIndex);
+                            if (raw && raw.length > 0) {
+                                const templateData = Buffer.alloc(raw.length);
+                                raw.copy(templateData);
+                                raw.fill(0);
+                                retrievedTemplates.set(fingerIndex, templateData);
+                                remainingFingers.delete(fingerIndex);
+                                console.log(
+                                    `[SyncFingers] Batched read finger ${fingerIndex} (${templateData.length}B) from "${srcDevice.name}".`
+                                );
+                            }
+                        }
+                    } catch (err: unknown) {
+                        console.warn(
+                            `[SyncFingers] Failed batched read of fingers [${bestFingersToFetch.join(', ')}] from "${srcDevice.name}": ${zkErrMsg(err)}`
+                        );
+                        sourceToFingersMap.delete(bestSourceId);
+                    } finally {
+                        if (connected) {
+                            try { await srcZk.disconnect(); } catch { /* ignore */ }
+                            await sleep(300);
+                        }
+                        releaseDeviceLock(bestSourceId);
+                    }
+                } else {
+                    sourceToFingersMap.delete(bestSourceId);
+                }
+            }
+
+            for (const fingerIndex of missingFingers) {
+                const templateData = retrievedTemplates.get(fingerIndex);
                 if (!templateData) {
                     slotErrors.push(`Finger ${fingerIndex}: could not extract from any source`);
                     continue;
                 }
 
-                // Push this specific finger to the target
-                try {
-                    await tgtZk.setFingerTemplate(employee.zkId, fingerIndex, templateData);
-                    pushed++;
-                    console.log(
-                        `[SyncFingers] ✓ Wrote finger ${fingerIndex} (${templateData.length}B) to "${targetDevice.name}".`
-                    );
+                let writeSuccess = false;
+                let writeAttempts = 3;
+                let lastWriteError: unknown = null;
 
-                    // Record in DB
-                    const fingerLabel = FINGER_MAP[fingerIndex] || `Finger ${fingerIndex}`;
-                    await prisma.employeeFingerprintEnrollment.upsert({
-                        where: {
-                            employeeId_deviceId_fingerIndex: {
-                                employeeId, deviceId: targetDevice.id, fingerIndex,
-                            },
-                        },
-                        update: { enrolledAt: new Date() },
-                        create: { employeeId, deviceId: targetDevice.id, fingerIndex, fingerLabel },
-                    });
-                } catch (err: unknown) {
-                    slotErrors.push(`Finger ${fingerIndex}: write failed — ${zkErrMsg(err)}`);
-                } finally {
-                    templateData.fill(0);
+                for (let attempt = 1; attempt <= writeAttempts; attempt++) {
+                    try {
+                        if (pushed > 0 || attempt > 1) {
+                            await sleep(300);
+                        }
+                        await tgtZk.setFingerTemplate(employee.zkId, fingerIndex, templateData);
+                        writeSuccess = true;
+                        pushed++;
+                        console.log(
+                            `[SyncFingers] ✓ Wrote finger ${fingerIndex} (${templateData.length}B) to "${targetDevice.name}" (attempt ${attempt}).`
+                        );
+                        break;
+                    } catch (err: unknown) {
+                        lastWriteError = err;
+                        console.warn(
+                            `[SyncFingers] Write attempt ${attempt} failed for finger ${fingerIndex} on "${targetDevice.name}": ${zkErrMsg(err)}`
+                        );
+                    }
                 }
+
+                if (writeSuccess) {
+                    try {
+                        const fingerLabel = FINGER_MAP[fingerIndex] || `Finger ${fingerIndex}`;
+                        await prisma.employeeFingerprintEnrollment.upsert({
+                            where: {
+                                employeeId_deviceId_fingerIndex: {
+                                    employeeId, deviceId: targetDevice.id, fingerIndex,
+                                },
+                            },
+                            update: { enrolledAt: new Date() },
+                            create: { employeeId, deviceId: targetDevice.id, fingerIndex, fingerLabel },
+                        });
+                    } catch (dbErr) {
+                        console.error(`[SyncFingers] Failed to save enrollment to DB for finger ${fingerIndex}:`, dbErr);
+                    }
+                } else {
+                    slotErrors.push(`Finger ${fingerIndex}: write failed — ${zkErrMsg(lastWriteError)}`);
+                }
+
+                templateData.fill(0);
             }
 
             if (pushed > 0) {
@@ -707,9 +787,18 @@ export const syncEmployeeFingerprints = async (
                 });
             }
 
-            const status = pushed > 0 ? 'synced' as const : 'skipped' as const;
+            const status = pushed > 0 
+                ? (slotErrors.length > 0 ? 'failed' as const : 'synced' as const)
+                : 'skipped' as const;
             const errorMsg = slotErrors.length > 0 ? slotErrors.join('; ') : undefined;
-            results.push({ deviceId: targetDevice.id, deviceName: targetDevice.name, status, error: errorMsg });
+            results.push({ 
+                deviceId: targetDevice.id, 
+                deviceName: targetDevice.name, 
+                status, 
+                error: errorMsg,
+                pushed,
+                failed: slotErrors.length
+            });
             console.log(
                 `[SyncFingers] "${targetDevice.name}": wrote ${pushed}/${missingFingers.length} finger(s).` +
                 (slotErrors.length > 0 ? ` Errors: ${slotErrors.join('; ')}` : '')
@@ -717,7 +806,14 @@ export const syncEmployeeFingerprints = async (
 
         } catch (err: unknown) {
             const errMsg = zkErrMsg(err);
-            results.push({ deviceId: targetDevice.id, deviceName: targetDevice.name, status: 'failed', error: errMsg });
+            results.push({ 
+                deviceId: targetDevice.id, 
+                deviceName: targetDevice.name, 
+                status: 'failed', 
+                error: errMsg,
+                pushed: 0,
+                failed: allFingerIndices.length 
+            });
             console.error(`[SyncFingers] ✗ Failed on "${targetDevice.name}": ${errMsg}`);
         } finally {
             try { await tgtZk.disconnect(); } catch { /* ignore */ }
@@ -725,15 +821,39 @@ export const syncEmployeeFingerprints = async (
         }
     }
 
-    const synced = results.filter(r => r.status === 'synced').length;
-    const failed = results.filter(r => r.status === 'failed').length;
+    const totalPushed = results.reduce((acc, r) => acc + (r.pushed || 0), 0);
+    const totalFailed = results.reduce((acc, r) => acc + (r.failed || 0), 0);
+
+    const success = totalFailed === 0 && results.every(r => r.status !== 'failed');
+    let message = '';
+
+    if (totalFailed === 0) {
+        if (totalPushed > 0) {
+            message = `Fingerprint synchronization completed successfully. ${totalPushed} fingerprint template(s) synchronized.`;
+        } else {
+            message = `Fingerprints are already fully synchronized on target device(s).`;
+        }
+    } else {
+        if (totalPushed > 0) {
+            message = `${totalPushed} fingerprint(s) synchronized successfully. ${totalFailed} fingerprint(s) failed to synchronize.`;
+        } else {
+            const firstError = results.find(r => r.error)?.error;
+            message = `Fingerprint synchronization failed. ${firstError || 'Device connection timeout.'}`;
+        }
+    }
 
     return {
-        success: failed === 0,
-        message: failed === 0
-            ? `Fingerprints synced to ${synced} device(s) for ${fullName}.`
-            : `Partial sync: ${synced} succeeded, ${failed} failed for ${fullName}.`,
-        results,
+        success,
+        message,
+        type: totalFailed === 0 ? 'success' : (totalPushed > 0 ? 'warning' : 'error'),
+        totalPushed,
+        totalFailed,
+        results: results.map(r => ({
+            deviceId: r.deviceId,
+            deviceName: r.deviceName,
+            status: r.status,
+            error: r.error
+        })),
     };
 };
 

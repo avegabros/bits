@@ -45,6 +45,25 @@ export function EditAssignmentSection({
 
   const [selectedCompanyId, setSelectedCompanyId] = useState(initialCompanyId)
 
+  const [sections, setSections] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/sections', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSections(data.sections)
+        }
+      })
+      .catch(err => console.error('Error fetching sections:', err))
+  }, [])
+
+  const filteredSections = useMemo(() => {
+    if (!editForm.departmentId) return []
+    const deptId = Number(editForm.departmentId)
+    return sections.filter((s: any) => s.departmentId === deptId)
+  }, [sections, editForm.departmentId])
+
   // Filter branches by selected company
   const filteredBranches = useMemo(() => {
     if (!selectedCompanyId) return []
@@ -109,7 +128,11 @@ export function EditAssignmentSection({
         <select
           value={editForm.departmentId ?? ''}
           onChange={(e) => {
-            onFormChange({ ...editForm, departmentId: e.target.value ? parseInt(e.target.value) : null })
+            onFormChange({
+              ...editForm,
+              departmentId: e.target.value ? parseInt(e.target.value) : null,
+              sectionId: null as any
+            })
             if (formErrors.departmentId) onClearError('departmentId')
           }}
           className={`${inputBase} ${formErrors.departmentId ? inputError : inputNormal}`}
@@ -119,6 +142,23 @@ export function EditAssignmentSection({
         </select>
         {formErrors.departmentId && <p className="text-[10px] text-red-500 font-bold ml-1">{formErrors.departmentId}</p>}
       </div>
+
+      {/* Section */}
+      {editForm.departmentId && (
+        <div className="space-y-1">
+          <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Section (optional)</label>
+          <select
+            value={editForm.sectionId ?? ''}
+            onChange={(e) => {
+              onFormChange({ ...editForm, sectionId: e.target.value ? parseInt(e.target.value) : null })
+            }}
+            className={`${inputBase} ${inputNormal}`}
+          >
+            <option value="">Select Section (optional)</option>
+            {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Position */}
       <div className="space-y-1">
@@ -135,12 +175,12 @@ export function EditAssignmentSection({
       {/* Date Hired / Status */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Date Hired</label>
+          <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Date Hired <span className="normal-case font-medium">(optional)</span></label>
           <input
             type="date"
             value={editForm.hireDate ? (editForm.hireDate as string).split('T')[0] : ''}
             onChange={(e) => {
-              onFormChange({ ...editForm, hireDate: e.target.value })
+              onFormChange({ ...editForm, hireDate: e.target.value || undefined })
               if (formErrors.hireDate) onClearError('hireDate')
             }}
             className={`${inputBase} ${formErrors.hireDate ? inputError : inputNormal}`}

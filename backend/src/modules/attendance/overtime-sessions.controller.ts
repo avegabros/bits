@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../shared/lib/prisma';
 import { Prisma, AttendanceLog, Attendance } from '@prisma/client';
 import { getPhtDateStr } from '../../shared/utils/date.utils';
-import { normalizeTime } from './attendance-utils';
+import { normalizeTime, toPHTDate } from './attendance-utils';
 
 function computeSessionState(otRequest: { date: Date, actualStartTime: Date | null, actualEndTime: Date | null }, now: Date) {
     const otDateStr = getPhtDateStr(otRequest.date);
@@ -48,7 +48,7 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
 
         if (startDate || endDate) {
             where.date = {};
-            if (startDate) where.date.gte = new Date(startDate as string);
+            if (startDate) where.date.gte = toPHTDate(new Date(startDate as string));
             if (endDate) where.date.lte = new Date(endDate as string);
         }
 
@@ -90,24 +90,24 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
         if (sessionState) {
             if (sessionState === 'SCHEDULED') {
                 where.actualStartTime = null;
-                where.date = { ...(typeof where.date === 'object' ? where.date : {}), gte: new Date(nowDateStr) };
+                where.date = { ...(typeof where.date === 'object' ? where.date : {}), gte: toPHTDate(new Date(nowDateStr)) };
             } else if (sessionState === 'ACTIVE') {
                 where.actualStartTime = { not: null };
                 where.actualEndTime = null;
                 // typically date is today or recent, but strictly speaking:
                 // we might not filter by date for ACTIVE if they forgot to clock out, but walkthru says:
                 // ACTIVE: actualStartTime !== null AND actualEndTime === null, date can be anything but PARTIAL is past.
-                where.date = { ...(typeof where.date === 'object' ? where.date : {}), gte: new Date(nowDateStr) };
+                where.date = { ...(typeof where.date === 'object' ? where.date : {}), gte: toPHTDate(new Date(nowDateStr)) };
             } else if (sessionState === 'COMPLETED') {
                 where.actualStartTime = { not: null };
                 where.actualEndTime = { not: null };
             } else if (sessionState === 'MISSED') {
                 where.actualStartTime = null;
-                where.date = { ...(typeof where.date === 'object' ? where.date : {}), lt: new Date(nowDateStr) };
+                where.date = { ...(typeof where.date === 'object' ? where.date : {}), lt: toPHTDate(new Date(nowDateStr)) };
             } else if (sessionState === 'PARTIAL') {
                 where.actualStartTime = { not: null };
                 where.actualEndTime = null;
-                where.date = { ...(typeof where.date === 'object' ? where.date : {}), lt: new Date(nowDateStr) };
+                where.date = { ...(typeof where.date === 'object' ? where.date : {}), lt: toPHTDate(new Date(nowDateStr)) };
             }
         }
 
@@ -183,7 +183,8 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
             // We must NOT add +8h here — that would shift the OT window 8 hours forward.
             let actualDurationMinutes = 0;
             if (req.actualStartTime && req.actualEndTime) {
-                const dateMs = new Date(req.date).getTime(); // UTC midnight — use as-is
+                const dateStr = getPhtDateStr(req.date);
+                const dateMs = new Date(`${dateStr}T00:00:00.000Z`).getTime();
                 const [otStartH, otStartM] = req.startTime.split(':').map(Number);
                 const [otEndH, otEndM] = req.endTime.split(':').map(Number);
 
