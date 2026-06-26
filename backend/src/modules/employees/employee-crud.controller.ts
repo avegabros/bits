@@ -11,6 +11,7 @@ import { generateRandomPassword, getBirthdatePassword } from '../../shared/utils
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../shared/lib/email.service';
 import { validateShiftGap } from '../shifts/shift-conflict.service';
 import { getChronologicalShiftIds } from '../shifts/shift-ordering.service';
+import { reassignSameDayShifts } from '../attendance/attendance.service';
 
 // GET /api/employees/:id - Get a single employee by ID (for profile view)
 export const getEmployeeById = async (req: Request, res: Response) => {
@@ -42,6 +43,8 @@ export const getEmployeeById = async (req: Request, res: Response) => {
                 role: true,
                 departmentId: true,
                 Department: { select: { name: true } },
+                sectionId: true,
+                Section: { select: { id: true, name: true } },
                 branchId: true,
                 Branch: { select: { name: true } },
                 companyId: true,
@@ -164,6 +167,8 @@ export const getAllEmployees = async (req: Request, res: Response) => {
             employeeNumber: true,
             departmentId: true,
             Department: { select: { name: true } },
+            sectionId: true,
+            Section: { select: { id: true, name: true } },
             Branch: { select: { name: true } },
         } : {
             id: true,
@@ -180,6 +185,8 @@ export const getAllEmployees = async (req: Request, res: Response) => {
             role: true,
             departmentId: true,
             Department: { select: { name: true } },
+            sectionId: true,
+            Section: { select: { id: true, name: true } },
             branchId: true,
             Branch: { select: { name: true } },
             companyId: true,
@@ -427,7 +434,8 @@ export const createEmployee = async (req: Request, res: Response) => {
             employmentStatus,
             shiftId,
             shiftIds,
-            companyId
+            companyId,
+            sectionId
         } = req.body;
 
         // The validators have already handled empty formats
@@ -543,6 +551,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 id: true; zkId: true; employeeNumber: true; firstName: true; lastName: true;
                 middleName: true; suffix: true; gender: true; dateOfBirth: true; email: true;
                 role: true; departmentId: true; Department: { select: { name: true } };
+                sectionId: true; Section: { select: { id: true; name: true } };
                 position: true; branchId: true; Branch: { select: { name: true } };
                 companyId: true; Company: { select: { id: true; name: true } };
                 contactNumber: true; hireDate: true; employmentStatus: true; createdAt: true;
@@ -576,6 +585,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                         password: hashedPassword,
                         role: 'USER',
                         departmentId: departmentId ? parseInt(departmentId, 10) : null,
+                        sectionId: sectionId ? parseInt(sectionId, 10) : null,
                         position,
                         branchId: branchId ? parseInt(branchId, 10) : null,
                         companyId: companyId ? parseInt(companyId, 10) : null,
@@ -601,6 +611,8 @@ export const createEmployee = async (req: Request, res: Response) => {
                         role: true,
                         departmentId: true,
                         Department: { select: { name: true } },
+                        sectionId: true,
+                        Section: { select: { id: true, name: true } },
                         position: true,
                         branchId: true,
                         Branch: { select: { name: true } },
@@ -739,7 +751,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
             shiftId,
             shiftIds,
             companyId,
-            employmentStatus
+            employmentStatus,
+            sectionId
         } = req.body;
 
         // Check if employee exists
@@ -828,6 +841,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (departmentId !== undefined) {
             updateData.departmentId = departmentId ? parseInt(departmentId, 10) : null;
         }
+        if (sectionId !== undefined) {
+            updateData.sectionId = sectionId ? parseInt(sectionId, 10) : null;
+        }
         if (branchId !== undefined) {
             updateData.branchId = branchId ? parseInt(branchId, 10) : null;
         }
@@ -870,6 +886,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
                     role: true,
                     departmentId: true,
                     Department: { select: { name: true } },
+                    sectionId: true,
+                    Section: { select: { id: true, name: true } },
                     position: true,
                     branchId: true,
                     Branch: { select: { name: true } },
@@ -886,6 +904,19 @@ export const updateEmployee = async (req: Request, res: Response) => {
             });
 
             if (shiftIds && Array.isArray(shiftIds)) {
+                // Get original shift assignments before deleting them
+                const originalAssignments = await tx.employeeShift.findMany({
+                    where: { employeeId },
+                    select: { shiftId: true }
+                });
+                const originalShiftIds = originalAssignments.map(a => a.shiftId);
+                
+                // Also get the current employee legacy shiftId in case assignments were empty
+                const originalLegacyShiftId = existingEmployee.shiftId;
+                if (originalLegacyShiftId && !originalShiftIds.includes(originalLegacyShiftId)) {
+                    originalShiftIds.push(originalLegacyShiftId);
+                }
+
                 // Delete existing shift assignments
                 await tx.employeeShift.deleteMany({ where: { employeeId } });
 
@@ -907,6 +938,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
                     where: { id: employeeId },
                     data: { shiftId: sortedShiftIds[0] || null }
                 });
+
+                // Same-day shift reassignment logic
+                await reassignSameDayShifts(employeeId, originalShiftIds, sortedShiftIds, tx);
             }
 
             return emp;
