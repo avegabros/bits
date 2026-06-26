@@ -59,6 +59,42 @@ async function main() {
     }
 
     // ──────────────────────────────────────────────
+    // 2.5. Sections
+    // ──────────────────────────────────────────────
+    console.log('🌱 Seeding Sections...')
+    const sectionSeeds = [
+        { departmentName: 'IT', sections: ['SOFTWARE DEVELOPMENT', 'INFRASTRUCTURE & SECURITY'] },
+        { departmentName: 'HUMAN RESOURCES', sections: ['RECRUITMENT & ONBOARDING', 'EMPLOYEE RELATIONS'] },
+        { departmentName: 'ENGINEERING', sections: ['CIVIL & STRUCTURAL', 'MECHANICAL & ELECTRICAL'] },
+        { departmentName: 'PRODUCTION', sections: ['LINE A', 'LINE B', 'PACKAGING'] }
+    ]
+
+    for (const seed of sectionSeeds) {
+        const dept = await prisma.department.findUnique({
+            where: { name: seed.departmentName }
+        })
+        if (dept) {
+            for (const sectionName of seed.sections) {
+                await prisma.section.upsert({
+                    where: {
+                        name_departmentId: {
+                            name: sectionName,
+                            departmentId: dept.id
+                        }
+                    },
+                    update: {},
+                    create: {
+                        name: sectionName,
+                        departmentId: dept.id,
+                        updatedAt: new Date()
+                    }
+                })
+                console.log(`🧩 Section: ${sectionName} in ${seed.departmentName}`)
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────
     // 3. Shifts
     // ──────────────────────────────────────────────
 
@@ -80,6 +116,7 @@ async function main() {
             lowFreqIntervalSec: 600,
             shiftAwareSyncEnabled: false,
             shiftBufferMinutes: 120,
+            nightShiftBufferMinutes: 120,
             autoTimeSyncEnabled: true,
             timeSyncIntervalSec: 3600,
             updatedAt: new Date()

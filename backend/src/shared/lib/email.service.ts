@@ -32,6 +32,10 @@ export const sendWelcomeEmail = async (toEmail: string, employeeName: string, ge
                         <p style="margin: 0;"><strong>Password:</strong> <span style="font-family: monospace; font-size: 16px; background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${generatedPassword}</span></p>
                     </div>
 
+                    <div style="margin: 20px 0;">
+                        <a href="${process.env.SMTP_PORTAL_URL ||  'https://bits.abas.ph'}/login" style="background-color: #E60000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Login to BITS</a>
+                    </div>
+
                     <p><strong>Security Notice:</strong> Please log in to the employee dashboard as soon as possible and change your password from the "My Profile" page.</p>
                     
                     <p style="margin-top: 30px;">Best regards,<br>BITS Administration Team</p>
@@ -68,6 +72,10 @@ export const sendPasswordResetEmail = async (toEmail: string, employeeName: stri
                     <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
                         <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${toEmail}</p>
                         <p style="margin: 0;"><strong>Temporary Password:</strong> <span style="font-family: monospace; font-size: 16px; background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${generatedPassword}</span></p>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <a href="${process.env.SMTP_PORTAL_URL || 'https://bits.abas.ph'}/login" style="background-color: #E60000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Login to BITS</a>
                     </div>
 
                     <p><strong>Security Notice:</strong> You will be required to change this temporary password immediately upon your next login.</p>

@@ -108,6 +108,21 @@ model Department {
   updatedAt         DateTime
   Employee          Employee[]
   ManagerDepartment ManagerDepartment[]
+  Section           Section[]
+}
+
+model Section {
+  id           Int        @id @default(autoincrement())
+  name         String
+  departmentId Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  Employee     Employee[]
+
+  @@unique([name, departmentId])
+  @@index([departmentId])
 }
 
 model ManagerDepartment {
@@ -214,6 +229,7 @@ model Employee {
   branchId                      Int?
   companyId                     Int?
   shiftId                       Int?
+  sectionId                     Int?
   Attendance                    Attendance[]
   AdjustmentsReviewed           AttendanceAdjustment[]          @relation("AdjustmentReviewedBy")
   AdjustmentsSubmitted          AttendanceAdjustment[]          @relation("AdjustmentSubmittedBy")
@@ -224,6 +240,7 @@ model Employee {
   Branch                        Branch?                         @relation(fields: [branchId], references: [id])
   Company                       Company?                        @relation(fields: [companyId], references: [id])
   Department                    Department?                     @relation(fields: [departmentId], references: [id])
+  Section                       Section?                        @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   ManagerDepartments            ManagerDepartment[]             @relation("ManagerDepartments")
   ManagerDeptAssignments        ManagerDepartment[]             @relation("ManagerDeptAssignedBy")
   Shift                         Shift?                          @relation(fields: [shiftId], references: [id])
@@ -235,6 +252,7 @@ model Employee {
   RefreshToken                  RefreshToken[]
 
   @@index([departmentId])
+  @@index([sectionId])
   @@index([branchId])
   @@index([companyId])
   @@index([shiftId])
@@ -411,6 +429,7 @@ model SyncConfig {
   lowFreqIntervalSec           Int      @default(600)
   shiftAwareSyncEnabled        Boolean  @default(false)
   shiftBufferMinutes           Int      @default(120)
+  nightShiftBufferMinutes      Int      @default(120)
   autoTimeSyncEnabled          Boolean  @default(true)
   timeSyncIntervalSec          Int      @default(3600)
   globalMinCheckoutMinutes     Int      @default(120)

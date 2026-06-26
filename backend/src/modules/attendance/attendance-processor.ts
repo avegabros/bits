@@ -560,6 +560,14 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             const phtDate = new Date(dateOnly.getTime() + 8 * 60 * 60 * 1000);
             const utcMidnight = new Date(Date.UTC(phtDate.getUTCFullYear(), phtDate.getUTCMonth(), phtDate.getUTCDate()));
             dateValues.add(utcMidnight.getTime());
+
+            // Add previous day for night-shifts and crossing-midnight OTs
+            const prevDate = new Date(dateOnly.getTime() - 24 * 60 * 60 * 1000);
+            dateValues.add(prevDate.getTime());
+            
+            const prevPhtDate = new Date(prevDate.getTime() + 8 * 60 * 60 * 1000);
+            const prevUtcMidnight = new Date(Date.UTC(prevPhtDate.getUTCFullYear(), prevPhtDate.getUTCMonth(), prevPhtDate.getUTCDate()));
+            dateValues.add(prevUtcMidnight.getTime());
         });
         const queryDates = Array.from(dateValues).map(ms => new Date(ms));
 
@@ -590,13 +598,97 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
 
         for (const log of logs) {
             const dateOnly = toPHTDate(log.timestamp);
-            const dateKey = `${log.employeeId}_${getPhtDateStr(dateOnly)}`;
+
+            // ── NIGHT SHIFT / OVERTIME RESOLUTION ─────────────────────────────────────
+            // Determine if this punch belongs to a night shift or crossing-midnight OT
+            // starting on the previous day.
+            let targetDate = dateOnly;
+            const prevDate = new Date(dateOnly.getTime() - 24 * 60 * 60 * 1000);
+
+            // Fetch any open attendance record from the previous day
+            const openPrevAttendance = await prisma.attendance.findFirst({
+                where: {
+                    employeeId: log.employeeId,
+                    date: prevDate,
+                    checkOutTime: null
+                },
+                include: {
+                    shift: true
+                }
+            });
+
+            let matchedPrev = false;
+
+            if (openPrevAttendance && openPrevAttendance.shift) {
+                const shift = openPrevAttendance.shift;
+                // Night session condition: shift.isNightShift === true OR startTime > endTime
+                const [sH, sM] = shift.startTime.split(':').map(Number);
+                const [eH, eM] = shift.endTime.split(':').map(Number);
+                const isNightSession = shift.isNightShift || (sH * 60 + sM > eH * 60 + eM);
+
+                if (isNightSession) {
+                    // Check if current log timestamp is within the check-out window of the previous day's shift
+                    let expectedEnd = new Date(prevDate.getTime() + (eH * 60 + eM) * 60 * 1000);
+                    if (eH * 60 + eM <= sH * 60 + sM) {
+                        expectedEnd.setTime(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+                    }
+
+                    const shiftBufferMins = syncConfig?.shiftBufferMinutes ?? 120;
+                    const nightShiftBufferMins = syncConfig?.nightShiftBufferMinutes ?? 120;
+
+                    const windowStart = new Date(expectedEnd.getTime() - shiftBufferMins * 60 * 1000);
+                    const windowEnd = new Date(expectedEnd.getTime() + nightShiftBufferMins * 60 * 1000);
+
+                    if (log.timestamp >= windowStart && log.timestamp <= windowEnd) {
+                        targetDate = prevDate;
+                        matchedPrev = true;
+                    }
+                }
+            }
+
+            // If we haven't matched a previous day's shift, check for a crossing-midnight OT starting on the previous day
+            if (!matchedPrev) {
+                const openPrevOt = await prisma.overtimeRequest.findFirst({
+                    where: {
+                        employeeId: log.employeeId,
+                        date: prevDate,
+                        status: 'APPROVED',
+                        actualStartTime: { not: null },
+                        actualEndTime: null
+                    }
+                });
+
+                if (openPrevOt) {
+                    const [sH, sM] = openPrevOt.startTime.split(':').map(Number);
+                    const [eH, eM] = openPrevOt.endTime.split(':').map(Number);
+                    const isOtPastMidnight = (sH * 60 + sM > eH * 60 + eM);
+
+                    if (isOtPastMidnight) {
+                        // Check if current log timestamp is within the check-out window of this OT
+                        const expectedEnd = new Date(prevDate.getTime() + (eH * 60 + eM) * 60 * 1000);
+                        expectedEnd.setTime(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+
+                        const shiftBufferMins = syncConfig?.shiftBufferMinutes ?? 120;
+                        const nightShiftBufferMins = syncConfig?.nightShiftBufferMinutes ?? 120;
+
+                        const windowStart = new Date(expectedEnd.getTime() - shiftBufferMins * 60 * 1000);
+                        const windowEnd = new Date(expectedEnd.getTime() + nightShiftBufferMins * 60 * 1000);
+
+                        if (log.timestamp >= windowStart && log.timestamp <= windowEnd) {
+                            targetDate = prevDate;
+                        }
+                    }
+                }
+            }
+            // ─────────────────────────────────────────────────────────────────────────
+
+            const dateKey = `${log.employeeId}_${getPhtDateStr(targetDate)}`;
             const recordOts = otsByEmpAndDate.get(dateKey) || [];
 
             const { shift: resolvedShift } = await resolveShiftForTimestamp(
                 log.employeeId, 
                 log.timestamp, 
-                dateOnly, 
+                targetDate, 
                 log.employee?.Shift
             );
 
@@ -648,7 +740,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         const shiftRecordExists = await prisma.attendance.findFirst({
                             where: {
                                 employeeId: log.employeeId,
-                                date: dateOnly,
+                                date: targetDate,
                                 shiftId: effectiveShift.id
                             }
                         });
@@ -668,7 +760,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     ? await prisma.attendance.findFirst({
                         where: {
                             employeeId: log.employeeId,
-                            date: dateOnly,
+                            date: targetDate,
                             shiftId: effectiveShift.id,
                             checkOutTime: null
                         }
@@ -705,18 +797,18 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     const existingAtt = await prisma.attendance.findFirst({
                         where: {
                             employeeId: log.employeeId,
-                            date: dateOnly,
+                            date: targetDate,
                             shiftId: targetShiftId
                         }
                     });
 
                     if (!existingAtt) {
                         const empShift = targetShiftId ? effectiveShift : null;
-                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, empShift, recordOts);
+                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, empShift, recordOts);
                         const checkInStatus = calculatedStatus === 'late' ? 'late' : 'present';
 
                         const checkInMetrics = calculateAttendanceMetrics(
-                            { date: dateOnly, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
+                            { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
                             empShift,
                             recordOts
                         );
@@ -724,7 +816,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         const createdOtRecord = await prisma.attendance.create({
                             data: {
                                 employeeId: log.employeeId,
-                                date: dateOnly,
+                                date: targetDate,
                                 shiftId: targetShiftId,
                                 checkInTime: log.timestamp,
                                 status: checkInStatus,
@@ -846,8 +938,11 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     const existingAtt = await prisma.attendance.findFirst({
                         where: {
                             employeeId: log.employeeId,
-                            date: dateOnly,
-                            checkInTime: new Date(pendingOtCheckOut.actualStartTime!)
+                            date: targetDate,
+                            OR: [
+                                { checkInTime: new Date(pendingOtCheckOut.actualStartTime!) },
+                                ...(targetShiftId !== null ? [{ shiftId: targetShiftId }] : [])
+                            ]
                         }
                     });
 
@@ -860,12 +955,12 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             updatedAt: new Date()
                         };
 
-                        if (!existingAtt.checkOutTime) {
+                        if (!existingAtt.checkOutTime || log.timestamp > existingAtt.checkOutTime) {
                             updateData.checkOutTime = log.timestamp;
                             updateData.checkOutDeviceId = log.deviceId;
                             updateData.checkoutSource = 'device';
 
-                            if (existingAtt.status === 'incomplete') {
+                            if (existingAtt.status === 'incomplete' || existingAtt.checkOutTime) {
                                 updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts);
 
                                 if (existingAtt.notes?.includes('No checkout recorded')) {
@@ -909,13 +1004,13 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             },
                         });
 
-                        await recalculateAndPersistAttendanceMetrics(log.employeeId, dateOnly);
+                        await recalculateAndPersistAttendanceMetrics(log.employeeId, targetDate);
                     } else {
                         const otCheckIn = new Date(pendingOtCheckOut.actualStartTime!);
-                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, dateOnly, targetShiftId ? effectiveShift : null, recordOts);
+                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, targetDate, targetShiftId ? effectiveShift : null, recordOts);
 
                         const checkMetrics = calculateAttendanceMetrics(
-                            { date: dateOnly, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus },
+                            { date: targetDate, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus },
                             targetShiftId ? effectiveShift : null,
                             recordOts
                         );
@@ -923,7 +1018,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         const createdOtCoRecord = await prisma.attendance.create({
                             data: {
                                 employeeId: log.employeeId,
-                                date: dateOnly,
+                                date: targetDate,
                                 shiftId: targetShiftId,
                                 checkInTime: otCheckIn,
                                 checkOutTime: log.timestamp,
@@ -981,7 +1076,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             const existingAttendance = await prisma.attendance.findFirst({
                 where: {
                     employeeId: log.employeeId,
-                    date: dateOnly,
+                    date: targetDate,
                     shiftId: effectiveShift?.id ?? null
                 }
             });
@@ -995,10 +1090,10 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 // OT scans are already handled by the Unified OT Gate above.
                 if (resolvedShift && recordOts.length === 0) {
                     const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
-                    const shiftEndMs = dateOnly.getTime() + (eH * 60 + eM) * 60 * 1000;
+                    const shiftEndMs = targetDate.getTime() + (eH * 60 + eM) * 60 * 1000;
                     // Handle overnight shifts where endTime < startTime
                     const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
-                    const shiftStartMs = dateOnly.getTime() + (sH * 60 + sM) * 60 * 1000;
+                    const shiftStartMs = targetDate.getTime() + (sH * 60 + sM) * 60 * 1000;
                     const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
                         ? shiftEndMs + 24 * 60 * 60 * 1000
                         : shiftEndMs;
@@ -1010,14 +1105,14 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 }
                 // ── END POST-SHIFT GUARD ──────────────────────────────────────────────
 
-                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, dateOnly, effectiveShift, recordOts);
+                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, effectiveShift, recordOts);
                 const isLate = calculatedStatus === 'late';
                 const checkInStatus = isLate ? 'late' : 'present';
 
                 // Calculate and persist initial metrics at check-in time.
                 // undertimeMinutes / totalHours / isEarlyOut will be 0/false until checkout.
                 const checkInMetrics = calculateAttendanceMetrics(
-                    { date: dateOnly, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
+                    { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
                     effectiveShift,
                     recordOts
                 );
@@ -1026,7 +1121,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     const createdRecord = await prisma.attendance.create({
                         data: {
                             employeeId: log.employeeId,
-                            date: dateOnly,
+                            date: targetDate,
                             shiftId: effectiveShift?.id ?? null,
                             checkInTime: log.timestamp,
                             status: checkInStatus,
@@ -1084,12 +1179,12 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
                 } catch (err: unknown) {
                     if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
-                        console.debug(`[Attendance] Duplicate record skipped for employeeId=${log.employeeId} on ${dateOnly}`);
+                        console.debug(`[Attendance] Duplicate record skipped for employeeId=${log.employeeId} on ${targetDate}`);
                         await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
                         continue;
                     }
                     console.error(
-                        `[Attendance] Failed to process check-in log id=${log.id} for employeeId=${log.employeeId} on ${dateOnly}:`,
+                        `[Attendance] Failed to process check-in log id=${log.id} for employeeId=${log.employeeId} on ${targetDate}:`,
                         err
                     );
                     continue;

@@ -58,7 +58,7 @@ export const sendOvertimeStatusEmail = async (
                         ` : ''}
                         
                         <p style="font-size: 14px; color: #6b7280; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
-                            You can view the full details of your request by logging into the Employee Portal.
+                            You can view the full details of your request by logging into the <a href="${process.env.SMTP_PORTAL_URL || 'https://bits.abas.ph'}/login" style="color: ${color}; font-weight: bold; text-decoration: underline;">Employee Portal</a>.
                             <br><br>
                             Best regards,<br>
                             BITS Attendance System
@@ -122,7 +122,7 @@ export const sendOvertimeAssignedEmail = async (
                         </div>
                         
                         <p style="font-size: 14px; color: #6b7280; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
-                            You can view the full details of your request by logging into the Employee Portal.
+                            You can view the full details of your request by logging into the <a href="${process.env.SMTP_PORTAL_URL || 'https://bits.abas.ph'}/login" style="color: ${color}; font-weight: bold; text-decoration: underline;">Employee Portal</a>.
                             <br><br>
                             Best regards,<br>
                             BITS Attendance System
