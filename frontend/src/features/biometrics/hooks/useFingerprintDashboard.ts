@@ -11,6 +11,7 @@ export interface DeviceSyncStatus {
   syncEnabled: boolean
   excluded: boolean
   pendingDeletion: boolean
+  syncStatus?: 'synced' | 'partial' | 'not_synced'
 }
 
 export interface FingerprintSlot {

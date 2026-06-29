@@ -13,6 +13,7 @@ export type DeviceSyncStatus = {
   enrolledAt?: string
   isActive: boolean
   syncEnabled: boolean
+  syncStatus?: 'synced' | 'partial' | 'not_synced'
 }
 
 export type FingerprintSlot = {

@@ -320,12 +320,28 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
             },
         });
 
+        const totalEmployeeFingers = enrollments.map(e => e.fingerIndex);
+        const uniqueFingers = new Set(totalEmployeeFingers);
+        const totalEnrolled = uniqueFingers.size;
+
         const devicesResult = activeDevices.map(device => {
             const enroll = deviceEnrollments.find(e => e.deviceId === device.id);
+            const deviceFingerCount = enrollments.filter(e => e.deviceId === device.id).length;
+            
+            let syncStatus: 'synced' | 'partial' | 'not_synced' = 'not_synced';
+            if (totalEnrolled > 0) {
+                if (deviceFingerCount === totalEnrolled) {
+                    syncStatus = 'synced';
+                } else if (deviceFingerCount > 0) {
+                    syncStatus = 'partial';
+                }
+            }
+
             return {
                 deviceId: device.id,
                 deviceName: device.name,
-                enrolled: !!enroll,
+                enrolled: totalEnrolled > 0 && deviceFingerCount === totalEnrolled,
+                syncStatus,
                 enrolledAt: enroll ? enroll.enrolledAt.toISOString() : undefined,
                 isActive: device.isActive,
                 syncEnabled: device.syncEnabled,
@@ -415,7 +431,7 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
             });
         }
 
-        const totalEnrolled = fingerMap.size;
+
 
         return res.status(200).json({
             success: true,

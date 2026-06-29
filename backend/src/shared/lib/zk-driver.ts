@@ -210,14 +210,13 @@ export class ZKDriver {
      * Returns true if a template exists on the device, false otherwise.
      */
     async hasFingerTemplate(uid: number, fingerIndex: number): Promise<boolean> {
-        if (!this.zkInstance) throw new Error('Not connected');
-        const { COMMANDS } = require('node-zklib/constants');
         try {
-            const buf = Buffer.alloc(3);
-            buf.writeUInt16LE(uid, 0);
-            buf.writeUInt8(fingerIndex, 2);
-            const result = await this.zkInstance.executeCmd(COMMANDS.CMD_USERTEMP_RRQ, buf);
-            return !!(result && result.length > 8);
+            const template = await this.getFingerTemplate(uid, fingerIndex);
+            if (template && template.length > 0) {
+                template.fill(0);
+                return true;
+            }
+            return false;
         } catch {
             return false;
         }
@@ -528,6 +527,12 @@ export class ZKDriver {
 
             // Step 9: Unlock machine
             await zkInfo.executeCmd(COMMANDS.CMD_ENABLEDEVICE, '');
+
+            // Step 10: Verify template actually exists on the device
+            const verifySuccess = await this.hasFingerTemplate(uid, fingerIndex);
+            if (!verifySuccess) {
+                throw new Error(`Device rejected or failed to write fingerprint template on slot ${fingerIndex}`);
+            }
 
             console.log(`[ZKDriver] Successfully synchronized fingerprint for UID: ${uid}`);
         } catch (error: unknown) {

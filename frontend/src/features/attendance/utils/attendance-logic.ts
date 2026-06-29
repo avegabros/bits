@@ -332,13 +332,6 @@ export function getStatusBadges(row: AttendanceRecord): StatusBadge[] {
     badges.push({ text: 'On Time', className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' });
   }
 
-  if (row.undertimeMinutes > 0) {
-    badges.push({ text: 'Undertime', className: 'text-red-500 bg-red-500/10 border-red-500/20' });
-  }
-  if (row.overtimeMinutes > 0) {
-    badges.push({ text: 'Overtime', className: 'text-emerald-600 bg-emerald-600/10 border-emerald-600/20' });
-  }
-
   return badges;
 }
 

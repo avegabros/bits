@@ -83,6 +83,10 @@ export function FingerprintDeviceSyncPanel({
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[9px] font-bold uppercase tracking-wider border border-red-100">
                           <AlertTriangle className="w-2.5 h-2.5" /> Pending Delete
                         </span>
+                      ) : device.syncStatus === 'partial' ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[9px] font-bold uppercase tracking-wider border border-orange-100">
+                          <AlertTriangle className="w-2.5 h-2.5" /> Partially Synced
+                        </span>
                       ) : device.enrolled ? (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold uppercase tracking-wider border border-emerald-100">
                           <Check className="w-2.5 h-2.5" /> Synced {device.enrolledAt ? `(${new Date(device.enrolledAt).toLocaleDateString()})` : ''}
