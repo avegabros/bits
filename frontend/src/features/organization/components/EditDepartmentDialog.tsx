@@ -71,9 +71,11 @@ export function EditDepartmentDialog({
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {sections.map(s => {
                   const isChecked = editSectionIds.includes(s.id)
-                  const isOwnedByOther = s.departmentId !== editingDept.id && isChecked === false
-                  const ownerLabel = s.department?.name && s.departmentId !== editingDept.id
-                    ? ` (${s.department.name})`
+                  const otherDepts = s.departments
+                    ?.map((d: any) => d.department.name)
+                    .filter((name: string) => name !== editingDept.name) || []
+                  const ownerLabel = otherDepts.length > 0
+                    ? ` (${otherDepts.join(', ')})`
                     : ''
                   return (
                     <label

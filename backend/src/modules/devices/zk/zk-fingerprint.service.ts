@@ -648,6 +648,13 @@ export const syncEmployeeFingerprints = async (
             if (missingFingers.length === 0) {
                 results.push({ deviceId: targetDevice.id, deviceName: targetDevice.name, status: 'skipped', pushed: 0, failed: 0 });
                 console.log(`[SyncFingers] "${targetDevice.name}": all ${allFingerIndices.length} finger(s) already enrolled on device — skipping.`);
+                
+                // Ensure overall device enrollment record exists in DB
+                await prisma.employeeDeviceEnrollment.upsert({
+                    where: { employeeId_deviceId: { employeeId, deviceId: targetDevice.id } },
+                    update: {},
+                    create: { employeeId, deviceId: targetDevice.id },
+                });
                 continue;
             }
 
@@ -780,10 +787,17 @@ export const syncEmployeeFingerprints = async (
 
             if (pushed > 0) {
                 await tgtZk.refreshData();
+            }
+
+            if (slotErrors.length === 0) {
                 await prisma.employeeDeviceEnrollment.upsert({
                     where: { employeeId_deviceId: { employeeId, deviceId: targetDevice.id } },
                     update: { enrolledAt: new Date() },
                     create: { employeeId, deviceId: targetDevice.id },
+                });
+            } else {
+                await prisma.employeeDeviceEnrollment.deleteMany({
+                    where: { employeeId, deviceId: targetDevice.id },
                 });
             }
 
@@ -957,11 +971,3 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
         );	
     }	
 }	
-	
-// ─────────────────────────────────────────────────────────────────────────────	
-// DEBUG & FORCED SYNC	
-// ─────────────────────────────────────────────────────────────────────────────	
-// RFID BADGE CARD ENROLLMENT	
-// Writes a card number into the user record on ALL active devices, then
-
-

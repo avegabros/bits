@@ -534,7 +534,93 @@ export async function recalculateAndPersistAttendanceMetrics(
 
 export const processAttendanceLogs = async (): Promise<ProcessResult> => {
     try {
-        const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        // Pre-processing step: Retrieve all currently unprocessed logs to identify which employees
+        // and dates require chronological re-processing.
+        const unprocessedLogs = await prisma.attendanceLog.findMany({
+            where: { 
+                timestamp: { gte: cutoff },
+                processedAt: null
+            },
+            select: { employeeId: true, timestamp: true }
+        });
+
+        if (unprocessedLogs.length > 0) {
+            const reprocessKeys = new Set<string>();
+            const reprocessPairs: { employeeId: number; date: Date }[] = [];
+
+            unprocessedLogs.forEach(log => {
+                const d1 = toPHTDate(log.timestamp);
+                const d2 = new Date(d1.getTime() - 24 * 60 * 60 * 1000);
+
+                [d1, d2].forEach(d => {
+                    const key = `${log.employeeId}_${d.getTime()}`;
+                    if (!reprocessKeys.has(key)) {
+                        reprocessKeys.add(key);
+                        reprocessPairs.push({ employeeId: log.employeeId, date: d });
+                    }
+                });
+            });
+
+            for (const { employeeId, date } of reprocessPairs) {
+                const existingRecords = await prisma.attendance.findMany({
+                    where: { employeeId, date }
+                });
+
+                let hasManualOrAdjustments = false;
+                for (const rec of existingRecords) {
+                    if (rec.checkoutSource === 'manual') {
+                        hasManualOrAdjustments = true;
+                        break;
+                    }
+                    const adjustmentsCount = await prisma.attendanceAdjustment.count({
+                        where: {
+                            attendanceId: rec.id,
+                            status: { in: ['pending', 'approved'] }
+                        }
+                    });
+                    if (adjustmentsCount > 0) {
+                        hasManualOrAdjustments = true;
+                        break;
+                    }
+                }
+
+                if (!hasManualOrAdjustments) {
+                    const startRange = date;
+                    const endRange = new Date(date.getTime() + 32 * 60 * 60 * 1000);
+
+                    // Reset processedAt = null for all raw logs of this employee in this target date range
+                    await prisma.attendanceLog.updateMany({
+                        where: {
+                            employeeId,
+                            timestamp: { gte: startRange, lt: endRange }
+                        },
+                        data: { processedAt: null }
+                    });
+
+                    // Clear the actual times on any approved OvertimeRequest for this employee and date
+                    await prisma.overtimeRequest.updateMany({
+                        where: {
+                            employeeId,
+                            date,
+                            status: 'APPROVED'
+                        },
+                        data: {
+                            actualStartTime: null,
+                            actualEndTime: null
+                        }
+                    });
+
+                    // Delete the pure device-based Attendance records
+                    if (existingRecords.length > 0) {
+                        await prisma.attendance.deleteMany({
+                            where: { employeeId, date }
+                        });
+                    }
+                }
+            }
+        }
 
         const logs = await prisma.attendanceLog.findMany({
             where: { 

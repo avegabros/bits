@@ -13,6 +13,9 @@ interface ReportFiltersProps {
   selectedDept: string;
   setSelectedDept: (v: string) => void;
   departments: string[];
+  selectedSection: string;
+  setSelectedSection: (v: string) => void;
+  sections: string[];
   searchTerm: string;
   setSearchTerm: (v: string) => void;
   onFilterChange: () => void; // Used to reset pagination when filters change
@@ -30,6 +33,9 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({
   selectedDept,
   setSelectedDept,
   departments,
+  selectedSection,
+  setSelectedSection,
+  sections,
   searchTerm,
   setSearchTerm,
   onFilterChange,
@@ -112,6 +118,26 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({
         </div>
         <div className="flex-1 min-w-0">
           <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold block mb-1.5">
+            Section
+          </label>
+          <select
+            value={selectedSection}
+            onChange={(e) => {
+              setSelectedSection(e.target.value);
+              onFilterChange();
+            }}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-500/20 outline-none transition-all appearance-none cursor-pointer"
+          >
+            <option value="all">All Sections</option>
+            {sections.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1 min-w-0">
+          <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold block mb-1.5">
             Search
           </label>
           <div className="relative">
@@ -131,3 +157,4 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({
     </div>
   );
 };
+

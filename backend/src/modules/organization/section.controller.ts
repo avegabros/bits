@@ -11,16 +11,25 @@ export const getAllSections = async (req: Request, res: Response) => {
         if (departmentIdQuery) {
             const deptId = parseInt(String(departmentIdQuery), 10);
             if (!isNaN(deptId)) {
-                whereClause.departmentId = deptId;
+                whereClause.departments = {
+                    some: {
+                        departmentId: deptId
+                    }
+                };
             }
         }
 
         const sections = await prisma.section.findMany({
             where: whereClause,
             include: {
-                department: {
-                    select: {
-                        name: true
+                departments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
                     }
                 }
             },
@@ -45,47 +54,35 @@ export const getAllSections = async (req: Request, res: Response) => {
 // POST /api/sections
 export const createSection = async (req: Request, res: Response) => {
     try {
-        const { name, departmentId } = req.body;
+        const { name } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Section name is required' });
-        }
-        if (!departmentId) {
-            return res.status(400).json({ success: false, message: 'Department ID is required' });
-        }
-
-        const deptId = parseInt(String(departmentId), 10);
-        if (isNaN(deptId)) {
-            return res.status(400).json({ success: false, message: 'Invalid department ID' });
-        }
-
-        const departmentExists = await prisma.department.findUnique({
-            where: { id: deptId }
-        });
-        if (!departmentExists) {
-            return res.status(404).json({ success: false, message: 'Department not found' });
         }
 
         const trimmedName = name.trim().toUpperCase();
         const existing = await prisma.section.findFirst({
             where: {
-                name: trimmedName,
-                departmentId: deptId
+                name: trimmedName
             }
         });
         if (existing) {
-            return res.status(400).json({ success: false, message: 'Section already exists in this department' });
+            return res.status(400).json({ success: false, message: 'Section already exists' });
         }
 
         const section = await prisma.section.create({
             data: {
                 name: trimmedName,
-                departmentId: deptId,
                 updatedAt: new Date()
             },
             include: {
-                department: {
-                    select: {
-                        name: true
+                departments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
                     }
                 }
             }
@@ -96,11 +93,10 @@ export const createSection = async (req: Request, res: Response) => {
             entityId: section.id,
             performedBy: req.user?.employeeId,
             source: 'admin-panel',
-            details: `Created new section "${section.name}" in department "${section.department.name}"`,
+            details: `Created new section "${section.name}"`,
             correlationId: req.correlationId
         }, {
-            'Name': section.name,
-            'Department': section.department.name
+            'Name': section.name
         });
 
         res.status(201).json({ success: true, section });
@@ -123,14 +119,7 @@ export const renameSection = async (req: Request, res: Response) => {
         }
 
         const target = await prisma.section.findUnique({
-            where: { id },
-            include: {
-                department: {
-                    select: {
-                        name: true
-                    }
-                }
-            }
+            where: { id }
         });
         if (!target) {
             return res.status(404).json({ success: false, message: 'Section not found' });
@@ -139,21 +128,25 @@ export const renameSection = async (req: Request, res: Response) => {
         const trimmedName = name.trim().toUpperCase();
         const existing = await prisma.section.findFirst({
             where: {
-                name: trimmedName,
-                departmentId: target.departmentId
+                name: trimmedName
             }
         });
         if (existing && existing.id !== id) {
-            return res.status(409).json({ success: false, message: 'Section name already exists in this department' });
+            return res.status(409).json({ success: false, message: 'Section name already exists' });
         }
 
         const section = await prisma.section.update({
             where: { id },
             data: { name: trimmedName, updatedAt: new Date() },
             include: {
-                department: {
-                    select: {
-                        name: true
+                departments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
                     }
                 }
             }
@@ -169,7 +162,7 @@ export const renameSection = async (req: Request, res: Response) => {
             entityId: section.id,
             performedBy: req.user?.employeeId,
             source: 'admin-panel',
-            details: `Renamed section to "${section.name}" in department "${section.department.name}"`,
+            details: `Renamed section to "${section.name}"`,
             correlationId: req.correlationId
         }, changes);
 
@@ -190,9 +183,13 @@ export const deleteSection = async (req: Request, res: Response) => {
         const existing = await prisma.section.findUnique({
             where: { id },
             include: {
-                department: {
-                    select: {
-                        name: true
+                departments: {
+                    include: {
+                        department: {
+                            select: {
+                                name: true
+                            }
+                        }
                     }
                 }
             }
@@ -217,17 +214,19 @@ export const deleteSection = async (req: Request, res: Response) => {
 
         await prisma.section.delete({ where: { id } });
 
+        const deptNames = existing.departments.map(d => d.department.name).join(', ') || 'None';
+
         void auditDelete({
             entityType: 'Section',
             entityId: id,
             performedBy: req.user?.employeeId,
             source: 'admin-panel',
             level: 'WARN',
-            details: `Deleted section "${existing.name}" from department "${existing.department.name}"`,
+            details: `Deleted section "${existing.name}" from department(s) "${deptNames}"`,
             correlationId: req.correlationId
         }, {
             'Name': existing.name,
-            'Department': existing.department.name
+            'Departments': deptNames
         });
 
         res.json({ success: true, message: `Section "${existing.name}" deleted` });

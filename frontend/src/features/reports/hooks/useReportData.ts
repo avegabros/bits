@@ -91,6 +91,7 @@ export const useReportData = (startDate: string, endDate: string) => {
           employeeNumber?: string | null;
           zkId?: number | null;
           Department?: { name: string };
+          Section?: { name: string };
           Branch?: { name: string };
           employmentStatus: string;
           role: string;
@@ -132,6 +133,7 @@ export const useReportData = (startDate: string, endDate: string) => {
             employeeNumber: e.employeeNumber ?? null,
             zkId: e.zkId ?? null,
             department: e.Department?.name || '—',
+            section: e.Section?.name || '—',
             branch: e.Branch?.name || '—',
             totalDays,
             present: 0,

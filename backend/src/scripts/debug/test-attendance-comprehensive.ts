@@ -622,6 +622,78 @@ async function runAll() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // TEST 13: Out-of-Order Log Sync (Device Offline Scenario)
+    // ─────────────────────────────────────────────────────────────────────────
+    section('TEST 13: Out-of-Order Log Sync (Device Offline Scenario)');
+    divider();
+    {
+        const emp = await createTestEmployee('T13');
+        await assignShifts(emp.id, [{ shiftId: SHIFT_DAY.id, sortOrder: 1 }]);
+        await cleanEmployee(emp.id, [DATE_ONLY]);
+
+        info(`--- Sub-test A: Punch out occurs after shift end (Post-Shift Guard) ---`);
+        info(`Step 1: Punch OUT at 17:05 (Device B - online)`);
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '17:05'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        let records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 0 ? pass('No record created initially (skipped by post-shift guard)') : fail('No record created initially', `got ${records.length}`);
+
+        info(`Step 2: Delayed Punch IN at 08:00 arrives (Device A - reconnected)`);
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '08:00'), status: 0 }
+        });
+        await processAttendanceLogs();
+
+        records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Exactly 1 record created after reconnection') : fail('Exactly 1 record', `got ${records.length}`);
+        
+        let att = records[0];
+        if (att) {
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '08:00').getUTCHours() ? pass('Check-in correctly reconciled to 08:00 AM') : fail('Check-in reconciled to 08:00 AM', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '17:05').getUTCHours() ? pass('Check-out correctly paired to 17:05 PM') : fail('Check-out paired to 17:05 PM', `got ${att.checkOutTime?.toISOString()}`);
+            att.lateMinutes === 0 ? pass('Late minutes is 0') : fail('Late minutes is 0', `got ${att.lateMinutes}`);
+        }
+
+        // Clean up for sub-test B
+        await cleanEmployee(emp.id, [DATE_ONLY]);
+
+        info(`--- Sub-test B: Punch out occurs before shift end (Treated as Late Check-In) ---`);
+        info(`Step 1: Punch OUT at 16:55 (Device B - online)`);
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '16:55'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Record created for check-out punch') : fail('Record created', `got ${records.length}`);
+        att = records[0];
+        if (att) {
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '16:55').getUTCHours() ? pass('Initially treated as late Check-In at 16:55') : fail('Treated as late Check-In', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime === null ? pass('Check-out is initially null') : fail('Check-out is null', `got ${att.checkOutTime}`);
+        }
+
+        info(`Step 2: Delayed Punch IN at 08:00 arrives (Device A - reconnected)`);
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '08:00'), status: 0 }
+        });
+        await processAttendanceLogs();
+
+        records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Still exactly 1 record after reconnection') : fail('Exactly 1 record', `got ${records.length}`);
+        att = records[0];
+        if (att) {
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '08:00').getUTCHours() ? pass('Check-in corrected to 08:00 AM') : fail('Check-in corrected', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '16:55').getUTCHours() ? pass('Check-out corrected to 16:55 PM') : fail('Check-out corrected', `got ${att.checkOutTime?.toISOString()}`);
+            att.lateMinutes === 0 ? pass('Late minutes is corrected to 0') : fail('Late minutes corrected', `got ${att.lateMinutes}`);
+        }
+
+        await destroyEmployee(emp.id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // FINAL SUMMARY
     // ─────────────────────────────────────────────────────────────────────────
     console.log(`\n${C.bold}${'═'.repeat(80)}${C.reset}`);

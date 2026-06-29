@@ -28,6 +28,7 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedSection, setSelectedSection] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
@@ -52,6 +53,12 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
   const departments = Array.from(
     new Set(reportData.map((e) => e.department).filter(Boolean))
   );
+  const sections = Array.from(
+    new Set(reportData
+      .filter((e) => selectedDept === 'all' || e.department === selectedDept)
+      .map((e) => e.section)
+      .filter((s) => s && s !== '—'))
+  );
   const branches = Array.from(
     new Set(reportData.map((e) => e.branch).filter(Boolean))
   );
@@ -70,9 +77,11 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
 
     const matchesDept =
       selectedDept === 'all' || emp.department === selectedDept;
+    const matchesSection =
+      selectedSection === 'all' || emp.section === selectedSection;
     const matchesBranch =
       selectedBranch === 'all' || emp.branch === selectedBranch;
-    return matchesSearch && matchesDept && matchesBranch;
+    return matchesSearch && matchesDept && matchesSection && matchesBranch;
   });
 
   const { sortedData, sortKey, sortOrder, handleSort } = useTableSort<ReportRow>({
@@ -209,8 +218,11 @@ export function ReportsDashboard({ role = 'admin' }: { role?: 'admin' | 'hr' }) 
         setSelectedBranch={setSelectedBranch}
         branches={branches}
         selectedDept={selectedDept}
-        setSelectedDept={setSelectedDept}
+        setSelectedDept={(v) => { setSelectedDept(v); setSelectedSection('all'); }}
         departments={departments}
+        selectedSection={selectedSection}
+        setSelectedSection={setSelectedSection}
+        sections={sections}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         onFilterChange={handleFilterChange}
