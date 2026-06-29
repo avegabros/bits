@@ -111,20 +111,28 @@ model Department {
   updatedAt         DateTime
   Employee          Employee[]
   ManagerDepartment ManagerDepartment[]
-  Section           Section[]
+  sections          SectionDepartment[]
 }
 
 model Section {
-  id           Int        @id @default(autoincrement())
-  name         String
-  departmentId Int
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  id           Int                 @id @default(autoincrement())
+  name         String              @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
   Employee     Employee[]
+  departments  SectionDepartment[]
+}
 
-  @@unique([name, departmentId])
+model SectionDepartment {
+  sectionId    Int
+  departmentId Int
+  assignedAt   DateTime   @default(now())
+
+  section      Section    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([sectionId, departmentId])
+  @@index([sectionId])
   @@index([departmentId])
 }
 

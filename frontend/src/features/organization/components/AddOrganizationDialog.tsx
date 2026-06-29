@@ -106,23 +106,7 @@ export function AddOrganizationDialog({
               </button>
             </div>
           </div>
-          {addType === 'section' && (
-            <div>
-              <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Department</label>
-              <select
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
-                value={newSectionDeptId}
-                onChange={e => setNewSectionDeptId?.(e.target.value)}
-              >
-                <option value="">Select Department</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          
           <div>
             <label className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">
               {addType === 'department' ? 'Department Name' : addType === 'section' ? 'Section Name' : addType === 'branch' ? 'Branch Name' : 'Company Name'}
@@ -144,7 +128,8 @@ export function AddOrganizationDialog({
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {sections.map(s => {
                   const isChecked = newDeptSectionIds.includes(s.id)
-                  const ownerLabel = s.department?.name ? ` (${s.department.name})` : ''
+                  const associatedDepts = s.departments?.map((d: any) => d.department.name) || []
+                  const ownerLabel = associatedDepts.length > 0 ? ` (${associatedDepts.join(', ')})` : ''
                   return (
                     <label
                       key={s.id}

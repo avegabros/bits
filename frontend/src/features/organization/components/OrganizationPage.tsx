@@ -42,7 +42,7 @@ export default function OrganizationPage({ role }: OrganizationPageProps) {
   const openEditDept = (dept: Department) => {
     org.setEditingDept(dept)
     org.setEditName(dept.name)
-    const assignedIds = org.sections.filter(s => s.departmentId === dept.id).map(s => s.id)
+    const assignedIds = org.sections.filter(s => s.departments?.some(d => d.departmentId === dept.id)).map(s => s.id)
     org.setEditSectionIds(assignedIds)
     org.setEditError(null)
   }

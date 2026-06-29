@@ -61,7 +61,7 @@ export function EditAssignmentSection({
   const filteredSections = useMemo(() => {
     if (!editForm.departmentId) return []
     const deptId = Number(editForm.departmentId)
-    return sections.filter((s: any) => s.departmentId === deptId)
+    return sections.filter((s: any) => s.departments?.some((d: any) => d.departmentId === deptId))
   }, [sections, editForm.departmentId])
 
   // Filter branches by selected company

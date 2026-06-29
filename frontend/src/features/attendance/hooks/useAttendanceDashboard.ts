@@ -112,7 +112,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
   const [companiesList, setCompaniesList] = useState<{ id: number; name: string }[]>([])
   const [companyFilter, setCompanyFilter] = useState('All Companies')
   const [departmentsList, setDepartmentsList] = useState<{ id: number; name: string }[]>([])
-  const [sectionsList, setSectionsList] = useState<{ id: number; name: string; departmentId: number }[]>([])
+  const [sectionsList, setSectionsList] = useState<{ id: number; name: string; departments?: { departmentId: number }[] }[]>([])
   const [stats, setStats] = useState({ onTime: 0, late: 0, absent: 0, restDay: 0, incomplete: 0, total: 0, avgHours: '0', totalOT: '0', totalUT: '0' })
   const [availableShifts, setAvailableShifts] = useState<string[]>(['All Shifts'])
 
@@ -156,7 +156,7 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     if (deptFilter === allDeptLabel) return sectionsList;
     const dept = departmentsList.find(d => d.name === deptFilter);
     if (!dept) return [];
-    return sectionsList.filter(s => s.departmentId === dept.id);
+    return sectionsList.filter(s => s.departments?.some(d => d.departmentId === dept.id));
   }, [sectionsList, departmentsList, deptFilter, allDeptLabel]);
 
   const sections = ['All Sections', ...filteredSectionsList.map(s => s.name)]

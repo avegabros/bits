@@ -46,7 +46,7 @@ export function EmployeeAddModal({ departments, branches, companies, shifts, onS
   const filteredSections = useMemo(() => {
     if (!newEmployee.departmentId) return [];
     const deptId = parseInt(newEmployee.departmentId, 10);
-    return sections.filter((s: any) => s.departmentId === deptId);
+    return sections.filter((s: any) => s.departments?.some((d: any) => d.departmentId === deptId));
   }, [sections, newEmployee.departmentId]);
 
   /** Parse workDays JSON and return compact day abbreviations */

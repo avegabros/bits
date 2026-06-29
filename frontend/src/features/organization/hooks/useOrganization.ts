@@ -187,18 +187,14 @@ export function useOrganization() {
         setNewName(''); setNewAddress(''); setIsAddOpen(false)
         showToast('success', 'Company Created', `${trimmed} has been added successfully`)
       } else if (addType === 'section') {
-        if (!newSectionDeptId) {
-          setAddError('Department is required for creating a section')
-          return
-        }
         const res = await fetch('/api/sections', {
           method: 'POST', headers: authHeaders(), credentials: 'include',
-          body: JSON.stringify({ name: trimmed, departmentId: parseInt(newSectionDeptId, 10) }),
+          body: JSON.stringify({ name: trimmed }),
         })
         const data = await res.json()
         if (!data.success) { setAddError(data.message || 'Failed to create'); return }
         setSections(prev => [...prev, data.section].sort((a, b) => a.name.localeCompare(b.name)))
-        setNewName(''); setNewSectionDeptId(''); setIsAddOpen(false)
+        setNewName(''); setIsAddOpen(false)
         showToast('success', 'Section Created', `${trimmed} has been added successfully`)
       } else {
         const endpoint = addType === 'department' ? '/api/departments' : '/api/branches'

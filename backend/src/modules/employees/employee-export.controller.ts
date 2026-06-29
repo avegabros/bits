@@ -768,7 +768,13 @@ export const bulkCreateEmployees = async (req: Request, res: Response) => {
                                 ? (await prisma.section.findFirst({
                                     where: {
                                         name: { equals: emp.section, mode: 'insensitive' },
-                                        department: { name: { equals: emp.department, mode: 'insensitive' } }
+                                        departments: {
+                                            some: {
+                                                department: {
+                                                    name: { equals: emp.department, mode: 'insensitive' }
+                                                }
+                                            }
+                                        }
                                     },
                                     select: { id: true }
                                 }))?.id ?? null

@@ -8,8 +8,7 @@ export interface Department {
 export interface Section {
   id: number
   name: string
-  departmentId: number
-  department?: { name: string }
+  departments?: { departmentId: number; department: { id: number; name: string } }[]
 }
 
 

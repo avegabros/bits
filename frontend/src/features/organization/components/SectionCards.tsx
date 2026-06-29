@@ -21,7 +21,7 @@ export function SectionCards({
         const color = getColor(index)
         const count = sectionCounts[section.name] || 0
         const initials = getInitials(section.name)
-        const deptName = section.department?.name || 'Unknown'
+        const deptName = section.departments?.map(d => d.department.name).join(', ') || 'Unassigned'
 
         return (
           <div

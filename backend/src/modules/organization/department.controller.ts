@@ -10,14 +10,28 @@ export const getAllDepartments = async (req: Request, res: Response) => {
                 name: 'asc'
             },
             include: {
-                Section: {
-                    select: { id: true, name: true }
+                sections: {
+                    include: {
+                        section: {
+                            select: { id: true, name: true }
+                        }
+                    }
                 }
             }
         });
+
+        // Map Sections to match the original shape (Section[]) for backwards compatibility
+        const mappedDepartments = departments.map(d => ({
+            id: d.id,
+            name: d.name,
+            createdAt: d.createdAt,
+            updatedAt: d.updatedAt,
+            Section: d.sections.map(s => s.section)
+        }));
+
         res.json({
             success: true,
-            departments
+            departments: mappedDepartments
         });
     } catch (error) {
         console.error('Error fetching departments:', error);
@@ -40,24 +54,35 @@ export const createDepartment = async (req: Request, res: Response) => {
         if (existing) {
             return res.status(400).json({ success: false, message: 'Department already exists' });
         }
+
         const department = await prisma.department.create({
-            data: { name: trimmedName, updatedAt: new Date() },
-            include: { Section: { select: { id: true, name: true } } }
+            data: {
+                name: trimmedName,
+                updatedAt: new Date(),
+                sections: {
+                    create: Array.isArray(sectionIds) ? sectionIds.map((sid: number) => ({
+                        sectionId: sid
+                    })) : []
+                }
+            },
+            include: {
+                sections: {
+                    include: {
+                        section: {
+                            select: { id: true, name: true }
+                        }
+                    }
+                }
+            }
         });
 
-        // Reassign selected sections to this new department
-        if (Array.isArray(sectionIds) && sectionIds.length > 0) {
-            await prisma.section.updateMany({
-                where: { id: { in: sectionIds } },
-                data: { departmentId: department.id, updatedAt: new Date() }
-            });
-        }
-
-        // Re-fetch with updated sections
-        const updatedDepartment = await prisma.department.findUnique({
-            where: { id: department.id },
-            include: { Section: { select: { id: true, name: true } } }
-        });
+        const mappedDepartment = {
+            id: department.id,
+            name: department.name,
+            createdAt: department.createdAt,
+            updatedAt: department.updatedAt,
+            Section: department.sections.map(s => s.section)
+        };
 
         void auditCreate({
             entityType: 'Department',
@@ -70,7 +95,7 @@ export const createDepartment = async (req: Request, res: Response) => {
             'Name': department.name
         });
 
-        res.status(201).json({ success: true, department: updatedDepartment });
+        res.status(201).json({ success: true, department: mappedDepartment });
     } catch (error) {
         console.error('Error creating department:', error);
         res.status(500).json({ success: false, message: 'Failed to create department' });
@@ -95,7 +120,7 @@ export const renameDepartment = async (req: Request, res: Response) => {
         }
         const target = await prisma.department.findUnique({
             where: { id },
-            include: { Section: { select: { id: true } } }
+            include: { sections: { select: { sectionId: true } } }
         });
         if (!target) {
             return res.status(404).json({ success: false, message: 'Department not found' });
@@ -103,33 +128,42 @@ export const renameDepartment = async (req: Request, res: Response) => {
 
         // Handle section assignments if provided
         if (Array.isArray(sectionIds)) {
-            const currentSectionIds = target.Section.map(s => s.id);
+            const currentSectionIds = target.sections.map(s => s.sectionId);
             const toAdd = sectionIds.filter((sid: number) => !currentSectionIds.includes(sid));
             const toRemove = currentSectionIds.filter(sid => !sectionIds.includes(sid));
 
-            // Check for active employees in sections being removed
+            // Check for active employees in sections being removed from this specific department
             if (toRemove.length > 0) {
                 const activeInRemoved = await prisma.employee.count({
                     where: {
                         sectionId: { in: toRemove },
+                        departmentId: id,
                         employmentStatus: 'ACTIVE'
                     }
                 });
                 if (activeInRemoved > 0) {
                     return res.status(400).json({
                         success: false,
-                        message: `⚠️ Cannot remove section(s) with ${activeInRemoved} active employee(s). Please reassign employees first.`
+                        message: `⚠️ Cannot remove section(s) with ${activeInRemoved} active employee(s) in this department. Please reassign employees first.`
                     });
                 }
-                // Delete empty sections being removed
-                await prisma.section.deleteMany({ where: { id: { in: toRemove } } });
+                
+                // Delete relationships from the join table
+                await prisma.sectionDepartment.deleteMany({
+                    where: {
+                        departmentId: id,
+                        sectionId: { in: toRemove }
+                    }
+                });
             }
 
-            // Reassign sections being added to this department
+            // Create relationships in the join table
             if (toAdd.length > 0) {
-                await prisma.section.updateMany({
-                    where: { id: { in: toAdd } },
-                    data: { departmentId: id, updatedAt: new Date() }
+                await prisma.sectionDepartment.createMany({
+                    data: toAdd.map((sid: number) => ({
+                        departmentId: id,
+                        sectionId: sid
+                    }))
                 });
             }
         }
@@ -137,8 +171,24 @@ export const renameDepartment = async (req: Request, res: Response) => {
         const department = await prisma.department.update({
             where: { id },
             data: { name: trimmedName, updatedAt: new Date() },
-            include: { Section: { select: { id: true, name: true } } }
+            include: {
+                sections: {
+                    include: {
+                        section: {
+                            select: { id: true, name: true }
+                        }
+                    }
+                }
+            }
         });
+
+        const mappedDepartment = {
+            id: department.id,
+            name: department.name,
+            createdAt: department.createdAt,
+            updatedAt: department.updatedAt,
+            Section: department.sections.map(s => s.section)
+        };
 
         const changes = [];
         if (target.name !== trimmedName) {
@@ -154,7 +204,7 @@ export const renameDepartment = async (req: Request, res: Response) => {
             correlationId: req.correlationId
         }, changes);
 
-        res.json({ success: true, department });
+        res.json({ success: true, department: mappedDepartment });
     } catch (error) {
         console.error('Error renaming department:', error);
         res.status(500).json({ success: false, message: 'Failed to rename department' });

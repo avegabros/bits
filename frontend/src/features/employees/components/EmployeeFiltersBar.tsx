@@ -22,7 +22,7 @@ interface FilterState {
 interface EmployeeFiltersBarProps {
   filters: FilterState;
   departments: { id: number; name: string }[];
-  sections: { id: number; name: string; departmentId: number }[];
+  sections: { id: number; name: string; departments?: { departmentId: number }[] }[];
   branches: { id: number; name: string }[];
   shifts: { id: number; name: string }[];
   role?: 'admin' | 'hr' | 'manager';
@@ -33,7 +33,7 @@ export function EmployeeFiltersBar({ filters, departments, sections, branches, s
     if (!filters.selectedDept || filters.selectedDept === 'all') return sections;
     const dept = departments.find(d => d.name === filters.selectedDept);
     if (!dept) return [];
-    return sections.filter(s => s.departmentId === dept.id);
+    return sections.filter(s => s.departments?.some((d: any) => d.departmentId === dept.id));
   }, [sections, departments, filters.selectedDept]);
 
   return (

@@ -75,18 +75,28 @@ async function main() {
         })
         if (dept) {
             for (const sectionName of seed.sections) {
-                await prisma.section.upsert({
-                    where: {
-                        name_departmentId: {
+                let section = await prisma.section.findUnique({
+                    where: { name: sectionName }
+                })
+                if (!section) {
+                    section = await prisma.section.create({
+                        data: {
                             name: sectionName,
+                            updatedAt: new Date()
+                        }
+                    })
+                }
+                await prisma.sectionDepartment.upsert({
+                    where: {
+                        sectionId_departmentId: {
+                            sectionId: section.id,
                             departmentId: dept.id
                         }
                     },
                     update: {},
                     create: {
-                        name: sectionName,
-                        departmentId: dept.id,
-                        updatedAt: new Date()
+                        sectionId: section.id,
+                        departmentId: dept.id
                     }
                 })
                 console.log(`🧩 Section: ${sectionName} in ${seed.departmentName}`)
