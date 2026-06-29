@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Edit2, Fingerprint, PenLine, AlertTriangle, Trash2, Clock, CreditCard } from 'lucide-react'
 import { fmtHours, formatLate, fmtMins } from '../utils/attendance-formatters'
 import { AttendanceRecord } from '../types'
+import { getStatusBadges } from '../utils/attendance-logic'
 
 interface AttendanceMobileCardsProps {
   loading: boolean
@@ -79,17 +80,14 @@ export function AttendanceMobileCards({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-              <span className={`font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${
-                row.displayStatus === 'present'           ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
-                  : row.displayStatus === 'IN_PROGRESS'      ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
-                  : row.displayStatus === 'late'             ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
-                  : row.displayStatus === 'missing_checkout' ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
-                  : row.displayStatus === 'rest_day'         ? 'text-slate-400 bg-slate-400/10 border-slate-400/20'
-                  : row.displayStatus === '—'                ? 'text-slate-500 bg-slate-500/10 border-slate-500/20'
-                  : 'text-red-500 bg-red-500/10 border-red-500/20'
-              }`}>
-                {row.displayStatus === 'present' ? 'On Time' : row.displayStatus === 'IN_PROGRESS' ? 'In Progress' : row.displayStatus === 'missing_checkout' ? 'Missing Checkout' : row.displayStatus === 'rest_day' ? 'Rest Day' : row.displayStatus}
-              </span>
+              {getStatusBadges(row).map((badge, idx) => (
+                <span
+                  key={idx}
+                  className={`font-black text-[10px] uppercase px-3 py-1 rounded-full border whitespace-nowrap ${badge.className}`}
+                >
+                  {badge.text}
+                </span>
+              ))}
               {row.isEdited && (
                 <span 
                   title={row.notes || 'Manually adjusted'}

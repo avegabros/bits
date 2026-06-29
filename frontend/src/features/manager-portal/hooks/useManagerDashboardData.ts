@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAttendanceStream, AttendanceStreamPayload } from '@/features/attendance/hooks/useAttendanceStream';
+import { processAttendanceData } from '@/features/attendance/utils/attendance-logic';
 
 export interface LiveRecord {
     id: string;
@@ -137,35 +138,14 @@ export function useManagerDashboardData() {
             const todayPHTStr = phtStr(new Date());
             const weeklyAll: WeekDay[] = weekDates.map(({ day, date }) => {
                 const dateStr = phtStr(date);
+                if (dateStr > todayPHTStr) return { day, present: 0, late: 0, absent: 0 };
                 const dayAtts = weekAtts.filter(a => {
                     const recDate = a.date ? phtStr(new Date(a.date)) : '';
                     return recDate === dateStr;
                 });
-
-                const late = dayAtts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-                const onTime = dayAtts.filter(a => a.checkInTime && (a.lateMinutes ?? 0) === 0).length;
-                const totalCheckedIn = onTime + late;
-                const isDateHoliday = holidayDateSet.has(dateStr);
-                const eligibleCount = activeEmps.filter((e: any) => {
-                    if (!e.hireDate) return true;
-                    return phtStr(new Date(e.hireDate)) <= dateStr;
-                }).length;
-                const dayHoliday = holidayByDate.get(dateStr);
-                let absent: number;
-                if (dayHoliday) {
-                    const nonHolidayEmps = activeEmps.filter((e: any) => {
-                        if (e.hireDate && phtStr(new Date(e.hireDate)) > dateStr) return false;
-                        return !holidayApplies(dayHoliday, e.branchId);
-                    });
-                    const nonHolidayCheckedIn = dayAtts.filter(a => {
-                        const emp = a.employee || a.Employee || {};
-                        return !holidayApplies(dayHoliday, emp.branchId) && a.checkInTime;
-                    }).length;
-                    absent = dateStr <= todayPHTStr ? Math.max(0, nonHolidayEmps.length - nonHolidayCheckedIn) : 0;
-                } else {
-                    absent = dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0;
-                }
-                return { day, present: onTime, late, absent };
+                const dayHolidays = holidayByDate.get(dateStr) ? [holidayByDate.get(dateStr)!] : [];
+                const { stats: dayStats } = processAttendanceData(dayAtts, activeEmps, dateStr, dayHolidays);
+                return { day, present: dayStats.onTime, late: dayStats.late, absent: dayStats.absent };
             });
             const weekly = weeklyAll.filter(d => {
                 if (d.day !== 'Sun') return true;
@@ -173,16 +153,12 @@ export function useManagerDashboardData() {
             });
             setWeeklyData(weekly);
 
-            const todayLate = atts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-            const todayOnTime = atts.filter(a => a.checkInTime && !(a.lateMinutes > 0)).length;
-            const todayPresent = todayOnTime + todayLate;
-            setTotalPresent(todayOnTime);
-            setTotalLate(todayLate);
-            const todayEligible = activeEmps.filter((e: any) => {
-                if (!e.hireDate) return true;
-                return phtStr(new Date(e.hireDate)) <= todayPHTStr;
-            }).length;
-            const missingCount = Math.max(0, todayEligible - todayPresent);
+            // Use unified processAttendanceData for today's stats
+            const todayHolidayArr = todayHoliday ? [todayHoliday] : [];
+            const { stats: todayStats } = processAttendanceData(atts, activeEmps, todayStr, todayHolidayArr);
+            setTotalPresent(todayStats.onTime);
+            setTotalLate(todayStats.late);
+            setTotalAbsent(todayStats.absent);
             if (todayHoliday) {
                 const holidayAffected = activeEmps.filter((e: any) => {
                     if (e.hireDate && phtStr(new Date(e.hireDate)) > todayPHTStr) return false;
@@ -192,14 +168,8 @@ export function useManagerDashboardData() {
                     const emp = a.employee || a.Employee || {};
                     return holidayApplies(todayHoliday, emp.branchId) && a.checkInTime;
                 }).length;
-                const holidayMissing = Math.max(0, holidayAffected.length - holidayAffectedPresent);
-                const nonHolidayEligible = todayEligible - holidayAffected.length;
-                const nonHolidayPresent = todayPresent - holidayAffectedPresent;
-                const nonHolidayAbsent = Math.max(0, nonHolidayEligible - nonHolidayPresent);
-                setTotalAbsent(nonHolidayAbsent);
-                setTotalHoliday(holidayMissing);
+                setTotalHoliday(Math.max(0, holidayAffected.length - holidayAffectedPresent));
             } else {
-                setTotalAbsent(missingCount);
                 setTotalHoliday(0);
             }
 

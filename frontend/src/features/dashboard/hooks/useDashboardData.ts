@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAttendanceStream, AttendanceStreamPayload } from '@/features/attendance/hooks/useAttendanceStream';
 import { useDeviceStream, DeviceStatusPayload, DeviceConnectedPayload } from '@/features/devices/hooks/useDeviceStream';
+import { processAttendanceData } from '@/features/attendance/utils/attendance-logic';
 
 interface Branch { id: number; name: string; address?: string; }
 interface Device { id: number; name: string; ip: string; port: number; location?: string; isActive: boolean; syncEnabled: boolean; }
@@ -189,39 +190,14 @@ export function useDashboardData(role: 'admin' | 'hr') {
             const todayPHTStr = phtStr(new Date());
             const weeklyAll: WeekDay[] = weekDates.map(({ day, date }) => {
                 const dateStr = phtStr(date);
+                if (dateStr > todayPHTStr) return { day, present: 0, late: 0, absent: 0 };
                 const dayAtts = weekAtts.filter(a => {
                     const recDate = a.date ? phtStr(new Date(a.date)) : '';
                     return recDate === dateStr;
                 });
-
-                const late = dayAtts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-                // On Time = checked in AND not late (mutually exclusive with Late)
-                const onTime = dayAtts.filter(a => a.checkInTime && (a.lateMinutes ?? 0) === 0).length;
-                const totalCheckedIn = onTime + late;
-                const isDateHoliday = holidayDateSet.has(dateStr);
-                // Only count employees whose hireDate is on or before this day
-                const eligibleCount = activeEmps.filter((e: RawEmployee) => {
-                    if (!e.hireDate) return true; // no hireDate = always eligible
-                    return phtStr(new Date(e.hireDate)) <= dateStr;
-                }).length;
-                // Branch-aware holiday check: only exempt employees whose branch matches
-                const dayHoliday = holidayByDate.get(dateStr);
-                let absent: number;
-                if (dayHoliday) {
-                    // Count employees NOT affected by the holiday as potentially absent
-                    const nonHolidayEmps = activeEmps.filter((e: RawEmployee) => {
-                        if (e.hireDate && phtStr(new Date(e.hireDate)) > dateStr) return false;
-                        return !holidayApplies(dayHoliday, e.branchId);
-                    });
-                    const nonHolidayCheckedIn = dayAtts.filter(a => {
-                        const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
-                        return !holidayApplies(dayHoliday, emp.branchId) && a.checkInTime;
-                    }).length;
-                    absent = dateStr <= todayPHTStr ? Math.max(0, nonHolidayEmps.length - nonHolidayCheckedIn) : 0;
-                } else {
-                    absent = dateStr <= todayPHTStr ? Math.max(0, eligibleCount - totalCheckedIn) : 0;
-                }
-                return { day, present: onTime, late, absent };
+                const dayHolidays = holidayByDate.get(dateStr) ? [holidayByDate.get(dateStr)!] : [];
+                const { stats: dayStats } = processAttendanceData(dayAtts, activeEmps, dateStr, dayHolidays);
+                return { day, present: dayStats.onTime, late: dayStats.late, absent: dayStats.absent };
             });
             // Always show Mon–Sat; only show Sun if there is attendance data
             const weekly = weeklyAll.filter(d => {
@@ -252,20 +228,14 @@ export function useDashboardData(role: 'admin' | 'hr') {
             });
             setBranchPresence(bPresence);
 
-            const todayLate = atts.filter(a => a.checkInTime && a.lateMinutes > 0).length;
-            // On Time = checked in AND not late (mutually exclusive with Late)
-            const todayOnTime = atts.filter(a => a.checkInTime && !(a.lateMinutes > 0)).length;
-            const todayPresent = todayOnTime + todayLate; // total who checked in, used for absent calc
-            setTotalPresent(todayOnTime);
-            setTotalLate(todayLate);
-            // Only count employees whose hireDate is on or before today for absent/holiday calc
-            const todayEligible = activeEmps.filter((e: RawEmployee) => {
-                if (!e.hireDate) return true;
-                return phtStr(new Date(e.hireDate)) <= todayPHTStr;
-            }).length;
-            const missingCount = Math.max(0, todayEligible - todayPresent);
+            // Use unified processAttendanceData for today's stats
+            const todayHolidayArr = todayHoliday ? [todayHoliday] : [];
+            const { stats: todayStats } = processAttendanceData(atts, activeEmps, todayStr, todayHolidayArr);
+            setTotalPresent(todayStats.onTime);
+            setTotalLate(todayStats.late);
+            setTotalAbsent(todayStats.absent);
             if (todayHoliday) {
-                // Branch-aware: count how many employees are affected by today's holiday
+                // Count holiday-affected employees who didn't check in
                 const holidayAffected = activeEmps.filter((e: RawEmployee) => {
                     if (e.hireDate && phtStr(new Date(e.hireDate)) > todayPHTStr) return false;
                     return holidayApplies(todayHoliday, e.branchId);
@@ -274,15 +244,8 @@ export function useDashboardData(role: 'admin' | 'hr') {
                     const emp = (a.employee || a.Employee || {}) as Partial<RawEmployee>;
                     return holidayApplies(todayHoliday, emp.branchId) && a.checkInTime;
                 }).length;
-                const holidayMissing = Math.max(0, holidayAffected.length - holidayAffectedPresent);
-                // Non-holiday employees are absent normally
-                const nonHolidayEligible = todayEligible - holidayAffected.length;
-                const nonHolidayPresent = todayPresent - holidayAffectedPresent;
-                const nonHolidayAbsent = Math.max(0, nonHolidayEligible - nonHolidayPresent);
-                setTotalAbsent(nonHolidayAbsent);
-                setTotalHoliday(holidayMissing);
+                setTotalHoliday(Math.max(0, holidayAffected.length - holidayAffectedPresent));
             } else {
-                setTotalAbsent(missingCount);
                 setTotalHoliday(0);
             }
 

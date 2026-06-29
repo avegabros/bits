@@ -8,6 +8,7 @@ import { useTableSort } from '@/hooks/useTableSort'
 import { useAttendanceStream, AttendanceStreamPayload } from '@/features/attendance/hooks/useAttendanceStream'
 import { fmtHours, formatLate, fmtMins, toTimeInput } from '@/features/attendance/utils/attendance-formatters'
 import { AttendanceRecord, AttendanceConflict } from '@/features/attendance/types'
+import { processAttendanceData } from '@/features/attendance/utils/attendance-logic'
 import * as XLSX from 'xlsx'
 
 interface RawAttendanceLog {
@@ -66,6 +67,7 @@ interface RawEmployee {
   Shift?: { name?: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string }
   EmployeeShift?: { shift: { id: number; name: string; shiftCode: string; isNightShift: boolean; startTime?: string; endTime?: string; workDays?: string } }[]
   profilePicture?: string | null
+  hireDate?: string
 }
 
 interface EditRequestBody {
@@ -164,6 +166,8 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     { value: 'all', label: 'All Status' },
     { value: 'present', label: 'On Time' },
     { value: 'late', label: 'Late' },
+    { value: 'undertime', label: 'Undertime' },
+    { value: 'overtime', label: 'Overtime' },
     { value: 'absent', label: 'Absent' },
     { value: 'rest_day', label: 'Rest Day' },
     { value: 'incomplete', label: 'Missing Checkout' },
@@ -177,7 +181,16 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
     if (branchQuery) setBranchFilter(branchQuery)
     if (statusQuery) {
       const s = statusQuery.toLowerCase()
-      setStatusFilter(s === 'present' ? 'present' : s === 'late' ? 'late' : s === 'absent' ? 'absent' : 'all')
+      setStatusFilter(
+        s === 'present' ? 'present'
+        : s === 'late' ? 'late'
+        : s === 'absent' ? 'absent'
+        : s === 'undertime' ? 'undertime'
+        : s === 'overtime' ? 'overtime'
+        : s === 'incomplete' ? 'incomplete'
+        : s === 'rest_day' ? 'rest_day'
+        : 'all'
+      )
     }
   }, [searchParams])
 
@@ -290,21 +303,14 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         }
       } catch { /* ignore holiday fetch errors */ }
 
-      // Helper: does a holiday apply to a given employee's branchId?
-      const holidayAppliesTo = (holiday: RawHoliday, branchId?: number | null) => {
-        if (!holiday?.branches || holiday.branches.length === 0) return true // National
-        if (!branchId) return true // No branch = treat as affected
-        return holiday.branches.some(b => b.branchId === branchId)
-      }
-
       setIsHolidayDate(dateIsHoliday)
 
+      // Always fetch all records for the selected date to compute correct absent rows
       const params = new URLSearchParams({
         startDate: selectedDate,
         endDate: selectedDate,
         limit: '10000',
       })
-      if (statusFilter !== 'all') params.append('status', statusFilter)
 
       const res = await fetch(`/api/attendance?${params}`, { 
         credentials: 'include', 
@@ -316,74 +322,6 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
 
       const data = await res.json()
       if (data.success) {
-        const userRecords = data.data.filter((log: RawAttendanceLog) => {
-          const emp = log.employee
-          return !emp || emp.role === 'USER' || !emp.role
-        })
-
-        const mapped: AttendanceRecord[] = userRecords.map((log: RawAttendanceLog) => {
-          const emp = log.employee
-          const isPending = log.isPending === true
-          const isPendingManualCreation = isPending && log.notes?.includes('[Pending] Manual creation');
-
-          const checkIn = log.checkInTime ? new Date(log.checkInTime) : new Date()
-          const checkOut = log.checkOutTime ? new Date(log.checkOutTime) : null
-          // OT-only records (no shift assigned, but has approved overtime) should not display
-          // regular hours — all time worked belongs to overtime, not a regular shift.
-          const isOtOnlyRecord = !log.shift && !log.shiftId && !log.shiftCode && (log.approvedOts && log.approvedOts.length > 0)
-          const totalHours: number = (isPendingManualCreation || isOtOnlyRecord) ? 0 : (log.totalHours ?? (checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0))
-          const lateMinutes: number = isPendingManualCreation ? 0 : (log.lateMinutes ?? 0)
-          const overtimeMinutes: number = isPendingManualCreation ? 0 : (log.overtimeMinutes ?? 0)
-          const undertimeMinutes: number = isPendingManualCreation ? 0 : (log.undertimeMinutes ?? 0)
-          const shiftCode: string | null = log.shift?.shiftCode ?? log.shiftCode ?? emp?.Shift?.shiftCode ?? null
-          const shiftId: number | null = log.shift?.id ?? log.shiftId ?? null
-          const shiftName: string | null = log.shift?.name ?? null
-          const isAnomaly: boolean = isPendingManualCreation ? false : (log.isAnomaly ?? false)
-          const isEarlyOut: boolean = isPendingManualCreation ? false : (log.isEarlyOut ?? false)
-          const isShiftActive: boolean = isPendingManualCreation ? false : (log.isShiftActive ?? false)
-          const gracePeriodApplied: boolean = log.gracePeriodApplied ?? false
-          let computedStatus = isEarlyOut ? 'early-out' : isAnomaly ? 'anomaly' : lateMinutes > 0 ? 'late' : undertimeMinutes > 0 ? 'undertime' : (log.status || 'present')
-          const hasMissingCheckout = log.checkOutTime === null && log.status === 'incomplete';
-
-          let displayStatus = isShiftActive ? 'IN_PROGRESS' : hasMissingCheckout ? 'missing_checkout' : computedStatus
-
-          if (isPendingManualCreation) {
-            computedStatus = 'absent'
-            displayStatus = 'absent'
-          }
-
-          return {
-            id: log.id,
-            employeeId: log.employeeId,
-            employeeName: emp?.firstName ? `${emp.firstName}${emp.middleName ? ` ${emp.middleName[0]}.` : ''} ${emp.lastName}${emp.suffix ? ` ${emp.suffix}` : ''}` : 'Unknown',
-            profilePicture: emp?.profilePicture,
-            department: emp?.Department?.name || 'General',
-            sectionName: emp?.Section?.name || '—',
-            branchName: emp?.Branch?.name || '—',
-            date: new Date(log.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
-            checkIn: isPendingManualCreation ? '—' : (log.checkInTime ? checkIn.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
-            checkOut: isPendingManualCreation ? '—' : (checkOut ? checkOut.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
-            status: computedStatus, 
-            displayStatus, lateMinutes, totalHours, overtimeMinutes, undertimeMinutes,
-            shiftId,
-            shiftCode,
-            shiftName,
-            shiftStartTime: log.shift?.startTime ?? emp?.Shift?.startTime,
-            shiftEndTime: log.shift?.endTime ?? emp?.Shift?.endTime,
-            isNightShift: log.shift?.isNightShift ?? emp?.Shift?.isNightShift ?? false,
-            isAnomaly, isEarlyOut, isShiftActive, gracePeriodApplied,
-            notes: log.notes || null,
-            isEarlyPunch: log.isEarlyPunch ?? false,
-            isMissingCheckout: log.isMissingCheckout ?? false,
-            checkInDevice: log.checkInDeviceName ?? null,
-            checkOutDevice: log.checkOutDeviceName ?? null,
-            checkoutSource: log.checkoutSource ?? null,
-            isEdited: log.isEdited ?? false,
-            isPending,
-            approvedOts: log.approvedOts,
-          }
-        })
-
         // Fetch all active employees to inject absent rows
         let allEmployees: RawEmployee[] = []
         try {
@@ -394,149 +332,86 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           )
         } catch { /* ignore */ }
 
-        // Build employee → company lookup for company filtering on attendance records
-        const companyByEmployeeId = new Map<number, string | null>()
-        for (const e of allEmployees) {
-          companyByEmployeeId.set(e.id, e.Company?.name ?? null)
-        }
+        // Filter out manager or admin logs (only keep USER logs)
+        const userRecords = data.data.filter((log: RawAttendanceLog) => {
+          const emp = log.employee
+          return !emp || emp.role === 'USER' || !emp.role
+        })
 
-        // Stamp companyName onto each mapped attendance record
-        for (const r of mapped) {
-          (r as any).companyName = companyByEmployeeId.get(r.employeeId) ?? null
-        }
+        // Call the unified data processing utility
+        const { records: processedRecords } = processAttendanceData(
+          userRecords,
+          allEmployees,
+          selectedDate,
+          matchedHoliday ? [matchedHoliday] : []
+        )
 
-        // Pending manual creations should NOT count as "present" for absent-row injection.
-        // Records with UPDATE/DELETE adjustments (isPending + real status) still count as present.
-        // Only brand-new unapproved creation placeholders (isPending + notes flag) are excluded.
-        const isPendingManualCreation = (r: AttendanceRecord) =>
-          r.isPending === true && (r.notes ?? '').includes('[Pending] Manual creation')
+        // Apply client-side filters (except status and shift for overall stats)
+        let filtered = processedRecords;
 
-        // Track which specific shifts have attendance records per employee.
-        // This ensures multi-shift employees only skip absent rows for shifts
-        // that already have records (not ALL shifts if they have ANY record).
-        const presentShiftsByEmployee = new Map<number, Set<number | null>>()
-        for (const r of mapped) {
-          if (isPendingManualCreation(r)) continue
-          if (!presentShiftsByEmployee.has(r.employeeId)) {
-            presentShiftsByEmployee.set(r.employeeId, new Set())
-          }
-          presentShiftsByEmployee.get(r.employeeId)!.add(r.shiftId)
-        }
-        // Also keep a simple "has any record" set for employees without multi-shift
-        const presentIds = new Set(mapped.filter(r => !isPendingManualCreation(r)).map(r => r.employeeId))
-
-        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
-        const isFutureDate = selectedDate > todayStr
-
-        // Helper: determine if the selected date is a working day for a given employee
-        const selectedDayName = new Date(selectedDate + 'T00:00:00Z')
-          .toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
-
-        /** Check if a specific shift's workDays includes the selected day */
-        const isWorkDayForShift = (workDays?: string): boolean => {
-          if (workDays) {
-            try {
-              const wDays = typeof workDays === 'string' ? JSON.parse(workDays) : workDays
-              if (Array.isArray(wDays)) return wDays.includes(selectedDayName)
-            } catch { /* fallback to default */ }
-          }
-          // Default: Mon-Fri are working days
-          return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(selectedDayName)
-        }
-
-        const isWorkingDayForEmployee = (emp: RawEmployee): boolean => {
-          // Check all assigned shifts via EmployeeShift junction table
-          if (emp.EmployeeShift && emp.EmployeeShift.length > 0) {
-            return emp.EmployeeShift.some(es => isWorkDayForShift(es.shift.workDays))
-          }
-          // Fallback to legacy primary shift
-          return isWorkDayForShift(emp.Shift?.workDays)
-        }
-
-        // Build absent/rest-day rows — one per assigned shift so employees
-        // appear in ALL their shift tabs, not just the primary.
-        const absentRows: AttendanceRecord[] = isFutureDate
-          ? []
-          : allEmployees
-            .filter((e: RawEmployee) => {
-              if (matchedHoliday && holidayAppliesTo(matchedHoliday, e.branchId)) return false
-              return true
-            })
-            .flatMap((e: RawEmployee) => {
-              const employeePresentShifts = presentShiftsByEmployee.get(e.id)
-
-              // Get all assigned shifts, falling back to legacy Shift
-              const shifts = (e.EmployeeShift && e.EmployeeShift.length > 0)
-                ? e.EmployeeShift.map(es => es.shift)
-                : (e.Shift ? [e.Shift] : [{ id: null as number | null, name: null as string | null, shiftCode: null as string | null, isNightShift: false, startTime: undefined as string | undefined, endTime: undefined as string | undefined, workDays: undefined as string | undefined }])
-
-              return shifts
-                .filter(shift => {
-                  // Skip this shift if the employee already has an attendance record for it
-                  const shiftId = (shift as any).id ?? null
-                  if (employeePresentShifts?.has(shiftId)) return false
-                  // For employees without EmployeeShift, skip entirely if they have any record
-                  if (!(e.EmployeeShift && e.EmployeeShift.length > 0) && presentIds.has(e.id)) return false
-                  return true
-                })
-                .map((shift, idx) => {
-                  const isWorking = isWorkDayForShift(shift.workDays)
-                  const rowStatus = isWorking ? 'absent' : 'rest_day'
-                  return {
-                    id: `absent-${e.id}${idx > 0 ? `-s${idx}` : ''}`,
-                    employeeId: e.id,
-                    employeeName: `${e.firstName} ${e.lastName}`,
-                    profilePicture: e.profilePicture,
-                    department: e.Department?.name || 'General',
-                    sectionName: e.Section?.name || '—',
-                    branchName: e.Branch?.name || '—',
-                    companyName: e.Company?.name ?? null,
-                    date: selectedDate,
-                    checkIn: '—', checkOut: '—', status: rowStatus, displayStatus: rowStatus,
-                    lateMinutes: 0, totalHours: 0, overtimeMinutes: 0, undertimeMinutes: 0,
-                    shiftId: null,
-                    shiftCode: shift.shiftCode ?? null,
-                    shiftName: shift.name ?? null,
-                    shiftStartTime: shift.startTime,
-                    shiftEndTime: shift.endTime,
-                    isNightShift: shift.isNightShift ?? false,
-                    isAnomaly: false, isEarlyOut: false, isShiftActive: false, gracePeriodApplied: false,
-                    isEarlyPunch: false, isMissingCheckout: false,
-                  }
-                })
-            })
-
-        // All mapped records (including pending manual creations) go into the table so the PR badge
-        // is visible — consistent with how UPDATE/DELETE adjustment records are displayed.
-        let full = (statusFilter === 'all' || statusFilter === 'absent' || statusFilter === 'rest_day')
-          ? [...mapped, ...absentRows]
-          : [...mapped]
-
-        // When filtering by 'absent' or 'rest_day', exclude the other type
-        if (statusFilter === 'absent') full = full.filter(r => r.status !== 'rest_day')
-        if (statusFilter === 'rest_day') full = full.filter(r => r.status !== 'absent' && r.status !== 'present' && r.status !== 'late' && r.status !== 'incomplete')
-
-        // Apply client-side filters
         if (debouncedSearch) {
           const q = debouncedSearch.toLowerCase()
-          full = full.filter(r => r.employeeName.toLowerCase().includes(q) || (r.shiftCode ?? '').toLowerCase().includes(q) || (r.shiftName ?? '').toLowerCase().includes(q))
+          filtered = filtered.filter(r => r.employeeName.toLowerCase().includes(q) || (r.shiftCode ?? '').toLowerCase().includes(q) || (r.shiftName ?? '').toLowerCase().includes(q))
         }
-        // Company filter: use direct companyName — null-company employees excluded from specific tabs
-        if (companyFilter !== 'All Companies') {
-          full = full.filter(r => (r as any).companyName === companyFilter)
-        }
-        if (branchFilter !== 'All Branches') full = full.filter(r => r.branchName === branchFilter)
-        if (deptFilter !== allDeptLabel) full = full.filter(r => r.department === deptFilter)
-        if (sectionFilter !== 'All Sections') full = full.filter(r => r.sectionName === sectionFilter)
 
-        // Extract available shifts from the filtered (by department/branch/etc) list before applying shiftFilter.
-        // NOTE: 'OT Approved' is intentionally excluded from the tab list — clicking the OT Approved badge
-        // in the Shift column redirects directly to Manage OT / Live Monitoring instead of filtering here.
+        if (companyFilter !== 'All Companies') {
+          filtered = filtered.filter(r => (r as any).companyName === companyFilter)
+        }
+        if (branchFilter !== 'All Branches') filtered = filtered.filter(r => r.branchName === branchFilter)
+        if (deptFilter !== allDeptLabel) filtered = filtered.filter(r => r.department === deptFilter)
+        if (sectionFilter !== 'All Sections') filtered = filtered.filter(r => r.sectionName === sectionFilter)
+
+        // --- Calculate Stats on the filtered subset (before status and shift filters) ---
+        const statsRecords = filtered.filter(r => r.isPending !== true || !(r.notes ?? '').includes('[Pending] Manual creation'))
+        const empGroups = new Map<number, typeof statsRecords>()
+        statsRecords.forEach(r => {
+          const list = empGroups.get(r.employeeId) || []
+          list.push(r)
+          empGroups.set(r.employeeId, list)
+        })
+
+        let onTime = 0
+        let late = 0
+        let absent = 0
+        let restDay = 0
+        let incomplete = 0
+
+        empGroups.forEach((recs) => {
+          const checkedIn = recs.filter(r => r.status !== 'absent' && r.status !== 'rest_day')
+          if (checkedIn.length > 0) {
+            const hasLate = checkedIn.some(r => r.lateMinutes > 0)
+            if (hasLate) {
+              late++
+            } else {
+              onTime++
+            }
+            if (checkedIn.some(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout')) {
+              incomplete++
+            }
+          } else {
+            const isWorking = recs.some(r => r.status === 'absent')
+            if (isWorking) {
+              absent++
+            } else {
+              restDay++
+            }
+          }
+        })
+
+        const total = onTime + late + absent + restDay
+        const avgHours = statsRecords.length > 0
+          ? (statsRecords.filter(r => r.totalHours > 0).reduce((s, r) => s + r.totalHours, 0) /
+            (statsRecords.filter(r => r.totalHours > 0).length || 1)).toFixed(1) : '0'
+        const totalOT = (statsRecords.reduce((s, r) => s + (r.overtimeMinutes ?? 0), 0) / 60).toFixed(1)
+        const totalUT = (statsRecords.reduce((s, r) => s + (r.undertimeMinutes ?? 0), 0) / 60).toFixed(1)
+
+        setStats({ onTime, late, absent, restDay, incomplete, total, avgHours, totalOT, totalUT })
+
+        // Extract available shifts from the filtered list (before shiftFilter is applied)
         const uniqueShifts = new Set<string>()
         const shiftStartTimes = new Map<string, string>()
         
-        for (const r of full) {
-          // OT-only records (no shift, but has approved OT) are grouped under 'No Shift' for tab purposes
+        for (const r of filtered) {
           const shiftKey = r.shiftName ?? r.shiftCode ?? 'No Shift'
           uniqueShifts.add(shiftKey)
           if (!shiftStartTimes.has(shiftKey) && r.shiftStartTime) {
@@ -554,7 +429,30 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
         
         setAvailableShifts(['All Shifts', ...sortedShifts])
 
-        if (shiftFilter !== 'All Shifts') full = full.filter(r => (r.shiftName ?? r.shiftCode ?? 'No Shift') === shiftFilter)
+        // Apply client-side shift filter
+        let full = filtered
+        if (shiftFilter !== 'All Shifts') {
+          full = full.filter(r => (r.shiftName ?? r.shiftCode ?? 'No Shift') === shiftFilter)
+        }
+
+        // Apply client-side status filter
+        if (statusFilter !== 'all') {
+          if (statusFilter === 'present') {
+            full = full.filter(r => r.status !== 'absent' && r.status !== 'rest_day' && r.status !== 'holiday' && r.lateMinutes === 0)
+          } else if (statusFilter === 'late') {
+            full = full.filter(r => r.status !== 'absent' && r.status !== 'rest_day' && r.status !== 'holiday' && r.lateMinutes > 0)
+          } else if (statusFilter === 'undertime') {
+            full = full.filter(r => r.undertimeMinutes > 0)
+          } else if (statusFilter === 'overtime') {
+            full = full.filter(r => r.overtimeMinutes > 0)
+          } else if (statusFilter === 'absent') {
+            full = full.filter(r => r.status === 'absent')
+          } else if (statusFilter === 'incomplete') {
+            full = full.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout')
+          } else if (statusFilter === 'rest_day') {
+            full = full.filter(r => r.status === 'rest_day')
+          }
+        }
 
         // --- MERGE MULTIPLE SHIFTS FOR "ALL SHIFTS" VIEW ---
         if (shiftFilter === 'All Shifts') {
@@ -576,13 +474,15 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
                 return timeA.localeCompare(timeB);
               });
               const primary = sortedGroup[0]
+              
+              const hasLate = sortedGroup.some(g => g.status === 'late')
               mergedFull.push({
                 ...primary,
                 id: `merged-${primary.employeeId}-${primary.date}`,
                 isMerged: true,
                 subRecords: sortedGroup,
-                status: 'Multiple',
-                displayStatus: 'Multiple',
+                status: hasLate ? 'late' : 'present',
+                displayStatus: hasLate ? 'late' : 'present',
                 shiftCode: sortedGroup.map(g => g.shiftCode).filter(Boolean).join(', '),
                 totalHours: group.reduce((sum, r) => sum + r.totalHours, 0),
                 lateMinutes: group.reduce((sum, r) => sum + r.lateMinutes, 0),
@@ -594,27 +494,9 @@ export function useAttendanceDashboard(role: 'admin' | 'hr' | 'manager') {
           }
           full = mergedFull
         }
-        // ----------------------------------------------------
 
         setRecords(full)
         setTotalPages(Math.max(1, Math.ceil(full.length / ROW_PER_PAGE)))
-
-        // Stats: exclude pending manual creation records — they are unapproved and must not
-        // inflate or deflate any stat counter (present, late, absent, hours, etc.).
-        const statsRecords = full.filter(r => !isPendingManualCreation(r))
-        setStats({
-          onTime: statsRecords.filter(r => r.status === 'present' || r.status === 'IN_PROGRESS').length,
-          late: statsRecords.filter(r => r.status === 'late').length,
-          absent: statsRecords.filter(r => r.status === 'absent').length,
-          restDay: statsRecords.filter(r => r.status === 'rest_day').length,
-          incomplete: statsRecords.filter(r => r.status === 'incomplete' || r.displayStatus === 'missing_checkout').length,
-          total: statsRecords.length,
-          avgHours: statsRecords.length > 0
-            ? (statsRecords.filter(r => r.totalHours > 0).reduce((s, r) => s + r.totalHours, 0) /
-              (statsRecords.filter(r => r.totalHours > 0).length || 1)).toFixed(1) : '0',
-          totalOT: (statsRecords.reduce((s, r) => s + (r.overtimeMinutes ?? 0), 0) / 60).toFixed(1),
-          totalUT: (statsRecords.reduce((s, r) => s + (r.undertimeMinutes ?? 0), 0) / 60).toFixed(1),
-        })
       } else {
         setError(data.message || 'Failed to fetch attendance')
       }

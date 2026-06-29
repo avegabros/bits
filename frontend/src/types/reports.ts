@@ -48,6 +48,7 @@ export type ReportRow = {
   employeeNumber: string | null;
   zkId: number | null;
   department: string;
+  section: string;
   branch: string;
   totalDays: number;
   present: number;
