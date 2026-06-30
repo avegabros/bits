@@ -4,9 +4,12 @@ import { syncScheduler } from './syncScheduler';
 import { timeSyncScheduler } from './timeSyncScheduler';
 import { healthCheckScheduler } from './healthCheckScheduler';
 import { logBufferMaintenanceScheduler } from './logBufferMaintenanceScheduler';
+import { backupScheduler } from './backupScheduler';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate } from '../../shared/lib/auditHelpers';
 import { z } from 'zod';
+import * as fs from 'fs';
+import * as path from 'path';
 import deviceEmitter from '../../shared/events/deviceEmitter';
 import { SYNC_LIMITS, USER_LIMITS } from './system.constants';
 
@@ -49,6 +52,16 @@ const updateSyncConfigSchema = z.object({
     logBufferMaintenanceEnabled: z.boolean().optional(),
     logBufferMaintenanceSchedule: z.enum(['daily', 'weekly', 'monthly']).optional(),
     logBufferMaintenanceHour: z.number().int().min(SYNC_LIMITS.MAINTENANCE_HOUR_MIN).max(SYNC_LIMITS.MAINTENANCE_HOUR_MAX, `Hour must be ${SYNC_LIMITS.MAINTENANCE_HOUR_MIN}-${SYNC_LIMITS.MAINTENANCE_HOUR_MAX}`).optional(),
+    dbBackupEnabled: z.boolean().optional(),
+    dbBackupCron: z.string().refine(val => {
+        try {
+            return require('node-cron').validate(val);
+        } catch {
+            return false;
+        }
+    }, { message: "Invalid cron expression" }).optional(),
+    dbBackupRetention: z.number().int().min(1).max(12).optional(),
+    dbBackupCompress: z.boolean().optional(),
 });
 
 // ─── GET /api/system/validation-limits ──────────────────────────────────────────
@@ -102,6 +115,13 @@ export const getSyncConfig = async (req: Request, res: Response) => {
                 logBufferMaintenanceEnabled: true,
                 logBufferMaintenanceSchedule: true,
                 logBufferMaintenanceHour: true,
+                dbBackupEnabled: true,
+                dbBackupCron: true,
+                dbBackupRetention: true,
+                dbBackupCompress: true,
+                lastBackupAt: true,
+                lastBackupStatus: true,
+                lastBackupError: true,
             }
         });
         if (!config) {
@@ -163,6 +183,10 @@ export const updateSyncConfig = async (req: Request, res: Response) => {
             { key: 'logBufferMaintenanceEnabled', label: 'Log buffer maintenance' },
             { key: 'logBufferMaintenanceSchedule', label: 'Log buffer maintenance schedule' },
             { key: 'logBufferMaintenanceHour', label: 'Log buffer maintenance hour' },
+            { key: 'dbBackupEnabled', label: 'Database backups' },
+            { key: 'dbBackupCron', label: 'Database backup cron' },
+            { key: 'dbBackupRetention', label: 'Database backup retention' },
+            { key: 'dbBackupCompress', label: 'Database backup compression' },
         ];
 
         for (const field of trackableFields) {
@@ -195,6 +219,7 @@ export const updateSyncConfig = async (req: Request, res: Response) => {
         timeSyncScheduler.reloadConfigAndReset().catch(err => console.error('[System] Error resetting time sync scheduler timer:', err));
         healthCheckScheduler.reloadConfigAndReset().catch(err => console.error('[System] Error resetting health check scheduler timer:', err));
         logBufferMaintenanceScheduler.reloadConfigAndReset().catch(err => console.error('[System] Error resetting log buffer maintenance scheduler:', err));
+        backupScheduler.reloadConfigAndReset().catch(err => console.error('[System] Error resetting database backup scheduler:', err));
 
         deviceEmitter.emit('config-update');
 
@@ -382,5 +407,86 @@ export const triggerManualLogBufferClear = async (req: Request, res: Response) =
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error('[System] Error triggering manual log buffer clear:', error);
         res.status(500).json({ success: false, message: 'Failed to trigger log buffer clear', error: errMsg });
+    }
+};
+
+// ─── GET /api/system/backups ───────────────────────────────────────────────────
+export const getBackupsList = async (req: Request, res: Response) => {
+    try {
+        const backupDir = path.resolve(process.cwd(), process.env.BACKUP_PATH || 'backups');
+        if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+        }
+
+        const files = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith('backup_') && (f.endsWith('.sql.gz') || f.endsWith('.sql')))
+            .map(f => {
+                const filePath = path.join(backupDir, f);
+                const stats = fs.statSync(filePath);
+                return {
+                    filename: f,
+                    size: stats.size,
+                    createdAt: stats.birthtime || stats.mtime
+                };
+            })
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Newest first
+
+        // Query database size
+        const [{ size }] = await prisma.$queryRawUnsafe<{ size: string }[]>(
+            `SELECT pg_database_size(current_database())::text as size`
+        );
+
+        res.json({
+            success: true,
+            backups: files,
+            dbSize: parseInt(size, 10)
+        });
+    } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[System] Error fetching backups list:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch backups list', error: errMsg });
+    }
+};
+
+// ─── GET /api/system/backups/download/:filename ────────────────────────────────
+export const downloadBackup = async (req: Request, res: Response) => {
+    try {
+        const filename = req.params.filename as string;
+        // Prevent directory traversal
+        const safeRegex = /^backup_[a-zA-Z0-9-]+\.sql(?:\.gz)?$/;
+        if (!safeRegex.test(filename)) {
+            return res.status(400).json({ success: false, message: 'Invalid filename' });
+        }
+
+        const backupDir = path.resolve(process.cwd(), process.env.BACKUP_PATH || 'backups');
+        const filePath = path.join(backupDir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, message: 'Backup file not found' });
+        }
+
+        res.download(filePath, filename);
+    } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[System] Error downloading backup:', error);
+        res.status(500).json({ success: false, message: 'Failed to download backup', error: errMsg });
+    }
+};
+
+// ─── POST /api/system/backups/trigger ──────────────────────────────────────────
+export const triggerManualBackup = async (req: Request, res: Response) => {
+    try {
+        console.log(`[System] Manual database backup triggered by user ${req.user?.employeeId || 'unknown'}`);
+        const result = await backupScheduler.triggerNow(req.user?.employeeId);
+
+        if (result.success) {
+            res.json({ success: true, message: result.message, filename: result.filename });
+        } else {
+            res.status(500).json({ success: false, message: result.message });
+        }
+    } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[System] Error triggering manual database backup:', error);
+        res.status(500).json({ success: false, message: 'Failed to trigger database backup', error: errMsg });
     }
 };

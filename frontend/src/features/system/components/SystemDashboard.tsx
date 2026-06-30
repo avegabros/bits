@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 import { SyncStatusCard } from './SyncStatusCard';
 import { SyncConfigForm } from './SyncConfigForm';
+import { DatabaseBackupManagerCard } from './DatabaseBackupManagerCard';
 import { DeviceSyncTable } from './DeviceSyncTable';
 import {
     useDeviceStream,
@@ -121,14 +122,17 @@ export function SystemDashboard() {
             />
 
             {/* ── Section 2–4: Configuration ────────────────────────────── */}
-            <SyncConfigForm />
+            <SyncConfigForm>
+                {/* ── Section 4.5: Database Backup Management ────────────────── */}
+                <DatabaseBackupManagerCard />
 
-            {/* ── Section 5: Device Table ───────────────────────────────── */}
-            <DeviceSyncTable
-                devices={devices}
-                loading={devicesLoading}
-                onDevicesChange={setDevices}
-            />
+                {/* ── Section 5: Device Table ───────────────────────────────── */}
+                <DeviceSyncTable
+                    devices={devices}
+                    loading={devicesLoading}
+                    onDevicesChange={setDevices}
+                />
+            </SyncConfigForm>
         </div>
     );
 }

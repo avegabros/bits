@@ -129,6 +129,10 @@ async function main() {
             nightShiftBufferMinutes: 120,
             autoTimeSyncEnabled: true,
             timeSyncIntervalSec: 3600,
+            dbBackupEnabled: false,
+            dbBackupCron: "0 0 * * *",
+            dbBackupRetention: 7,
+            dbBackupCompress: true,
             updatedAt: new Date()
         }
     })

@@ -4,6 +4,7 @@ import { syncScheduler } from '../../modules/system/syncScheduler';
 import { timeSyncScheduler } from '../../modules/system/timeSyncScheduler';
 import { healthCheckScheduler } from '../../modules/system/healthCheckScheduler';
 import { logBufferMaintenanceScheduler } from '../../modules/system/logBufferMaintenanceScheduler';
+import { backupScheduler } from '../../modules/system/backupScheduler';
 import { autoCloseIncompleteAttendance, autoCheckoutEmployees } from '../../modules/attendance/attendance.service';
 
 /**
@@ -44,11 +45,15 @@ export const startCronJobs = () => {
     // condition of wiping inline during every 30s sync cycle.
     void logBufferMaintenanceScheduler.start();
 
+    // Job 7: Automatic database backup scheduler (configurable cron)
+    void backupScheduler.start();
+
     console.log('[CronJobs] ✓ Periodic sync scheduled (every 30 seconds, skips when device is busy)');
     console.log('[CronJobs] ✓ Midnight cleanup scheduled (00:00 daily)');
     console.log('[CronJobs] ✓ Hourly device clock sync scheduled (top of every hour)');
     console.log('[CronJobs] ✓ Device health monitor started (configurable interval)');
     console.log('[CronJobs] ✓ Log buffer maintenance scheduler started (configurable schedule)');
+    console.log('[CronJobs] ✓ Database backup scheduler started (configurable cron)');
 };
 
 

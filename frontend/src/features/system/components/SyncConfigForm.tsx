@@ -12,13 +12,14 @@ import { TimeSyncConfigSection } from './TimeSyncConfigSection';
 import { AttendanceRulesSection } from './AttendanceRulesSection';
 import { HealthMonitorConfigSection } from './HealthMonitorConfigSection';
 import { LogMaintenanceConfigSection } from './LogMaintenanceConfigSection';
+import { DatabaseBackupConfigSection } from './DatabaseBackupConfigSection';
 import { DurationInput } from './DurationInput';
 
 function Skeleton({ className }: { className?: string }) {
     return <div className={`animate-pulse bg-slate-200 rounded-lg ${className ?? ''}`} />;
 }
 
-export function SyncConfigForm() {
+export function SyncConfigForm({ children }: { children?: React.ReactNode }) {
     const { config, setConfig, limits, loading, saving, isDirty, showIntervalWarning, setShowIntervalWarning, saveConfig, handleSubmit, handleDiscard } = useSyncConfig();
 
     if (loading) return (
@@ -97,20 +98,32 @@ export function SyncConfigForm() {
                             limits={limits}
                             onChange={handleChange}
                         />
+                        <DatabaseBackupConfigSection
+                            dbBackupEnabled={config.dbBackupEnabled}
+                            dbBackupCron={config.dbBackupCron}
+                            dbBackupRetention={config.dbBackupRetention}
+                            dbBackupCompress={config.dbBackupCompress}
+                            onChange={handleChange}
+                        />
                     </div>
                 </div>
+
+                {children}
 
                 {/* ── Sticky Save Bar ───────────────────────────────────── */}
                 <div className="sticky bottom-[-16px] md:bottom-[-24px] -mx-4 md:-mx-6 mt-12 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_12px_-1px_rgba(0,0,0,0.05)] z-40">
                     <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6">
-                        <div className="text-sm font-medium">
+                        <div className="text-xs font-semibold">
                             {isDirty ? (
                                 <span className="text-amber-600 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                                     Unsaved changes
                                 </span>
                             ) : (
-                                <span className="text-slate-500">All changes saved</span>
+                                <span className="text-slate-500 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    All changes saved
+                                </span>
                             )}
                         </div>
                         <div className="flex gap-3 w-full sm:w-auto justify-end">
@@ -120,16 +133,20 @@ export function SyncConfigForm() {
                                     variant="ghost" 
                                     disabled={saving} 
                                     onClick={handleDiscard}
-                                    className="flex-1 sm:flex-none text-sm font-semibold h-10 px-4 text-slate-500 hover:text-slate-700"
+                                    className="flex-1 sm:flex-none text-xs font-semibold h-9 px-4 text-slate-500 hover:text-slate-700"
                                 >
                                     Discard Changes
                                 </Button>
                             )}
-                            <Button type="submit" disabled={saving || !isDirty} className="flex-1 sm:flex-none text-sm font-semibold h-10 px-6">
+                            <Button 
+                                type="submit" 
+                                disabled={saving || !isDirty} 
+                                className="flex-1 sm:flex-none text-xs font-semibold h-9 px-5 bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 transition-colors duration-200"
+                            >
                                 {saving ? (
                                     'Saving...'
                                 ) : (
-                                    <><Save className="h-4 w-4 mr-2" /> Save Configuration</>
+                                    <><Save className="h-3.5 w-3.5" /> Save Configuration</>
                                 )}
                             </Button>
                         </div>
