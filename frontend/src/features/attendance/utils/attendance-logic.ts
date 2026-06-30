@@ -233,17 +233,18 @@ export function processAttendanceData(
     if (matchedHoliday && holidayAppliesTo(matchedHoliday, e.branchId)) continue;
 
     const empRecords = statsRecords.filter((r) => r.employeeId === e.id);
+    const checkedIn = empRecords.filter(r => r.status !== 'absent' && r.status !== 'rest_day');
 
-    if (empRecords.length > 0) {
+    if (checkedIn.length > 0) {
       // Checked in!
-      const hasLate = empRecords.some((r) => r.lateMinutes > 0);
+      const hasLate = checkedIn.some((r) => r.lateMinutes > 0);
       if (hasLate) {
         late++;
       } else {
         onTime++;
       }
 
-      const hasIncomplete = empRecords.some(
+      const hasIncomplete = checkedIn.some(
         (r) => r.status === 'incomplete' || r.displayStatus === 'missing_checkout'
       );
       if (hasIncomplete) {
@@ -251,15 +252,24 @@ export function processAttendanceData(
       }
     } else {
       // Not checked in
-      const shifts = (e.EmployeeShift && e.EmployeeShift.length > 0)
-        ? e.EmployeeShift.map((es: any) => es.shift)
-        : (e.Shift ? [e.Shift] : [{ workDays: undefined }]);
-
-      const isWorking = shifts.some((s: any) => isWorkDayForShift(s.workDays));
-      if (isWorking) {
-        absent++;
+      const isWorking = empRecords.some(r => r.status === 'absent');
+      if (empRecords.length > 0) {
+        if (isWorking) {
+          absent++;
+        } else {
+          restDay++;
+        }
       } else {
-        restDay++;
+        const shifts = (e.EmployeeShift && e.EmployeeShift.length > 0)
+          ? e.EmployeeShift.map((es: any) => es.shift)
+          : (e.Shift ? [e.Shift] : [{ workDays: undefined }]);
+
+        const isWorkingFallback = shifts.some((s: any) => isWorkDayForShift(s.workDays));
+        if (isWorkingFallback) {
+          absent++;
+        } else {
+          restDay++;
+        }
       }
     }
   }

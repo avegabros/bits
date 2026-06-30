@@ -532,7 +532,22 @@ export async function recalculateAndPersistAttendanceMetrics(
     }
 }
 
+let isProcessingAttendanceLogs = false;
+
 export const processAttendanceLogs = async (): Promise<ProcessResult> => {
+    if (isProcessingAttendanceLogs) {
+        console.log('[AttendanceProcessor] Already processing logs, skipping concurrent run.');
+        return { success: true, processed: 0, created: 0, updated: 0 };
+    }
+    isProcessingAttendanceLogs = true;
+    try {
+        return await runProcessAttendanceLogs();
+    } finally {
+        isProcessingAttendanceLogs = false;
+    }
+};
+
+const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
     try {
         const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 

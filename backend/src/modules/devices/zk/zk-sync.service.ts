@@ -119,8 +119,14 @@ async function syncSingleDevice(dbDevice: {
         for (const log of logs) {
             try {
                 const zkUserId = parseInt(log.deviceUserId);
+                const utcTime = convertPHTtoUTC(log.recordTime);
 
-                if (isNaN(zkUserId)) continue;
+                if (isNaN(zkUserId)) {
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
+                    continue;
+                }
 
                 // 1. Find Employee by zkId — SKIP if not in DB (prevents ghost re-creation)
                 const employee = await prisma.employee.findUnique({
@@ -130,39 +136,13 @@ async function syncSingleDevice(dbDevice: {
                 if (!employee) {
                     // This zkId was removed from the DB intentionally. Do not re-create.
                     console.log(`[ZK] Skipping unknown zkId ${zkUserId} — not in database`);
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
                     continue;
                 }
 
-                // 2. Fetch Last Log to prevent duplicates
-                const lastLog = await prisma.attendanceLog.findFirst({
-                    where: { employeeId: employee.id },
-                    orderBy: { timestamp: 'desc' }
-                });
-
-                // Convert PHT to UTC for storage and comparison
-                const utcTime = convertPHTtoUTC(log.recordTime);
-
-                // Logic: Prevent duplicates within 1 minute (accidental double-scans)
-                if (lastLog) {
-                    const diffMs = Math.abs(utcTime.getTime() - lastLog.timestamp.getTime());
-                    const diffMinutes = diffMs / (1000 * 60);
-
-                    if (diffMinutes < 1) {
-                        void audit({
-                            action: 'DUPLICATE_PUNCH',
-                            level: 'WARN',
-                            entityType: 'Attendance',
-                            entityId: employee.id,
-                            performedBy: employee.id,
-                            source: 'device-sync',
-                            details: `Duplicate punch detected for ${employee.firstName} ${employee.lastName} (${Math.round(diffMs / 1000)}s apart)`,
-                            metadata: { employeeId: employee.id, zkId: zkUserId, diffSeconds: Math.round(diffMs / 1000), deviceId: dbDevice.id }
-                        });
-                        continue;
-                    }
-                }
-
-                // 3. Check for exact duplicate in DB (same timestamp + same employee)
+                // 2. Check for exact duplicate in DB (same timestamp + same employee)
                 const exists = await prisma.attendanceLog.findUnique({
                     where: {
                         timestamp_employeeId: {
@@ -184,6 +164,9 @@ async function syncSingleDevice(dbDevice: {
                         details: `Duplicate punch detected for ${employee.firstName} ${employee.lastName} (exact timestamp match)`,
                         metadata: { employeeId: employee.id, zkId: zkUserId, diffSeconds: 0, deviceId: dbDevice.id }
                     });
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
                     continue;
                 }
 
