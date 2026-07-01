@@ -190,7 +190,8 @@ export class ZKDriver {
         const { COMMANDS } = require('node-zklib/constants');
         let count = 0;
         // CMD_USERTEMP_RRQ = read fingerprint template for a UID+finger slot
-        for (let finger = 0; finger <= 9; finger++) {
+        // Only scan slots 0, 1, 2 since our system only supports these slots
+        for (let finger = 0; finger <= 2; finger++) {
             try {
                 const buf = Buffer.alloc(3);
                 buf.writeUInt16LE(uid, 0);
@@ -201,6 +202,7 @@ export class ZKDriver {
             } catch {
                 // Slot empty or not supported — skip
             }
+            await new Promise(r => setTimeout(r, 50)); // 50ms rate limit delay
         }
         return count;
     }
@@ -551,11 +553,11 @@ export class ZKDriver {
             // Step 1: Lock the machine
             await zkInfo.executeCmd(COMMANDS.CMD_DISABLEDEVICE, Buffer.from([0x00, 0x00, 0x00, 0x00]));
 
-            // Step 2: Delete existing template on target slot
-            const delBuf = Buffer.alloc(3);
-            delBuf.writeUInt16LE(uid, 0);
-            delBuf.writeUInt8(fingerIndex, 2);
-            await zkInfo.executeCmd(COMMANDS.CMD_DELETE_USERTEMP, delBuf).catch(() => {});
+            // Step 2: Delete existing template on target slot (Commented out to prevent aborted-write data loss on K14 devices)
+            // const delBuf = Buffer.alloc(3);
+            // delBuf.writeUInt16LE(uid, 0);
+            // delBuf.writeUInt8(fingerIndex, 2);
+            // await zkInfo.executeCmd(COMMANDS.CMD_DELETE_USERTEMP, delBuf).catch(() => {});
 
             // Step 3-7: The official upload data exchange handshake
             await zkInfo.executeCmd(COMMANDS.CMD_PREPARE_DATA, prepPayload);

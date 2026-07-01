@@ -953,6 +953,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
                     id: true,
                     zkId: true,
                     employeeNumber: true,
+                    cardNumber: true,
                     firstName: true,
                     lastName: true,
                     middleName: true,
@@ -1047,27 +1048,41 @@ export const updateEmployee = async (req: Request, res: Response) => {
         // ── Queue device sync if employee details changed and they're on devices ──
         if (updatedEmployee.zkId && updatedEmployee.employmentStatus === 'ACTIVE') {
             const nameChanged = firstName !== undefined || lastName !== undefined;
-            const roleChanged = req.body.role !== undefined;
-            if (nameChanged || roleChanged) {
+            const cardChanged = req.body.cardNumber !== undefined && req.body.cardNumber !== existingEmployee.cardNumber;
+            if (nameChanged || cardChanged) {
                 const fullName = `${updatedEmployee.firstName} ${updatedEmployee.lastName}`;
-                const deviceRole = updatedEmployee.role === 'ADMIN' ? 14 : 0;
                 setImmediate(async () => {
                     try {
-                        await enqueueGlobalUpsertUser({
-                            zkId: updatedEmployee.zkId!,
-                            name: fullName,
-                            card: existingEmployee.cardNumber ?? 0,
-                            role: deviceRole,
+                        // Fetch all device admin settings for this employee
+                        const enrollments = await prisma.employeeDeviceEnrollment.findMany({
+                            where: { employeeId: updatedEmployee.id, isDeviceAdmin: true },
+                            select: { deviceId: true }
                         });
-                        // Flush queue inline for online devices
+                        const adminDeviceIds = new Set(enrollments.map(e => e.deviceId));
+
+                        // Find all active + sync-enabled devices
                         const devices = await prisma.device.findMany({
                             where: { isActive: true, syncEnabled: true },
-                            select: { id: true },
+                            select: { id: true }
                         });
+
+                        const { enqueueUpsertUser, processDeviceSyncQueue } = require('../devices/deviceSyncQueue.service');
+
                         for (const d of devices) {
-                            try { await processDeviceSyncQueue(d.id); } catch { /* retry later */ }
+                            const deviceRole = adminDeviceIds.has(d.id) ? 14 : 0;
+                            await enqueueUpsertUser(d.id, {
+                                zkId: updatedEmployee.zkId!,
+                                name: fullName,
+                                card: updatedEmployee.cardNumber ?? 0,
+                                role: deviceRole
+                            });
+                            try {
+                                await processDeviceSyncQueue(d.id);
+                            } catch {
+                                // Ignore and let background cron handle offline/error devices
+                            }
                         }
-                        console.log(`[API] (background) Queued UPSERT_USER for zkId=${updatedEmployee.zkId}`);
+                        console.log(`[API] (background) Queued UPSERT_USER for zkId=${updatedEmployee.zkId} on ${devices.length} devices.`);
                     } catch (err: unknown) {
                         console.error(`[API] (background) Failed to queue device update:`, err);
                     }

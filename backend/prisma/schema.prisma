@@ -345,12 +345,13 @@ model DeviceBiometricExclusion {
 }
 
 model EmployeeDeviceEnrollment {
-  id         Int      @id @default(autoincrement())
-  employeeId Int
-  deviceId   Int
-  enrolledAt DateTime @default(now())
-  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id            Int      @id @default(autoincrement())
+  employeeId    Int
+  deviceId      Int
+  isDeviceAdmin Boolean  @default(false)
+  enrolledAt    DateTime @default(now())
+  device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, deviceId])
   @@index([employeeId])

@@ -198,7 +198,7 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
                 zkId: { not: null, gt: 1 },
                 employmentStatus: 'ACTIVE',
             },
-            select: { zkId: true, firstName: true, lastName: true, role: true, cardNumber: true }
+            select: { id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true }
         });
 
         if (employees.length === 0) {
@@ -227,11 +227,18 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
                 // Fetch all device users once to avoid redundant network requests.
                 const deviceUsers = await zk.getUsers();
 
+                // Fetch device admin mapping for this device
+                const enrollments = await prisma.employeeDeviceEnrollment.findMany({
+                    where: { deviceId: dbDevice.id, isDeviceAdmin: true },
+                    select: { employeeId: true }
+                });
+                const adminEmployeeIds = new Set(enrollments.map(e => e.employeeId));
+
                 for (const employee of employees) {
                     const fullName = `${employee.firstName} ${employee.lastName}`;
                     const zkId = employee.zkId!;
                     const visibleId = zkId.toString();
-                    const deviceRole = ['ADMIN', 'MANAGER'].includes(employee.role) ? 14 : 0;
+                    const deviceRole = adminEmployeeIds.has(employee.id) ? 14 : 0;
                     const deviceUid = zkId;
 
                     if (PROTECTED_DEVICE_UIDS.includes(deviceUid)) {
@@ -255,9 +262,8 @@ export const syncEmployeesToDevice = async (): Promise<SyncResult> => {
                                 // continue to next employee — do NOT return, do NOT abort the sync
                             }
                         } else {
-                            // Slot is empty — safe to clear and write
+                            // Slot is empty — safe to write
                             try { await zk.deleteUser(deviceUid); } catch { /* empty slot — ok */ }
-                            await zk.clearUserFingerprints(deviceUid);
                             await zk.setUser(deviceUid, fullName, "", deviceRole, employee.cardNumber ?? 0, visibleId);
                             console.log(`[ZK]   ✓ Written: "${fullName}" → UID=${deviceUid} on "${dbDevice.name}"`);
                             successCount++;

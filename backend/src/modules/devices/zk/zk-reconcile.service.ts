@@ -52,7 +52,16 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
     const dbEmployees = await prisma.employee.findMany({
         where: { zkId: { not: null }, employmentStatus: 'ACTIVE' },
         select: { 
-            id: true, zkId: true, firstName: true, lastName: true, role: true, cardNumber: true
+            id: true, 
+            zkId: true, 
+            firstName: true, 
+            lastName: true, 
+            role: true, 
+            cardNumber: true,
+            EmployeeDeviceEnrollment: {
+                where: { deviceId },
+                select: { isDeviceAdmin: true }
+            }
         }
     });
     const dbByZkId = new Map(dbEmployees.map(e => [e.zkId!.toString(), e]));
@@ -127,7 +136,8 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
             const zkId = emp.zkId!;
             const visibleId = zkId.toString();
             const fullName = `${emp.firstName} ${emp.lastName}`;
-            const deviceRole = emp.role === 'ADMIN' ? 14 : 0;
+            const isDevAdmin = emp.EmployeeDeviceEnrollment?.[0]?.isDeviceAdmin || false;
+            const deviceRole = isDevAdmin ? 14 : 0;
 
             if (PROTECTED_DEVICE_UIDS.includes(zkId)) continue;
 
@@ -237,6 +247,7 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                                         console.log(`[Reconcile] 🔍 Would sync missing finger index ${fingerIndex} for "${fullName}" (UID=${dUser.uid}).`);
                                     }
                                 }
+                                await new Promise(r => setTimeout(r, 50)); // 50ms rate limit delay
                             }
                             
                             // If they have fingers in DB but 0 were found on device, mark as needs enrollment

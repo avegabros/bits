@@ -287,9 +287,8 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
             } else if (visibleConflict) {
                 throw new Error(`visibleId conflict: userId=${visibleId} already claimed by uid=${visibleConflict.uid}`);
             } else {
-                // Empty slot, force clean before writing
+                // Empty slot, write user record
                 try { await zk.deleteUser(deviceUid); } catch { /* empty */ }
-                await zk.clearUserFingerprints(deviceUid);
                 await zk.setUser(deviceUid, payload.name, "", payload.role, payload.card, visibleId);
             }
 
