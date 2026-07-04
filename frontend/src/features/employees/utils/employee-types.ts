@@ -50,6 +50,7 @@ export type Employee = {
   updatedAt?: string
   EmployeeDeviceEnrollment?: {
     enrolledAt: string
+    isDeviceAdmin?: boolean
     device: {
       id: number
       name: string

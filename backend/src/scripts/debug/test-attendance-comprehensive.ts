@@ -639,7 +639,7 @@ async function runAll() {
         await processAttendanceLogs();
 
         let records = await getAtt(emp.id, DATE_ONLY);
-        records.length === 0 ? pass('No record created initially (skipped by post-shift guard)') : fail('No record created initially', `got ${records.length}`);
+        records.length === 1 && records[0].shiftId === null ? pass('No Shift record created initially (captured under No Shift)') : fail('No Shift record created initially', `got ${records.length}, shiftId ${records[0]?.shiftId}`);
 
         info(`Step 2: Delayed Punch IN at 08:00 arrives (Device A - reconnected)`);
         await prisma.attendanceLog.create({
@@ -688,6 +688,45 @@ async function runAll() {
             att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '08:00').getUTCHours() ? pass('Check-in corrected to 08:00 AM') : fail('Check-in corrected', `got ${att.checkInTime.toISOString()}`);
             att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '16:55').getUTCHours() ? pass('Check-out corrected to 16:55 PM') : fail('Check-out corrected', `got ${att.checkOutTime?.toISOString()}`);
             att.lateMinutes === 0 ? pass('Late minutes is corrected to 0') : fail('Late minutes corrected', `got ${att.lateMinutes}`);
+        }
+
+        await destroyEmployee(emp.id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEST 14: Post-Shift Demotion Fallback to "No Shift"
+    // ─────────────────────────────────────────────────────────────────────────
+    section('TEST 14: Post-Shift Demotion Fallback to "No Shift"');
+    divider();
+    {
+        const emp = await createTestEmployee('T14');
+        await assignShifts(emp.id, [{ shiftId: SHIFT_DAY.id, sortOrder: 1 }]);
+        await cleanEmployee(emp.id, [DATE_ONLY]);
+
+        info('Step 1: Punch OUT at 18:30 after shift (08:00-17:00) ends with no check-in');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '18:30'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        let records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 && records[0].shiftId === null
+            ? pass('Record successfully created under "No Shift" (shiftId=null)')
+            : fail('No Shift record created', `got length ${records.length}, shiftId ${records[0]?.shiftId}`);
+
+        info('Step 2: Punch again at 19:30 (simulating second punch post-shift)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '19:30'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Still exactly 1 record') : fail('Exactly 1 record', `got ${records.length}`);
+        
+        let att = records[0];
+        if (att) {
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '18:30').getUTCHours() ? pass('Check-in remains 18:30 PM') : fail('Check-in remains 18:30', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '19:30').getUTCHours() ? pass('Check-out successfully set to 19:30 PM under No Shift') : fail('Check-out set to 19:30', `got ${att.checkOutTime?.toISOString()}`);
         }
 
         await destroyEmployee(emp.id);

@@ -532,7 +532,25 @@ export async function recalculateAndPersistAttendanceMetrics(
     }
 }
 
+let isProcessingAttendanceLogs = false;
+
 export const processAttendanceLogs = async (): Promise<ProcessResult> => {
+    if (isProcessingAttendanceLogs) {
+        console.log('[AttendanceProcessor] Already processing logs, skipping concurrent run.');
+        return { success: true, processed: 0, created: 0, updated: 0 };
+    }
+    isProcessingAttendanceLogs = true;
+    try {
+        return await runProcessAttendanceLogs();
+    } finally {
+        isProcessingAttendanceLogs = false;
+    }
+};
+
+const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
+    const pendingAudits = new Map<string, any>();
+    const originalRecords = new Map<string, any>();
+    const originalOts = new Map<string, any>();
     try {
         const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -587,6 +605,24 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                 }
 
                 if (!hasManualOrAdjustments) {
+                    // Capture original records before deletion/clearing
+                    for (const rec of existingRecords) {
+                        const key = `${employeeId}_${date.getTime()}_${rec.shiftId}`;
+                        originalRecords.set(key, rec);
+                    }
+
+                    const existingOts = await prisma.overtimeRequest.findMany({
+                        where: {
+                            employeeId,
+                            date,
+                            status: 'APPROVED'
+                        }
+                    });
+                    for (const ot of existingOts) {
+                        const key = `${employeeId}_${date.getTime()}_${ot.id}`;
+                        originalOts.set(key, ot);
+                    }
+
                     const startRange = date;
                     const endRange = new Date(date.getTime() + 32 * 60 * 60 * 1000);
 
@@ -800,7 +836,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     return false;
                 }
             })();
-            const effectiveShift = isRestDay ? null : resolvedShift;
+            let effectiveShift = isRestDay ? null : resolvedShift;
             // ── END REST DAY DETECTION ────────────────────────────────────────────────
 
             // ── UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────────
@@ -871,14 +907,17 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     });
                     pendingOtCheckIn.actualStartTime = log.timestamp;
 
-                    void audit({
+                    const audPayload1 = {
                         action: 'CHECK_IN',
                         entityType: 'OvertimeRequest',
                         entityId: pendingOtCheckIn.id,
                         performedBy: log.employeeId,
                         source: 'device-sync',
-                        details: `Employee biometric OT check-in`
-                    });
+                        details: `Employee biometric OT check-in`,
+                        compareKey: `${log.employeeId}_${targetDate.getTime()}_${pendingOtCheckIn.id}`,
+                        actualStartTime: log.timestamp
+                    };
+                    pendingAudits.set(`${audPayload1.performedBy}_${audPayload1.entityType}_${audPayload1.entityId}_${audPayload1.action}`, audPayload1);
 
                     const existingAtt = await prisma.attendance.findFirst({
                         where: {
@@ -1013,14 +1052,17 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     });
                     pendingOtCheckOut.actualEndTime = log.timestamp;
 
-                    void audit({
+                    const audPayload2 = {
                         action: 'CHECK_OUT',
                         entityType: 'OvertimeRequest',
                         entityId: pendingOtCheckOut.id,
                         performedBy: log.employeeId,
                         source: 'device-sync',
-                        details: `Employee biometric OT check-out`
-                    });
+                        details: `Employee biometric OT check-out`,
+                        compareKey: `${log.employeeId}_${targetDate.getTime()}_${pendingOtCheckOut.id}`,
+                        actualEndTime: log.timestamp
+                    };
+                    pendingAudits.set(`${audPayload2.performedBy}_${audPayload2.entityType}_${audPayload2.entityId}_${audPayload2.action}`, audPayload2);
 
                     const existingAtt = await prisma.attendance.findFirst({
                         where: {
@@ -1163,6 +1205,37 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             }
             // ── END UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────
 
+            // ── POST-SHIFT GUARD DEMOTION ─────────────────────────────────────────
+            // If the employee's shift has already ended and there is no approved OT,
+            // demote the shift to "No Shift" (null) before checking the database.
+            // This ensures any checkout punch without a check-in is saved under
+            // the "No Shift" category instead of being silently skipped.
+            // We ONLY demote if there isn't already an open check-in for this shift.
+            if (resolvedShift && recordOts.length === 0) {
+                const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
+                const shiftEndMs = targetDate.getTime() + (eH * 60 + eM) * 60 * 1000;
+                const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
+                const shiftStartMs = targetDate.getTime() + (sH * 60 + sM) * 60 * 1000;
+                const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
+                    ? shiftEndMs + 24 * 60 * 60 * 1000
+                    : shiftEndMs;
+
+                if (log.timestamp.getTime() > adjustedShiftEndMs) {
+                    const hasOpenRecordForShift = await prisma.attendance.findFirst({
+                        where: {
+                            employeeId: log.employeeId,
+                            date: targetDate,
+                            shiftId: resolvedShift.id,
+                            checkOutTime: null
+                        }
+                    });
+                    if (!hasOpenRecordForShift) {
+                        effectiveShift = null;
+                    }
+                }
+            }
+            // ── END POST-SHIFT GUARD DEMOTION ─────────────────────────────────────
+
             const existingAttendance = await prisma.attendance.findFirst({
                 where: {
                     employeeId: log.employeeId,
@@ -1172,28 +1245,6 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
             });
 
             if (!existingAttendance) {
-                // ── POST-SHIFT GUARD ──────────────────────────────────────────────────
-                // If the employee's shift has already ended and there is no approved OT,
-                // skip this scan entirely. This prevents phantom attendance records from
-                // being created when an employee scans the biometric device after their
-                // shift is over (e.g. shift 09:30–10:30, scan at 11:00).
-                // OT scans are already handled by the Unified OT Gate above.
-                if (resolvedShift && recordOts.length === 0) {
-                    const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
-                    const shiftEndMs = targetDate.getTime() + (eH * 60 + eM) * 60 * 1000;
-                    // Handle overnight shifts where endTime < startTime
-                    const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
-                    const shiftStartMs = targetDate.getTime() + (sH * 60 + sM) * 60 * 1000;
-                    const adjustedShiftEndMs = shiftEndMs <= shiftStartMs
-                        ? shiftEndMs + 24 * 60 * 60 * 1000
-                        : shiftEndMs;
-
-                    if (log.timestamp.getTime() > adjustedShiftEndMs) {
-                        await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
-                        continue;
-                    }
-                }
-                // ── END POST-SHIFT GUARD ──────────────────────────────────────────────
 
                 const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, effectiveShift, recordOts);
                 const isLate = calculatedStatus === 'late';
@@ -1242,15 +1293,18 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     });
                     created++;
 
-                    void audit({
+                    const audPayload3 = {
                         action: 'CHECK_IN',
                         entityType: 'Attendance',
                         entityId: createdRecord.id,
                         performedBy: createdRecord.employeeId,
                         source: 'device-sync',
                         details: `Employee checked in (${isLate ? 'Late' : 'On-time'})`,
-                        metadata: { snapshot: { status: createdRecord.status, checkInTime: createdRecord.checkInTime.toISOString() } }
-                    });
+                        metadata: { snapshot: { status: createdRecord.status, checkInTime: formatToPhilippineTime(createdRecord.checkInTime) } },
+                        compareKey: `${createdRecord.employeeId}_${createdRecord.date.getTime()}_${createdRecord.shiftId}`,
+                        checkInTime: createdRecord.checkInTime
+                    };
+                    pendingAudits.set(`${audPayload3.performedBy}_${audPayload3.entityType}_${audPayload3.entityId}_${audPayload3.action}`, audPayload3);
 
                     const shift = effectiveShift;
                     const metrics = calculateAttendanceMetrics(createdRecord, shift, recordOts);
@@ -1359,15 +1413,18 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                             });
                             updated++;
 
-                            void audit({
+                            const audPayload4 = {
                                 action: 'CHECK_OUT',
                                 entityType: 'Attendance',
                                 entityId: updatedRecord.id,
                                 performedBy: updatedRecord.employeeId,
                                 source: 'device-sync',
                                 details: `Employee checked out (updated)`,
-                                metadata: { changes: [{ field: 'checkOutTime', oldValue: existingAttendance.checkOutTime ? existingAttendance.checkOutTime.toISOString() : null, newValue: log.timestamp.toISOString() }] }
-                            });
+                                metadata: { changes: [{ field: 'checkOutTime', oldValue: existingAttendance.checkOutTime ? formatToPhilippineTime(existingAttendance.checkOutTime) : null, newValue: formatToPhilippineTime(log.timestamp) }] },
+                                compareKey: `${updatedRecord.employeeId}_${updatedRecord.date.getTime()}_${updatedRecord.shiftId}`,
+                                checkOutTime: updatedRecord.checkOutTime
+                            };
+                            pendingAudits.set(`${audPayload4.performedBy}_${audPayload4.entityType}_${audPayload4.entityId}_${audPayload4.action}`, audPayload4);
 
                             const shift = effectiveShift;
                             const metrics = calculateAttendanceMetrics(updatedRecord, shift, recordOts);
@@ -1436,15 +1493,18 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                         });
                         updated++;
 
-                        void audit({
+                        const audPayload5 = {
                             action: 'CHECK_OUT',
                             entityType: 'Attendance',
                             entityId: updatedRecord2.id,
                             performedBy: updatedRecord2.employeeId,
                             source: 'device-sync',
                             details: `Employee checked out`,
-                            metadata: { changes: [{ field: 'checkOutTime', oldValue: null, newValue: log.timestamp.toISOString() }] }
-                        });
+                            metadata: { changes: [{ field: 'checkOutTime', oldValue: null, newValue: formatToPhilippineTime(log.timestamp) }] },
+                            compareKey: `${updatedRecord2.employeeId}_${updatedRecord2.date.getTime()}_${updatedRecord2.shiftId}`,
+                            checkOutTime: updatedRecord2.checkOutTime
+                        };
+                        pendingAudits.set(`${audPayload5.performedBy}_${audPayload5.entityType}_${audPayload5.entityId}_${audPayload5.action}`, audPayload5);
 
                         const shift2 = effectiveShift;
                         const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2, recordOts);
@@ -1467,6 +1527,50 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
                     console.error(`[Attendance] Failed to process check-out log id=${log.id} for employeeId=${log.employeeId}:`, err);
                     continue;
                 }
+            }
+        }
+
+        // Write the consolidated audits at the end of the batch run, checking if values actually changed
+        for (const payload of pendingAudits.values()) {
+            let shouldLog = true;
+
+            if (payload.entityType === 'Attendance') {
+                const orig = originalRecords.get(payload.compareKey);
+                if (orig) {
+                    if (payload.action === 'CHECK_IN') {
+                        if (orig.checkInTime.getTime() === payload.checkInTime.getTime()) {
+                            shouldLog = false;
+                        }
+                    } else if (payload.action === 'CHECK_OUT') {
+                        const origTime = orig.checkOutTime?.getTime() || null;
+                        const newTime = payload.checkOutTime?.getTime() || null;
+                        if (origTime === newTime) {
+                            shouldLog = false;
+                        }
+                    }
+                }
+            } else if (payload.entityType === 'OvertimeRequest') {
+                const origOt = originalOts.get(payload.compareKey);
+                if (origOt) {
+                    if (payload.action === 'CHECK_IN') {
+                        const origTime = origOt.actualStartTime?.getTime() || null;
+                        const newTime = payload.actualStartTime?.getTime() || null;
+                        if (origTime === newTime) {
+                            shouldLog = false;
+                        }
+                    } else if (payload.action === 'CHECK_OUT') {
+                        const origTime = origOt.actualEndTime?.getTime() || null;
+                        const newTime = payload.actualEndTime?.getTime() || null;
+                        if (origTime === newTime) {
+                            shouldLog = false;
+                        }
+                    }
+                }
+            }
+
+            if (shouldLog) {
+                const { compareKey, checkInTime, checkOutTime, actualStartTime, actualEndTime, ...cleanPayload } = payload;
+                void audit(cleanPayload);
             }
         }
 

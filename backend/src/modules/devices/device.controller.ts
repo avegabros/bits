@@ -624,3 +624,228 @@ export const retryDeviceDeadLetters = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: 'Failed to retry dead-letters', error: zkErrMsg(error) });
     }
 };
+
+export const getDeviceAdministrators = async (req: Request, res: Response) => {
+    try {
+        const admins = await prisma.employeeDeviceEnrollment.findMany({
+            where: { isDeviceAdmin: true },
+            include: {
+                employee: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        employeeNumber: true,
+                        zkId: true
+                    }
+                },
+                device: {
+                    select: {
+                        id: true,
+                        name: true,
+                        ip: true,
+                        isActive: true
+                    }
+                }
+            },
+            orderBy: {
+                employee: {
+                    lastName: 'asc'
+                }
+            }
+        });
+        res.json({ success: true, administrators: admins });
+    } catch (error: unknown) {
+        console.error('[Devices] Error fetching administrators:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch device administrators', error: zkErrMsg(error) });
+    }
+};
+
+export const setDeviceAdministrators = async (req: Request, res: Response) => {
+    try {
+        const { employeeId, deviceIds } = req.body;
+
+        if (!employeeId) {
+            return res.status(400).json({ success: false, message: 'Employee ID is required' });
+        }
+        if (!Array.isArray(deviceIds)) {
+            return res.status(400).json({ success: false, message: 'deviceIds must be an array of device IDs' });
+        }
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: Number(employeeId) },
+            select: { id: true, zkId: true, firstName: true, lastName: true, cardNumber: true }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
+        if (!employee.zkId) {
+            return res.status(400).json({ success: false, message: 'Employee does not have a ZK ID assigned (must be synchronized first).' });
+        }
+
+        const fullName = `${employee.firstName} ${employee.lastName}`;
+
+        // 1. Get current enrollments with admin privileges
+        const currentAdmins = await prisma.employeeDeviceEnrollment.findMany({
+            where: { employeeId: employee.id, isDeviceAdmin: true },
+            select: { deviceId: true }
+        });
+        const currentDeviceIds = currentAdmins.map(e => e.deviceId);
+
+        // 2. Diff additions and removals
+        const toAdd = deviceIds.filter((id: number) => !currentDeviceIds.includes(id));
+        const toRemove = currentDeviceIds.filter(id => !deviceIds.includes(id));
+
+        // 3. Update DB
+        await prisma.$transaction(async (tx) => {
+            // Enable admins
+            for (const dId of toAdd) {
+                await tx.employeeDeviceEnrollment.upsert({
+                    where: { employeeId_deviceId: { employeeId: employee.id, deviceId: dId } },
+                    update: { isDeviceAdmin: true },
+                    create: { employeeId: employee.id, deviceId: dId, isDeviceAdmin: true }
+                });
+            }
+            // Disable admins
+            for (const dId of toRemove) {
+                await tx.employeeDeviceEnrollment.update({
+                    where: { employeeId_deviceId: { employeeId: employee.id, deviceId: dId } },
+                    data: { isDeviceAdmin: false }
+                });
+            }
+        });
+
+        // 4. Queue updates for the devices
+        const { enqueueUpsertUser, processDeviceSyncQueue } = require('./deviceSyncQueue.service');
+        const activeDevices = await prisma.device.findMany({
+            where: { isActive: true, syncEnabled: true },
+            select: { id: true }
+        });
+        const activeDeviceIds = activeDevices.map(d => d.id);
+
+        for (const dId of toAdd) {
+            await enqueueUpsertUser(dId, {
+                zkId: employee.zkId,
+                name: fullName,
+                card: employee.cardNumber ?? 0,
+                role: 14 // Device Admin
+            });
+            if (activeDeviceIds.includes(dId)) {
+                setImmediate(async () => {
+                    try { await processDeviceSyncQueue(dId); } catch { /* ignore */ }
+                });
+            }
+        }
+
+        for (const dId of toRemove) {
+            await enqueueUpsertUser(dId, {
+                zkId: employee.zkId,
+                name: fullName,
+                card: employee.cardNumber ?? 0,
+                role: 0 // Normal User
+            });
+            if (activeDeviceIds.includes(dId)) {
+                setImmediate(async () => {
+                    try { await processDeviceSyncQueue(dId); } catch { /* ignore */ }
+                });
+            }
+        }
+
+        // Log audit
+        const { auditUpdate } = require('../../shared/lib/auditHelpers');
+        void auditUpdate({
+            entityType: 'Employee',
+            entityId: employee.id,
+            performedBy: req.user?.employeeId,
+            details: `Updated device admin roles for ${fullName}. Added: [${toAdd.join(', ')}], Removed: [${toRemove.join(', ')}]`,
+            correlationId: req.correlationId
+        }, [
+            { field: 'isDeviceAdminOnDevices', oldValue: currentDeviceIds, newValue: deviceIds }
+        ]);
+
+        res.json({ success: true, message: 'Device administrator roles updated and queued for sync.' });
+    } catch (error: unknown) {
+        console.error('[Devices] Error setting administrators:', error);
+        res.status(500).json({ success: false, message: 'Failed to update device administrators', error: zkErrMsg(error) });
+    }
+};
+
+export const removeDeviceAdministrator = async (req: Request, res: Response) => {
+    try {
+        const employeeId = parseInt(req.params.employeeId as string, 10);
+        if (isNaN(employeeId)) {
+            return res.status(400).json({ success: false, message: 'Invalid employee ID' });
+        }
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            select: { id: true, zkId: true, firstName: true, lastName: true, cardNumber: true }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
+
+        const fullName = `${employee.firstName} ${employee.lastName}`;
+
+        // Find current device admin enrollments
+        const currentAdmins = await prisma.employeeDeviceEnrollment.findMany({
+            where: { employeeId: employee.id, isDeviceAdmin: true },
+            select: { deviceId: true }
+        });
+
+        if (currentAdmins.length === 0) {
+            return res.json({ success: true, message: 'Employee was not a device administrator on any device.' });
+        }
+
+        const currentDeviceIds = currentAdmins.map(e => e.deviceId);
+
+        // Update DB
+        await prisma.employeeDeviceEnrollment.updateMany({
+            where: { employeeId: employee.id, deviceId: { in: currentDeviceIds } },
+            data: { isDeviceAdmin: false }
+        });
+
+        // Queue updates to set role back to 0
+        const { enqueueUpsertUser, processDeviceSyncQueue } = require('./deviceSyncQueue.service');
+        const activeDevices = await prisma.device.findMany({
+            where: { isActive: true, syncEnabled: true },
+            select: { id: true }
+        });
+        const activeDeviceIds = activeDevices.map(d => d.id);
+
+        for (const dId of currentDeviceIds) {
+            if (employee.zkId) {
+                await enqueueUpsertUser(dId, {
+                    zkId: employee.zkId,
+                    name: fullName,
+                    card: employee.cardNumber ?? 0,
+                    role: 0 // Normal User
+                });
+                if (activeDeviceIds.includes(dId)) {
+                    setImmediate(async () => {
+                        try { await processDeviceSyncQueue(dId); } catch { /* ignore */ }
+                    });
+                }
+            }
+        }
+
+        // Log audit
+        const { auditUpdate } = require('../../shared/lib/auditHelpers');
+        void auditUpdate({
+            entityType: 'Employee',
+            entityId: employee.id,
+            performedBy: req.user?.employeeId,
+            details: `Removed all device admin privileges for ${fullName}`,
+            correlationId: req.correlationId
+        }, [
+            { field: 'isDeviceAdminOnDevices', oldValue: currentDeviceIds, newValue: [] }
+        ]);
+
+        res.json({ success: true, message: 'All device administrator privileges revoked and queued for sync.' });
+    } catch (error: unknown) {
+        console.error('[Devices] Error removing administrator:', error);
+        res.status(500).json({ success: false, message: 'Failed to revoke device administrator privileges', error: zkErrMsg(error) });
+    }
+};

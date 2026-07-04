@@ -8,7 +8,10 @@ import {
     triggerManualTimeSync,
     triggerManualLogBufferClear,
     getSystemLogs,
-    getValidationLimits
+    getValidationLimits,
+    getBackupsList,
+    downloadBackup,
+    triggerManualBackup
 } from './system.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
@@ -233,5 +236,10 @@ router.get('/logs', getSystemLogs);
  *         description: Log buffer clear failed
  */
 router.post('/clear-device-logs', triggerManualLogBufferClear);
+
+// ─── Backup Management Routes ────────────────────────────────────────────────
+router.get('/backups', getBackupsList);
+router.get('/backups/download/:filename', downloadBackup);
+router.post('/backups/trigger', triggerManualBackup);
 
 export default router;

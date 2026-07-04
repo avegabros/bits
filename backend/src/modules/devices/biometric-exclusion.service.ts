@@ -91,7 +91,11 @@ export async function addExclusion(
 
     } else if (type === 'CARD') {
         // Enqueue UPSERT_USER with card: 0
-        const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
+        const enrollment = await prisma.employeeDeviceEnrollment.findUnique({
+            where: { employeeId_deviceId: { employeeId, deviceId } },
+            select: { isDeviceAdmin: true }
+        });
+        const deviceRole = enrollment?.isDeviceAdmin ? 14 : 0;
         await enqueueUpsertUser(deviceId, {
             zkId: employee.zkId,
             name: `${employee.firstName} ${employee.lastName}`,
@@ -172,7 +176,11 @@ export async function removeExclusion(
         }
     } else if (type === 'CARD') {
         if (employee.cardNumber && employee.cardNumber > 0) {
-            const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
+            const enrollment = await prisma.employeeDeviceEnrollment.findUnique({
+                where: { employeeId_deviceId: { employeeId, deviceId } },
+                select: { isDeviceAdmin: true }
+            });
+            const deviceRole = enrollment?.isDeviceAdmin ? 14 : 0;
             await enqueueUpsertUser(deviceId, {
                 zkId: employee.zkId,
                 name: `${employee.firstName} ${employee.lastName}`,

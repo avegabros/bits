@@ -47,8 +47,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       TZ: Asia/Manila
+      BACKUP_PATH: ${BACKUP_PATH:-/app/backups}
     volumes:
       - bits_uploads:/app/uploads
+      - bits_backups:/app/backups
     ports:
       - "4013:3001"
       - "4014:5555"
@@ -82,6 +84,8 @@ volumes:
     name: project_postgres_data
   bits_uploads:
     name: bits_uploads_data
+  bits_backups:
+    name: bits_backups_data
 
 networks:
   bits_network:

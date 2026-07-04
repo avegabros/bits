@@ -34,6 +34,13 @@ export interface SyncConfig {
     logBufferMaintenanceEnabled: boolean;
     logBufferMaintenanceSchedule: 'daily' | 'weekly' | 'monthly';
     logBufferMaintenanceHour: number;
+    dbBackupEnabled: boolean;
+    dbBackupCron: string;
+    dbBackupRetention: number;
+    dbBackupCompress: boolean;
+    lastBackupAt: string | null;
+    lastBackupStatus: string | null;
+    lastBackupError: string | null;
 }
 
 export interface Device {

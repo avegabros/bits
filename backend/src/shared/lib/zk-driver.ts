@@ -190,7 +190,8 @@ export class ZKDriver {
         const { COMMANDS } = require('node-zklib/constants');
         let count = 0;
         // CMD_USERTEMP_RRQ = read fingerprint template for a UID+finger slot
-        for (let finger = 0; finger <= 9; finger++) {
+        // Only scan slots 0, 1, 2 since our system only supports these slots
+        for (let finger = 0; finger <= 2; finger++) {
             try {
                 const buf = Buffer.alloc(3);
                 buf.writeUInt16LE(uid, 0);
@@ -201,6 +202,7 @@ export class ZKDriver {
             } catch {
                 // Slot empty or not supported — skip
             }
+            await new Promise(r => setTimeout(r, 50)); // 50ms rate limit delay
         }
         return count;
     }
@@ -404,24 +406,67 @@ export class ZKDriver {
      */
     async getFingerTemplate(uid: number, fingerIndex: number): Promise<Buffer | null> {
         if (!this.zkInstance) throw new Error('Not connected');
+        const zk = this.zkInstance as any;
         const { COMMANDS } = require('node-zklib/constants');
+        const { createTCPHeader, removeTcpHeader } = require('node-zklib/utils');
 
         const buf = Buffer.alloc(3);
         buf.writeUInt16LE(uid, 0);
         buf.writeUInt8(fingerIndex, 2);
 
+        zk.replyId++;
+        const header = createTCPHeader(COMMANDS.CMD_USERTEMP_RRQ, zk.sessionId, zk.replyId, buf);
+
         try {
-            const result = await this.zkInstance.executeCmd(COMMANDS.CMD_USERTEMP_RRQ, buf);
-            
-            // Valid templates are usually large (e.g. 500+ bytes for VX10)
-            // Anything less or equal to ~100 bytes is typically an error framework packet
-            if (result && result.length > 100) {
+            const combinedResponse = await new Promise<Buffer | null>((resolve) => {
+                let timer: ReturnType<typeof setTimeout> | null = null;
+                let socket = zk.socket;
+                let replyBuffer = Buffer.alloc(0);
+
+                const cleanup = () => {
+                    if (timer) clearTimeout(timer);
+                    socket.removeListener('data', handleData);
+                };
+
+                const handleData = (data: Buffer) => {
+                    replyBuffer = Buffer.concat([replyBuffer, data]);
+                    
+                    if (replyBuffer.length >= 16) {
+                        const cmdId = replyBuffer.readUInt16LE(8);
+                        
+                        if (cmdId === COMMANDS.CMD_PREPARE_DATA) {
+                            if (timer) clearTimeout(timer);
+                            timer = setTimeout(() => {
+                                cleanup();
+                                resolve(replyBuffer);
+                            }, 200); // 200ms inactivity is plenty to accumulate all template packets
+                            return;
+                        } else {
+                            cleanup();
+                            resolve(null);
+                        }
+                    }
+                };
+
+                socket.on('data', handleData);
+
+                timer = setTimeout(() => {
+                    cleanup();
+                    resolve(null);
+                }, 3000); // 3s global timeout
+
+                socket.write(header, (err: any) => {
+                    if (err) {
+                        cleanup();
+                        resolve(null);
+                    }
+                });
+            });
+
+            if (combinedResponse && combinedResponse.length > 24) {
+                const result = removeTcpHeader(combinedResponse);
                 const rawTemplate = this.extractRawTemplate(result as Buffer);
 
-                // ZKTeco template entries often include a 6-byte header inside the DATA packet:
-                // [TotalSize(2)] [UID(2)] [FID(1)] [Flag(1)] [RawTemplate(N)]
-                // We need to strip this before pushing to another device, otherwise
-                // setFingerTemplate() will wrap it again causing a "double-header" corruption.
                 if (rawTemplate.length > 6) {
                     const reportedSize = rawTemplate.readUInt16LE(0);
                     const reportedUid = rawTemplate.readUInt16LE(2);
@@ -433,8 +478,6 @@ export class ZKDriver {
                         reportedUid === uid &&
                         reportedFlag === 1
                     ) {
-                        // reportedSize is the biometric payload size (excluding header).
-                        // Slice precisely to drop both the 6-byte header and trailing TCP padding.
                         const strippedTemplate = rawTemplate.subarray(6, 6 + reportedSize);
                         console.log(
                             `[ZKDriver] getFingerTemplate: Stripped 6-byte entry header ` +
@@ -450,6 +493,7 @@ export class ZKDriver {
             }
             return null;
         } catch (error) {
+            console.error(`[ZKDriver] Error fetching template slot ${fingerIndex} for UID ${uid}:`, error);
             return null;
         }
     }
@@ -509,11 +553,11 @@ export class ZKDriver {
             // Step 1: Lock the machine
             await zkInfo.executeCmd(COMMANDS.CMD_DISABLEDEVICE, Buffer.from([0x00, 0x00, 0x00, 0x00]));
 
-            // Step 2: Delete existing template on target slot
-            const delBuf = Buffer.alloc(3);
-            delBuf.writeUInt16LE(uid, 0);
-            delBuf.writeUInt8(fingerIndex, 2);
-            await zkInfo.executeCmd(COMMANDS.CMD_DELETE_USERTEMP, delBuf).catch(() => {});
+            // Step 2: Delete existing template on target slot (Commented out to prevent aborted-write data loss on K14 devices)
+            // const delBuf = Buffer.alloc(3);
+            // delBuf.writeUInt16LE(uid, 0);
+            // delBuf.writeUInt8(fingerIndex, 2);
+            // await zkInfo.executeCmd(COMMANDS.CMD_DELETE_USERTEMP, delBuf).catch(() => {});
 
             // Step 3-7: The official upload data exchange handshake
             await zkInfo.executeCmd(COMMANDS.CMD_PREPARE_DATA, prepPayload);

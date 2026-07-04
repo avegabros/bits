@@ -10,9 +10,8 @@ import { tryAcquireDeviceLock, releaseDeviceLock } from './zk-lock.service';
 function getAuthMethodFromVerifyMode(verifyMode: number): string {
     switch (verifyMode) {
         case 1:
-        case 2:
             return 'FINGERPRINT';
-        case 4:
+        case 2:
             return 'CARD';
         case 3:
             return 'PASSWORD';
@@ -52,7 +51,7 @@ async function syncSingleDevice(dbDevice: {
     port: number;
     isActive: boolean;
     syncEnabled: boolean;
-}): Promise<{ deviceId: number; newLogs: number; skipped: boolean; error?: string }> {
+}, clearLogsOnSuccess = false): Promise<{ deviceId: number; newLogs: number; skipped: boolean; error?: string }> {
     if (dbDevice.syncEnabled === false) {
         console.debug(`[ZK] Skipping "${dbDevice.name}" — sync is disabled.`);
         return { deviceId: dbDevice.id, newLogs: 0, skipped: true };
@@ -119,8 +118,14 @@ async function syncSingleDevice(dbDevice: {
         for (const log of logs) {
             try {
                 const zkUserId = parseInt(log.deviceUserId);
+                const utcTime = convertPHTtoUTC(log.recordTime);
 
-                if (isNaN(zkUserId)) continue;
+                if (isNaN(zkUserId)) {
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
+                    continue;
+                }
 
                 // 1. Find Employee by zkId — SKIP if not in DB (prevents ghost re-creation)
                 const employee = await prisma.employee.findUnique({
@@ -130,39 +135,13 @@ async function syncSingleDevice(dbDevice: {
                 if (!employee) {
                     // This zkId was removed from the DB intentionally. Do not re-create.
                     console.log(`[ZK] Skipping unknown zkId ${zkUserId} — not in database`);
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
                     continue;
                 }
 
-                // 2. Fetch Last Log to prevent duplicates
-                const lastLog = await prisma.attendanceLog.findFirst({
-                    where: { employeeId: employee.id },
-                    orderBy: { timestamp: 'desc' }
-                });
-
-                // Convert PHT to UTC for storage and comparison
-                const utcTime = convertPHTtoUTC(log.recordTime);
-
-                // Logic: Prevent duplicates within 1 minute (accidental double-scans)
-                if (lastLog) {
-                    const diffMs = Math.abs(utcTime.getTime() - lastLog.timestamp.getTime());
-                    const diffMinutes = diffMs / (1000 * 60);
-
-                    if (diffMinutes < 1) {
-                        void audit({
-                            action: 'DUPLICATE_PUNCH',
-                            level: 'WARN',
-                            entityType: 'Attendance',
-                            entityId: employee.id,
-                            performedBy: employee.id,
-                            source: 'device-sync',
-                            details: `Duplicate punch detected for ${employee.firstName} ${employee.lastName} (${Math.round(diffMs / 1000)}s apart)`,
-                            metadata: { employeeId: employee.id, zkId: zkUserId, diffSeconds: Math.round(diffMs / 1000), deviceId: dbDevice.id }
-                        });
-                        continue;
-                    }
-                }
-
-                // 3. Check for exact duplicate in DB (same timestamp + same employee)
+                // 2. Check for exact duplicate in DB (same timestamp + same employee)
                 const exists = await prisma.attendanceLog.findUnique({
                     where: {
                         timestamp_employeeId: {
@@ -184,6 +163,9 @@ async function syncSingleDevice(dbDevice: {
                         details: `Duplicate punch detected for ${employee.firstName} ${employee.lastName} (exact timestamp match)`,
                         metadata: { employeeId: employee.id, zkId: zkUserId, diffSeconds: 0, deviceId: dbDevice.id }
                     });
+                    if (latestInsertedTimestamp === null || utcTime > latestInsertedTimestamp) {
+                        latestInsertedTimestamp = utcTime;
+                    }
                     continue;
                 }
 
@@ -249,6 +231,12 @@ async function syncSingleDevice(dbDevice: {
                 deviceName: dbDevice.name,
                 newLogs: newCount
             });
+        }
+
+        if (clearLogsOnSuccess) {
+            console.log(`[ZK] [LogBufferMaintenance] Safely clearing attendance logs on "${dbDevice.name}"...`);
+            await zk.clearAttendanceLogs();
+            console.log(`[ZK] [LogBufferMaintenance] ✓ "${dbDevice.name}" logs cleared.`);
         }
 
         console.log(`[ZK] Device "${dbDevice.name}" sync complete. ${newCount} new logs.`);
@@ -469,32 +457,32 @@ export const clearAllDeviceLogBuffers = async (): Promise<{
         return { clearedDevices: 0, failedDevices: [] };
     }
 
-    console.log(`[LogBufferMaintenance] Clearing log buffers on ${activeDevices.length} device(s)...`);
+    console.log(`[LogBufferMaintenance] Safe clearing log buffers on ${activeDevices.length} device(s)...`);
 
     let clearedDevices = 0;
     const failedDevices: Array<{ id: number; name: string; error: string }> = [];
 
     for (const device of activeDevices) {
-        // Non-blocking lock check — skip device if busy with sync or enrollment
-        if (!tryAcquireDeviceLock(device.id)) {
-            console.warn(`[LogBufferMaintenance] "${device.name}" is busy — skipping this run.`);
-            failedDevices.push({ id: device.id, name: device.name, error: 'Device busy — try again later' });
-            continue;
-        }
+        console.log(`[LogBufferMaintenance] Initiating pre-clear sync and clear on "${device.name}"...`);
+        // Force sync and clear within a single lock/connection session
+        const syncResult = await syncSingleDevice({
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            port: device.port,
+            isActive: true,
+            syncEnabled: true
+        }, true); // clearLogsOnSuccess = true
 
-        const zk = getDriver(device.ip, device.port);
-        try {
-            await connectWithRetry(zk, 2);
-            await zk.clearAttendanceLogs();
-            console.log(`[LogBufferMaintenance] ✓ "${device.name}" log buffer cleared.`);
+        if (syncResult.error) {
+            console.error(`[LogBufferMaintenance] ✗ Safe clear failed for "${device.name}": ${syncResult.error}`);
+            failedDevices.push({ id: device.id, name: device.name, error: syncResult.error });
+        } else if (syncResult.skipped) {
+            console.warn(`[LogBufferMaintenance] ⚠ Safe clear skipped for "${device.name}" (device busy or offline).`);
+            failedDevices.push({ id: device.id, name: device.name, error: 'Device busy or offline' });
+        } else {
+            console.log(`[LogBufferMaintenance] ✓ "${device.name}" log buffer cleared safely.`);
             clearedDevices++;
-        } catch (err: unknown) {
-            const errMsg = err instanceof Error ? err.message : zkErrMsg(err);
-            console.error(`[LogBufferMaintenance] ✗ "${device.name}" failed: ${errMsg}`);
-            failedDevices.push({ id: device.id, name: device.name, error: errMsg });
-        } finally {
-            try { await zk.disconnect(); } catch { /* ignore */ }
-            releaseDeviceLock(device.id);
         }
     }
 

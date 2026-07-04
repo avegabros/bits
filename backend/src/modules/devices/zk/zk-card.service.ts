@@ -86,12 +86,18 @@ export const enrollEmployeeCard = async (
     }
 
     // 4. Queue update for target device or globally SECOND.
-    const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
+    const enrollments = await prisma.employeeDeviceEnrollment.findMany({
+        where: { employeeId: employee.id, isDeviceAdmin: true },
+        select: { deviceId: true }
+    });
+    const adminDeviceIds = new Set(enrollments.map(e => e.deviceId));
+
     const { enqueueUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
     const { getExcludedDeviceIds } = require('../biometric-exclusion.service');
 
     try {
         if (targetDeviceId) {
+            const deviceRole = adminDeviceIds.has(targetDeviceId) ? 14 : 0;
             await enqueueUpsertUser(targetDeviceId, {
                 zkId: currentZkId!,
                 name: fullName,
@@ -110,6 +116,7 @@ export const enrollEmployeeCard = async (
             const cardExclusions = await getExcludedDeviceIds(employeeId, 'CARD');
             for (const dev of devices) {
                 const effectiveCard = cardExclusions.has(dev.id) ? 0 : cardNumber;
+                const deviceRole = adminDeviceIds.has(dev.id) ? 14 : 0;
                 await enqueueUpsertUser(dev.id, {
                     zkId: currentZkId!,
                     name: fullName,
@@ -156,11 +163,17 @@ export const deleteEmployeeCard = async (
     if (!employee.cardNumber) return { success: true, message: `Employee already has no card assigned.` };
 
     const fullName = `${employee.firstName} ${employee.lastName}`;
-    const deviceRole = employee.role === 'ADMIN' ? 14 : 0;
+    const enrollments = await prisma.employeeDeviceEnrollment.findMany({
+        where: { employeeId: employee.id, isDeviceAdmin: true },
+        select: { deviceId: true }
+    });
+    const adminDeviceIds = new Set(enrollments.map(e => e.deviceId));
+
     const { enqueueGlobalUpsertUser, enqueueUpsertUser, processDeviceSyncQueue } = require('../deviceSyncQueue.service');
 
     try {
         if (targetDeviceId) {
+            const deviceRole = adminDeviceIds.has(targetDeviceId) ? 14 : 0;
             await enqueueUpsertUser(targetDeviceId, {
                 zkId: employee.zkId,
                 name: fullName,
@@ -180,6 +193,7 @@ export const deleteEmployeeCard = async (
         } else {
             const devices = await prisma.device.findMany({ where: { syncEnabled: true }, select: { id: true } });
             for (const dev of devices) {
+                const deviceRole = adminDeviceIds.has(dev.id) ? 14 : 0;
                 await enqueueUpsertUser(dev.id, {
                     zkId: employee.zkId,
                     name: fullName,
