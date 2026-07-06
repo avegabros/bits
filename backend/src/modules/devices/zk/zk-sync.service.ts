@@ -64,7 +64,7 @@ async function syncSingleDevice(dbDevice: {
 
     if (!tryAcquireDeviceLock(dbDevice.id)) {
         console.debug(`[ZK] Cron sync skipped for "${dbDevice.name}" — device is busy.`);
-        return { deviceId: dbDevice.id, newLogs: 0, skipped: true };
+        return { deviceId: dbDevice.id, newLogs: 0, skipped: true, error: 'Device is busy' };
     }
 
     // 1. Read the latest sync watermark for this device.

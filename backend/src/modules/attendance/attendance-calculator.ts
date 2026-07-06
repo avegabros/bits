@@ -8,8 +8,13 @@ import { BasicAttendanceRecord } from './attendance.types';
  * All times are stored as UTC where PHT midnight = UTC midnight offset by -8h
  * i.e. a stored timestamp of 2026-02-10T00:00:00Z represents 2026-02-10T08:00:00+08:00 PHT midnight workaround
  */
-export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift: Prisma.ShiftGetPayload<{}> | null, approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[]) {
-    const shiftCode = shift?.shiftCode ?? null;
+export function calculateAttendanceMetrics(
+    record: BasicAttendanceRecord,
+    shift: Prisma.ShiftGetPayload<{}> | null,
+    approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[]
+) {
+    const isHoliday = !!record.isHoliday;
+    const shiftCode = isHoliday ? null : (shift?.shiftCode ?? null);
 
     if (!record.checkInTime) {
         return { 
@@ -19,12 +24,27 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         };
     }
 
-    if (!shift) {
+    const isRestDay = (() => {
+        if (!shift) return false;
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const phtDate = new Date(new Date(record.date).getTime() + 8 * 60 * 60 * 1000);
+        const dayName = dayNames[phtDate.getUTCDay()];
+        try {
+            const workDays: string[] = typeof shift.workDays === 'string' 
+                ? JSON.parse(shift.workDays || '[]') 
+                : (shift.workDays || []);
+            return workDays.length > 0 && !workDays.includes(dayName);
+        } catch {
+            return false;
+        }
+    })();
+
+    if (!shift || isHoliday || isRestDay) {
         // No shift assigned – mostly OT-only logic or generic fallbacks
         const checkIn = normalizeTime(new Date(record.checkInTime));
         const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
         const totalMs = checkOut ? checkOut.getTime() - checkIn.getTime() : 0;
-        const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
+        const rawTotalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
         
         let overtimeMinutes = 0;
         if (checkOut && approvedOts && approvedOts.length > 0) {
@@ -49,21 +69,11 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
 
         const undertimeMinutes = 0;
 
-        // Late: after default shift start PHT
-        const checkInPHT = new Date(checkIn.getTime() + 8 * 60 * 60 * 1000);
-        const rawLateMinutes = Math.max(0, checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes() - ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60);
-
-        // Anomaly: Tap in is more than threshold away from default shift start
-        const ANOMALY_THRESHOLD_MINS = ATTENDANCE_LIMITS.ANOMALY_THRESHOLD_MINS;
-        const diffMins = Math.abs(checkInPHT.getUTCHours() * 60 + checkInPHT.getUTCMinutes() - ATTENDANCE_LIMITS.DEFAULT_SHIFT_START_HOUR * 60);
-        const rawIsAnomaly = diffMins > ANOMALY_THRESHOLD_MINS;
-
-        // On an approved OT-only day (rest day with no shift), the employee has no
-        // scheduled start time. Do not penalise them with default-shift-based lateness
-        // or anomaly flags — they are working exactly as approved.
+        // On a day with no shift (e.g. rest day or OT-only), the employee has no
+        // scheduled start time. Do not penalise them with lateness or anomaly flags.
         const hasApprovedOt = approvedOts && approvedOts.length > 0;
-        const lateMinutes = hasApprovedOt ? 0 : rawLateMinutes;
-        const isAnomaly = hasApprovedOt ? false : rawIsAnomaly;
+        const lateMinutes = 0;
+        const isAnomaly = false;
 
         const today = getTodayPHT();
         const recordDateStr = new Date(record.date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -71,6 +81,8 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
         const isToday = recordDateStr === todayStr;
         const isShiftActive = !!record.checkInTime && !record.checkOutTime && isToday && record.status !== 'pending';
         const status = isShiftActive ? "IN_PROGRESS" : record.status;
+
+        const totalHours = (hasApprovedOt && !isHoliday) ? parseFloat((overtimeMinutes / 60).toFixed(2)) : rawTotalHours;
 
         return { 
             shiftCode: null, 
@@ -250,10 +262,15 @@ export function calculateAttendanceMetrics(record: BasicAttendanceRecord, shift:
                 }
 
                 // Intersection of actual OT execution [actualStartTime, actualEndTime] and approved OT [otStart, otEnd]
-                if (ot.actualStartTime && ot.actualEndTime) {
-                    const actualCheckIn = normalizeTime(new Date(ot.actualStartTime)).getTime();
-                    const actualCheckOut = normalizeTime(new Date(ot.actualEndTime)).getTime();
+                // Fall back to the record's main checkIn/checkOut if actualStartTime/actualEndTime are not set (continuous shift)
+                const actualCheckIn = ot.actualStartTime 
+                    ? normalizeTime(new Date(ot.actualStartTime)).getTime()
+                    : (checkIn ? checkIn.getTime() : null);
+                const actualCheckOut = ot.actualEndTime 
+                    ? normalizeTime(new Date(ot.actualEndTime)).getTime()
+                    : (checkOut ? checkOut.getTime() : null);
 
+                if (actualCheckIn !== null && actualCheckOut !== null) {
                     const overlapStart = Math.max(actualCheckIn, otStartMs);
                     const overlapEnd = Math.min(actualCheckOut, otEndMs);
 
@@ -299,9 +316,10 @@ export function calculateAttendanceStatus(
     checkOutTime: Date | null,
     date: Date,
     shift: Prisma.ShiftGetPayload<{}> | null,
-    approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[]
+    approvedOts?: { startTime: string, endTime: string, actualStartTime?: Date | string | null, actualEndTime?: Date | string | null }[],
+    isHoliday?: boolean
 ): string {
-    const record = { date, checkInTime, checkOutTime, status: 'present' };
+    const record = { date, checkInTime, checkOutTime, status: 'present', isHoliday };
     const metrics = calculateAttendanceMetrics(record as any, shift, approvedOts);
     
     if (!checkOutTime) return 'incomplete';

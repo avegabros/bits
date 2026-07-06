@@ -480,6 +480,24 @@ export async function recalculateAndPersistAttendanceMetrics(
 
     if (records.length === 0) return;
 
+    const employee = await client.employee.findUnique({
+        where: { id: employeeId },
+        select: { branchId: true }
+    });
+
+    const holiday = await client.holiday.findFirst({
+        where: { date },
+        include: { branches: true }
+    });
+
+    const isHoliday = (() => {
+        if (!holiday) return false;
+        if (holiday.branches.length === 0) return true;
+        const empBranchId = employee?.branchId;
+        if (!empBranchId) return false;
+        return holiday.branches.some(b => b.branchId === empBranchId);
+    })();
+
     // Build date representations for OT lookup (raw + UTC midnight)
     const phtDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
     const utcMidnight = new Date(Date.UTC(phtDate.getUTCFullYear(), phtDate.getUTCMonth(), phtDate.getUTCDate()));
@@ -512,7 +530,7 @@ export async function recalculateAndPersistAttendanceMetrics(
         const otsForRecord = isLatestForDay ? approvedOts : [];
 
         const metrics = calculateAttendanceMetrics(
-            { date: record.date, checkInTime: record.checkInTime, checkOutTime: record.checkOutTime, status: record.status },
+            { date: record.date, checkInTime: record.checkInTime, checkOutTime: record.checkOutTime, status: record.status, isHoliday },
             record.shift,
             otsForRecord
         );
@@ -549,6 +567,7 @@ export const processAttendanceLogs = async (): Promise<ProcessResult> => {
 
 const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
     const pendingAudits = new Map<string, any>();
+    const auditPromises: Promise<void>[] = [];
     const originalRecords = new Map<string, any>();
     const originalOts = new Map<string, any>();
     try {
@@ -715,6 +734,13 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
             otsByEmpAndDate.set(key, list);
         }
 
+        const holidays = await prisma.holiday.findMany({
+            where: {
+                date: { in: queryDates }
+            },
+            include: { branches: true }
+        });
+
         let created = 0;
         let updated = 0;
 
@@ -814,16 +840,24 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                 log.employee?.Shift
             );
 
-            // ── REST DAY DETECTION ────────────────────────────────────────────────────
-            // If the resolved shift exists but today is NOT in its workDays, this is a
-            // rest day. On rest days the employee has no scheduled shift — any work is
-            // exclusively because of an approved OT. We therefore treat the shift as null
-            // ("effectiveShift") so that:
+            // ── REST DAY & HOLIDAY DETECTION ──────────────────────────────────────────
+            // If the resolved shift exists but today is a Rest Day or Holiday, the employee
+            // has no scheduled shift — any work is treated like a Rest Day.
+            // We therefore treat the shift as null ("effectiveShift") so that:
             //  • Attendance records get shiftId: null (OT-only, no shift-based metrics).
             //  • The unique constraint (employeeId, date, shiftId) prevents duplicates.
-            //  • lateMinutes / undertimeMinutes are not calculated against a shift they
-            //    are not scheduled for.
+            //  • lateMinutes / undertimeMinutes are not calculated.
             // resolvedShift is kept for the post-shift guard which needs the raw shift.
+            const isHoliday = (() => {
+                const dayMs = targetDate.getTime();
+                const matchedHoliday = holidays.find(h => toPHTDate(h.date).getTime() === dayMs);
+                if (!matchedHoliday) return false;
+                if (matchedHoliday.branches.length === 0) return true;
+                const empBranchId = log.employee?.branchId;
+                if (!empBranchId) return false;
+                return matchedHoliday.branches.some(b => b.branchId === empBranchId);
+            })();
+
             const isRestDay = (() => {
                 if (!resolvedShift) return false;
                 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -836,8 +870,8 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     return false;
                 }
             })();
-            let effectiveShift = isRestDay ? null : resolvedShift;
-            // ── END REST DAY DETECTION ────────────────────────────────────────────────
+            let effectiveShift = (isRestDay || isHoliday) ? null : resolvedShift;
+            // ── END REST DAY & HOLIDAY DETECTION ──────────────────────────────────────
 
             // ── UNIFIED OVERTIME LOGIC GATE ──────────────────────────────────────────
             if (recordOts.length > 0) {
@@ -929,11 +963,11 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
                     if (!existingAtt) {
                         const empShift = targetShiftId ? effectiveShift : null;
-                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, empShift, recordOts);
+                        const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, empShift, recordOts, isHoliday);
                         const checkInStatus = calculatedStatus === 'late' ? 'late' : 'present';
 
                         const checkInMetrics = calculateAttendanceMetrics(
-                            { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
+                            { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus, isHoliday },
                             empShift,
                             recordOts
                         );
@@ -973,7 +1007,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         created++;
 
                         const otCheckInShift = targetShiftId ? effectiveShift : null;
-                        const otCheckInMetrics = calculateAttendanceMetrics(createdOtRecord, otCheckInShift, recordOts);
+                        const otCheckInMetrics = calculateAttendanceMetrics({ ...createdOtRecord, isHoliday }, otCheckInShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
                             type: 'check-in',
@@ -1007,7 +1041,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
                         if (fullAtt) {
                             const otCheckInShift = targetShiftId ? effectiveShift : null;
-                            const otCheckInMetrics = calculateAttendanceMetrics(fullAtt, otCheckInShift, recordOts);
+                            const otCheckInMetrics = calculateAttendanceMetrics({ ...fullAtt, isHoliday }, otCheckInShift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
                                 type: 'check-in',
@@ -1064,16 +1098,23 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     };
                     pendingAudits.set(`${audPayload2.performedBy}_${audPayload2.entityType}_${audPayload2.entityId}_${audPayload2.action}`, audPayload2);
 
-                    const existingAtt = await prisma.attendance.findFirst({
+                    let existingAtt = await prisma.attendance.findFirst({
                         where: {
                             employeeId: log.employeeId,
                             date: targetDate,
-                            OR: [
-                                { checkInTime: new Date(pendingOtCheckOut.actualStartTime!) },
-                                ...(targetShiftId !== null ? [{ shiftId: targetShiftId }] : [])
-                            ]
+                            checkInTime: new Date(pendingOtCheckOut.actualStartTime!)
                         }
                     });
+
+                    if (!existingAtt && targetShiftId !== null) {
+                        existingAtt = await prisma.attendance.findFirst({
+                            where: {
+                                employeeId: log.employeeId,
+                                date: targetDate,
+                                shiftId: targetShiftId
+                            }
+                        });
+                    }
 
                     if (existingAtt) {
                         targetShiftId = existingAtt.shiftId;
@@ -1091,7 +1132,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                             updateData.checkOutAuthMethod = log.authMethod;
 
                             if (existingAtt.status === 'incomplete' || existingAtt.checkOutTime) {
-                                updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts);
+                                updateData.status = calculateAttendanceStatus(existingAtt.checkInTime, log.timestamp, existingAtt.date, targetShiftId ? effectiveShift : null, recordOts, isHoliday);
 
                                 if (existingAtt.notes?.includes('No checkout recorded')) {
                                     updateData.notes = existingAtt.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -1120,7 +1161,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         updated++;
 
                         const otCoShift = targetShiftId ? effectiveShift : null;
-                        const otCoMetrics = calculateAttendanceMetrics(updatedOtRecord, otCoShift, recordOts);
+                        const otCoMetrics = calculateAttendanceMetrics({ ...updatedOtRecord, isHoliday }, otCoShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
                             type: 'check-out',
@@ -1137,10 +1178,10 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         await recalculateAndPersistAttendanceMetrics(log.employeeId, targetDate);
                     } else {
                         const otCheckIn = new Date(pendingOtCheckOut.actualStartTime!);
-                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, targetDate, targetShiftId ? effectiveShift : null, recordOts);
+                        const calculatedStatus = calculateAttendanceStatus(otCheckIn, log.timestamp, targetDate, targetShiftId ? effectiveShift : null, recordOts, isHoliday);
 
                         const checkMetrics = calculateAttendanceMetrics(
-                            { date: targetDate, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus },
+                            { date: targetDate, checkInTime: otCheckIn, checkOutTime: log.timestamp, status: calculatedStatus, isHoliday },
                             targetShiftId ? effectiveShift : null,
                             recordOts
                         );
@@ -1184,7 +1225,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         created++;
 
                         const otNewCoShift = targetShiftId ? effectiveShift : null;
-                        const otNewCoMetrics = calculateAttendanceMetrics(createdOtCoRecord, otNewCoShift, recordOts);
+                        const otNewCoMetrics = calculateAttendanceMetrics({ ...createdOtCoRecord, isHoliday }, otNewCoShift, recordOts);
 
                         attendanceEmitter.emit('new-record', {
                             type: 'check-out',
@@ -1211,7 +1252,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
             // This ensures any checkout punch without a check-in is saved under
             // the "No Shift" category instead of being silently skipped.
             // We ONLY demote if there isn't already an open check-in for this shift.
-            if (resolvedShift && recordOts.length === 0) {
+            if (resolvedShift) {
                 const [eH, eM] = resolvedShift.endTime.split(':').map(Number);
                 const shiftEndMs = targetDate.getTime() + (eH * 60 + eM) * 60 * 1000;
                 const [sH, sM] = resolvedShift.startTime.split(':').map(Number);
@@ -1221,15 +1262,14 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     : shiftEndMs;
 
                 if (log.timestamp.getTime() > adjustedShiftEndMs) {
-                    const hasOpenRecordForShift = await prisma.attendance.findFirst({
+                    const hasRecordForShift = await prisma.attendance.findFirst({
                         where: {
                             employeeId: log.employeeId,
                             date: targetDate,
-                            shiftId: resolvedShift.id,
-                            checkOutTime: null
+                            shiftId: resolvedShift.id
                         }
                     });
-                    if (!hasOpenRecordForShift) {
+                    if (!hasRecordForShift) {
                         effectiveShift = null;
                     }
                 }
@@ -1246,14 +1286,14 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
             if (!existingAttendance) {
 
-                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, effectiveShift, recordOts);
+                const calculatedStatus = calculateAttendanceStatus(log.timestamp, null, targetDate, effectiveShift, recordOts, isHoliday);
                 const isLate = calculatedStatus === 'late';
                 const checkInStatus = isLate ? 'late' : 'present';
 
                 // Calculate and persist initial metrics at check-in time.
                 // undertimeMinutes / totalHours / isEarlyOut will be 0/false until checkout.
                 const checkInMetrics = calculateAttendanceMetrics(
-                    { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus },
+                    { date: targetDate, checkInTime: log.timestamp, checkOutTime: null, status: checkInStatus, isHoliday },
                     effectiveShift,
                     recordOts
                 );
@@ -1307,7 +1347,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     pendingAudits.set(`${audPayload3.performedBy}_${audPayload3.entityType}_${audPayload3.entityId}_${audPayload3.action}`, audPayload3);
 
                     const shift = effectiveShift;
-                    const metrics = calculateAttendanceMetrics(createdRecord, shift, recordOts);
+                    const metrics = calculateAttendanceMetrics({ ...createdRecord, isHoliday }, shift, recordOts);
 
                     attendanceEmitter.emit('new-record', {
                         type: 'check-in',
@@ -1353,6 +1393,41 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     const effectiveMinCheckout = shiftDurationHours ? Math.min(shiftDurationHours / 2, minCheckoutHours) : minCheckoutHours;
 
                     if (diffHours < effectiveMinCheckout) {
+                        console.log(
+                            `[Attendance] Log ignored: employee="${log.employee.firstName} ${log.employee.lastName}" (ID=${log.employeeId}), ` +
+                            `timestamp=${formatToPhilippineTime(log.timestamp)}, ` +
+                            `reason=Within minimum checkout gap (${(effectiveMinCheckout * 60).toFixed(0)} minutes from check-in at ${formatToPhilippineTime(checkInTime)})`
+                        );
+
+                        const snapshot = {
+                            status: 'ignored',
+                            checkInTime: formatToPhilippineTime(checkInTime),
+                            ignoredPunchTime: formatToPhilippineTime(log.timestamp)
+                        };
+
+                        const existingIgnoredAudit = await prisma.auditLog.findFirst({
+                            where: {
+                                performedBy: log.employeeId,
+                                details: `Punch ignored (Within minimum checkout gap of ${(effectiveMinCheckout * 60).toFixed(0)} minutes)`,
+                                metadata: {
+                                    equals: { snapshot }
+                                }
+                            }
+                        });
+
+                        if (!existingIgnoredAudit) {
+                            const ignoredAudPayload = {
+                                action: 'CHECK_OUT' as const,
+                                entityType: 'Attendance' as const,
+                                entityId: existingAttendance.id,
+                                performedBy: log.employeeId,
+                                source: 'device-sync' as const,
+                                details: `Punch ignored (Within minimum checkout gap of ${(effectiveMinCheckout * 60).toFixed(0)} minutes)`,
+                                metadata: snapshot
+                            };
+                            auditPromises.push(audit(ignoredAudPayload));
+                        }
+
                         await prisma.attendanceLog.update({ where: { id: log.id }, data: { processedAt: new Date() } });
                         continue;
                     }
@@ -1371,7 +1446,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                             };
 
                             if (existingAttendance.status === 'incomplete') {
-                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
+                                updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts, isHoliday);
 
                                 if (existingAttendance.notes?.includes('No checkout recorded')) {
                                     updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -1381,7 +1456,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                             // Persist checkout metrics
                             const coStatus1 = (updateData.status as string) ?? existingAttendance.status;
                             const coMetrics1 = calculateAttendanceMetrics(
-                                { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus1 },
+                                { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus1, isHoliday },
                                 effectiveShift,
                                 recordOts
                             );
@@ -1427,7 +1502,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                             pendingAudits.set(`${audPayload4.performedBy}_${audPayload4.entityType}_${audPayload4.entityId}_${audPayload4.action}`, audPayload4);
 
                             const shift = effectiveShift;
-                            const metrics = calculateAttendanceMetrics(updatedRecord, shift, recordOts);
+                            const metrics = calculateAttendanceMetrics({ ...updatedRecord, isHoliday }, shift, recordOts);
 
                             attendanceEmitter.emit('new-record', {
                                 type: 'check-out',
@@ -1451,7 +1526,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         };
 
                         if (existingAttendance.status === 'incomplete') {
-                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts);
+                            updateData.status = calculateAttendanceStatus(existingAttendance.checkInTime, log.timestamp, existingAttendance.date, effectiveShift, recordOts, isHoliday);
 
                             if (existingAttendance.notes?.includes('No checkout recorded')) {
                                 updateData.notes = existingAttendance.notes.replace(/\s*\|?\s*No checkout recorded.*$/i, '') || null;
@@ -1461,7 +1536,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         // Persist checkout metrics
                         const coStatus2 = (updateData.status as string) ?? existingAttendance.status;
                         const coMetrics2 = calculateAttendanceMetrics(
-                            { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus2 },
+                            { date: existingAttendance.date, checkInTime: existingAttendance.checkInTime, checkOutTime: log.timestamp, status: coStatus2, isHoliday },
                             effectiveShift,
                             recordOts
                         );
@@ -1507,7 +1582,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         pendingAudits.set(`${audPayload5.performedBy}_${audPayload5.entityType}_${audPayload5.entityId}_${audPayload5.action}`, audPayload5);
 
                         const shift2 = effectiveShift;
-                        const metrics2 = calculateAttendanceMetrics(updatedRecord2, shift2, recordOts);
+                        const metrics2 = calculateAttendanceMetrics({ ...updatedRecord2, isHoliday }, shift2, recordOts);
 
                         attendanceEmitter.emit('new-record', {
                             type: 'check-out',
@@ -1570,9 +1645,10 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
             if (shouldLog) {
                 const { compareKey, checkInTime, checkOutTime, actualStartTime, actualEndTime, ...cleanPayload } = payload;
-                void audit(cleanPayload);
+                auditPromises.push(audit(cleanPayload));
             }
         }
+        await Promise.all(auditPromises);
 
         console.log(`[Attendance] Processed ${logs.length} logs: ${created} created, ${updated} updated`);
 
