@@ -48,4 +48,5 @@ export const fieldLabels: Record<string, string> = {
     checkOutTime: 'Time-Out',
     status: 'Status',
     record: 'Record',
+    notes: 'Remarks',
 };

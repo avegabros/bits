@@ -1,16 +1,16 @@
 {
-  "referenceDate": "2026-06-25",
+  "referenceDate": "2026-07-06",
   "employee": {
     "firstName": "Simulated",
     "lastName": "Employee"
   },
   "shifts": [
     {
-      "shiftCode": "S_NIGHT",
-      "name": "Night Shift (22-06)",
-      "startTime": "8:00",
-      "endTime": "12:00",
-      "graceMinutes": 15,
+      "shiftCode": "S_AM",
+      "name": "AM Shift (8-12)",
+      "startTime": "08:00",
+      "endTime": "17:00",
+      "graceMinutes": 30,
       "workDays": [
         "Mon",
         "Tue",
@@ -22,43 +22,40 @@
       ],
       "halfDays": [],
       "breakMinutes": 0,
-      "breaks": [
-        {
-          "start": null,
-          "end": null
-        }
-      ],
+      "breaks": [],
       "sortOrder": 1,
       "isPrimary": true,
-      "isNightShift": true
+      "isNightShift": false
     }
   ],
   "_comment": "overtimes format: { 'startTime': 'HH:MM', 'endTime': 'HH:MM', 'status': 'APPROVED' | 'PENDING', 'reason': 'text' }",
   "overtimes": [
     {
-      "startTime": "12:00",
-      "endTime": "14:00",
-      "status": "APPROVED",
-      "reason": "Night shift post-shift OT"
+      "startTime": "22:30",
+      "endTime": "02:00",
+      "status": "PENDING",
+      "reason": "Overnight overtime test"
     }
   ],
   "punches": [
     {
-      "timestamp": "2026-06-25T08:50:00+08:00"
+      "timestamp": "2026-07-06T08:12:00+08:00"
     },
     {
-      "timestamp": "2026-06-25T12:10:00+08:00"
+      "timestamp": "2026-07-06T17:32:00+08:00"
     },
     {
-      "timestamp": "2026-06-25T13:00:00+08:00"
+      "timestamp": "2026-07-06T22:45:00+08:00"
     },
     {
-      "timestamp": "2026-06-25T15:00:00+08:00"
+      "timestamp": "2026-07-07T02:10:00+08:00"
+    },
+    {
+      "timestamp": "2026-07-07T17:12:00+08:00"
     }
   ],
-  
   "syncConfigOverrides": {
-    "globalMinCheckoutMinutes": 120,
+    "globalMinCheckoutMinutes": 15,
     "minShiftGapMinutes": 30,
     "shiftBufferMinutes": 120
   },

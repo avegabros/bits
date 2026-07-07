@@ -157,17 +157,34 @@ export function AdjustmentAuditLogsMobileCards({
                                 </div>
                             ) : (
                                 <div className="flex flex-col gap-[6px]">
-                                    {group.logs.map((log, idx) => (
-                                        <div key={`change-${idx}`} className="flex flex-wrap items-center gap-x-[6px] text-[11px] leading-normal">
+                                    {group.logs.map((log, idx) => {
+                                        const isNotes = log.field === 'notes';
+                                        return (
+                                        <div key={`change-${idx}`} className={`flex ${isNotes ? 'flex-col items-start gap-[4px] text-left whitespace-normal' : 'flex-wrap items-center gap-x-[6px]'} text-[11px] leading-normal`}>
                                             <span className="font-semibold text-[#616161]">{fieldLabels[log.field] || log.field}:</span>
-                                            <span className="text-[#9E9E9E] line-through decoration-[#BDBDBD]">
-                                                {formatValue(log.field, log.oldValue)}
-                                            </span>
-                                            <span className={`font-black ${getChangeColor(log.field, log.newValue)}`}>
-                                                → {formatValue(log.field, log.newValue)}
-                                            </span>
+                                            {isNotes ? (
+                                                <div className="flex flex-col gap-[2px] pl-[8px] border-l-2 border-slate-200 mt-[2px] text-[10px] w-full">
+                                                    {log.oldValue && log.oldValue !== 'None' && (
+                                                        <span className="text-[#9E9E9E] line-through decoration-[#BDBDBD] break-words">
+                                                            {formatValue(log.field, log.oldValue)}
+                                                        </span>
+                                                    )}
+                                                    <span className={`font-black ${getChangeColor(log.field, log.newValue)} break-words`}>
+                                                        → {formatValue(log.field, log.newValue)}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className="text-[#9E9E9E] line-through decoration-[#BDBDBD]">
+                                                        {formatValue(log.field, log.oldValue)}
+                                                    </span>
+                                                    <span className={`font-black ${getChangeColor(log.field, log.newValue)}`}>
+                                                        → {formatValue(log.field, log.newValue)}
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             )}
                         </div>

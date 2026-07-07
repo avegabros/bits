@@ -47,6 +47,7 @@ export interface BasicAttendanceRecord {
     checkInTime: Date | null;
     checkOutTime: Date | null;
     status: string | null;
+    isHoliday?: boolean;
 }
 
 export interface AttendanceConflict {

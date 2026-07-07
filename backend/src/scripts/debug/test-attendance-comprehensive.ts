@@ -733,6 +733,105 @@ async function runAll() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // TEST 15: Post-Shift Completed Record Check-Out Update (No No-Shift)
+    // ─────────────────────────────────────────────────────────────────────────
+    section('TEST 15: Post-Shift Completed Record Check-Out Update');
+    divider();
+    {
+        const emp = await createTestEmployee('T15');
+        await assignShifts(emp.id, [{ shiftId: SHIFT_DAY.id, sortOrder: 1 }]);
+        await cleanEmployee(emp.id, [DATE_ONLY]);
+
+        info('Step 1: Punch IN at 08:31 (within shift window)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '08:31'), status: 0 }
+        });
+        await processAttendanceLogs();
+
+        info('Step 2: Punch OUT at 17:33 (shift ends at 17:00, completing the record)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '17:33'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        let records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 && records[0].shiftId === SHIFT_DAY.id
+            ? pass('Record successfully created and completed under regular shift')
+            : fail('Regular shift record completed', `got length ${records.length}, shiftId ${records[0]?.shiftId}`);
+
+        info('Step 3: Punch again at 22:12 (simulating late check-out update after shift)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '22:12'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Still exactly 1 record (no duplicate No Shift record)') : fail('Exactly 1 record', `got ${records.length}`);
+
+        let att = records[0];
+        if (att) {
+            att.shiftId === SHIFT_DAY.id ? pass('Record remains associated with regular shift') : fail('Shift remains regular', `got shiftId ${att.shiftId}`);
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '08:31').getUTCHours() ? pass('Check-in remains 08:31 AM') : fail('Check-in remains 08:31', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '22:12').getUTCHours() ? pass('Check-out successfully updated to 22:12 PM') : fail('Check-out updated to 22:12', `got ${att.checkOutTime?.toISOString()}`);
+        }
+
+        await destroyEmployee(emp.id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEST 16: Continuous Overnight Overtime Pairing
+    // ─────────────────────────────────────────────────────────────────────────
+    section('TEST 16: Continuous Overnight Overtime Pairing');
+    divider();
+    {
+        const emp = await createTestEmployee('T16');
+        await assignShifts(emp.id, [{ shiftId: SHIFT_DAY.id, sortOrder: 1 }]);
+        await cleanEmployee(emp.id, [DATE_ONLY]);
+
+        // Create approved overnight overtime request for DATE_ONLY (startTime: 18:00, endTime: 02:00 next day)
+        const otReq = await prisma.overtimeRequest.create({
+            data: {
+                employeeId: emp.id,
+                date: new Date(DATE_ONLY.getTime() + 8 * 60 * 60 * 1000), // PHT Date
+                startTime: '18:00',
+                endTime: '02:00',
+                status: 'APPROVED',
+                reason: 'Continuous overnight overtime test'
+            }
+        });
+
+        info('Step 1: Punch IN on previous day at 08:00 (regular shift check-in)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(DATE_ONLY, '08:00'), status: 0 }
+        });
+        await processAttendanceLogs();
+
+        const nextDate = new Date(DATE_ONLY.getTime() + 24 * 60 * 60 * 1000);
+        info('Step 2: Punch OUT next morning at 02:00 (continuous overnight OT check-out)');
+        await prisma.attendanceLog.create({
+            data: { employeeId: emp.id, timestamp: phtTime(nextDate, '02:00'), status: 1 }
+        });
+        await processAttendanceLogs();
+
+        const records = await getAtt(emp.id, DATE_ONLY);
+        records.length === 1 ? pass('Exactly 1 record mapped to previous day') : fail('Exactly 1 record mapped to previous day', `got ${records.length}`);
+
+        const att = records[0];
+        if (att) {
+            att.shiftId === SHIFT_DAY.id ? pass('Record remains associated with regular day shift') : fail('Shift remains regular day shift', `got ${att.shiftId}`);
+            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '08:00').getUTCHours() ? pass('Check-in remains 08:00 AM') : fail('Check-in remains 08:00 AM', `got ${att.checkInTime.toISOString()}`);
+            att.checkOutTime?.getUTCHours() === phtTime(nextDate, '02:00').getUTCHours() ? pass('Check-out successfully set to 02:00 AM next day') : fail('Check-out set to 02:00 AM next day', `got ${att.checkOutTime?.toISOString()}`);
+            att.overtimeMinutes === 480 ? pass('Overtime minutes correctly calculated as 480 minutes') : fail('Overtime minutes is 480', `got ${att.overtimeMinutes}`);
+        }
+
+        const nextRecords = await getAtt(emp.id, nextDate);
+        nextRecords.length === 0 ? pass('No incorrect attendance record created on next day') : fail('No attendance on next day', `got ${nextRecords.length}`);
+
+        await prisma.overtimeRequest.deleteMany({ where: { employeeId: emp.id } });
+        await destroyEmployee(emp.id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // FINAL SUMMARY
     // ─────────────────────────────────────────────────────────────────────────
     console.log(`\n${C.bold}${'═'.repeat(80)}${C.reset}`);

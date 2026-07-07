@@ -66,6 +66,9 @@ export const handleExport = (
 
   let sumLateDays = 0;
   let sumLateMinutes = 0;
+  let sumOvertime = 0;
+  let sumUndertime = 0;
+  let sumRegHrs = 0;
 
   filteredData.forEach((e) => {
     const shiftLabel = e.shift
@@ -84,6 +87,9 @@ export const handleExport = (
     ]);
     sumLateDays += e.late;
     sumLateMinutes += e.lateMinutes;
+    sumOvertime += e.overtime;
+    sumUndertime += e.undertime;
+    sumRegHrs += e.totalHours;
   });
 
   // Summary / totals row
@@ -93,9 +99,9 @@ export const handleExport = (
     '',
     `${sumLateDays} late day(s)`,
     formatTotalLate(sumLateMinutes),
-    '',
-    '',
-    '',
+    sumOvertime > 0 ? formatHrsMins(sumOvertime) : '—',
+    sumUndertime > 0 ? formatHrsMins(sumUndertime) : '—',
+    sumRegHrs > 0 ? sumRegHrs.toFixed(2) : '0.00',
   ]);
 
   const worksheet = XLSX.utils.aoa_to_sheet(allRows);
@@ -168,6 +174,7 @@ export const handleExportIndividual = (
     'PRESENT',
     'LATE DAYS',
     'LATE TOTAL',
+    'UNDERTIME TOTAL',
     'REG HOURS',
   ]); // Removed ABSENT
   const rate =
@@ -177,6 +184,7 @@ export const handleExportIndividual = (
     emp.present,
     emp.late,
     formatLateHrs(emp.lateMinutes),
+    emp.undertime > 0 ? formatHrsMins(emp.undertime) : '—',
     Math.max(0, emp.totalHours).toFixed(2),
   ]);
   allRows.push([]);
@@ -414,9 +422,9 @@ function sanitizeSheetName(name: string): string {
   return name.replace(/[\\/*?:\[\]]/g, '_').substring(0, 31);
 }
 
-const COLS_PER_EMP = 6;
+const COLS_PER_EMP = 7;
 const SEPARATOR_COLS = 1;
-const HEADER_ROWS = 3;
+const HEADER_ROWS = 4;
 
 /** Merge two style objects (fill + alignment, etc.) */
 function mergeStyle(...styles: Record<string, unknown>[]): Record<string, unknown> {
@@ -429,8 +437,8 @@ function mergeStyle(...styles: Record<string, unknown>[]): Record<string, unknow
   return result;
 }
 
-const ALIGN_CENTER: Record<string, unknown> = { alignment: { horizontal: 'center' as const } };
-const ALIGN_RIGHT: Record<string, unknown> = { alignment: { horizontal: 'right' as const } };
+const ALIGN_CENTER: Record<string, unknown> = { alignment: { horizontal: 'center' as const, vertical: 'center' as const } };
+const ALIGN_RIGHT: Record<string, unknown> = { alignment: { horizontal: 'right' as const, vertical: 'center' as const } };
 
 const STYLE_BOLD: Record<string, unknown> = { font: { bold: true } };
 
@@ -445,19 +453,19 @@ const THIN_BORDER = {
 // Header row 0-1: light blue-gray background, bold, centered, bordered
 const STYLE_INFO_HEADER: Record<string, unknown> = {
   font: { bold: true },
-  alignment: { horizontal: 'center' as const },
+  alignment: { horizontal: 'center' as const, vertical: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
   border: THIN_BORDER,
 };
 const STYLE_INFO_VALUE: Record<string, unknown> = {
-  alignment: { horizontal: 'center' as const },
+  alignment: { horizontal: 'center' as const, vertical: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFBDD7EE' } },
   border: THIN_BORDER,
 };
 // Header row 2 (DATE, DAY, IN, OUT, REMARKS): gray, bold, centered, bordered
 const STYLE_COL_HEADER: Record<string, unknown> = {
   font: { bold: true },
-  alignment: { horizontal: 'center' as const },
+  alignment: { horizontal: 'center' as const, vertical: 'center' as const },
   fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
   border: THIN_BORDER,
 };
@@ -658,41 +666,64 @@ export const handleExportAllCompanies = async (
       const branchName = emp.Branch?.name || '—';
       const position = emp.position || '—';
 
-      // Compute total late minutes for this employee across the entire period
+      // Compute total late and undertime minutes for this employee across the entire period
       const empRecordsMap = attByEmployee.get(emp.id) || new Map();
       let empTotalLateMinutes = 0;
+      let empTotalUndertimeMinutes = 0;
       for (const rec of empRecordsMap.values()) {
         empTotalLateMinutes += rec.lateMinutes ?? 0;
+        empTotalUndertimeMinutes += rec.undertimeMinutes ?? 0;
       }
+      const empTotalCombinedMinutes = empTotalLateMinutes + empTotalUndertimeMinutes;
 
-      // Row 0: [EmpNumber] | [FullName (merged B+C)] | DEPARTMENT | [DeptName] | [TotalLate]
+      // Row 0: [EmpNumber] | [FullName (merged B+C)] | DEPARTMENT | [DeptName (merged E+F)] | [TotalLate (G)]
       setStyledCell(ws, 0, c0, empNumber, STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 1, fullName.toUpperCase(), STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 2, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 0, c0 + 3, 'DEPARTMENT', STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 4, deptName, STYLE_INFO_VALUE);
-      setStyledCell(ws, 0, c0 + 5, formatTotalLate(empTotalLateMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
+      setStyledCell(ws, 0, c0 + 5, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 0, c0 + 6, "LATE: " + formatTotalLate(empTotalLateMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
 
-      // Row 1: POSITION | [Position (merged B+C)] | SITE | [Branch] | (empty)
+      // Row 1: POSITION | [Position (merged B+C)] | SITE | [Branch (merged E+F)] | [TotalUT (G)]
       setStyledCell(ws, 1, c0, 'POSITION', STYLE_INFO_HEADER);
       setStyledCell(ws, 1, c0 + 1, position.toUpperCase(), STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 2, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 3, 'SITE', STYLE_INFO_HEADER);
       setStyledCell(ws, 1, c0 + 4, branchName, STYLE_INFO_VALUE);
-      setStyledCell(ws, 1, c0 + 5, '', FILL_NONE);
+      setStyledCell(ws, 1, c0 + 5, '', STYLE_INFO_VALUE);
+      setStyledCell(ws, 1, c0 + 6, "UT: " + formatTotalLate(empTotalUndertimeMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
 
-      // Merge cells B+C for name (row 0) and position (row 1)
+      // Merge header cells B+C and E+F
       if (!ws['!merges']) ws['!merges'] = [];
-      ws['!merges'].push({ s: { r: 0, c: c0 + 1 }, e: { r: 0, c: c0 + 2 } });
-      ws['!merges'].push({ s: { r: 1, c: c0 + 1 }, e: { r: 1, c: c0 + 2 } });
+      ws['!merges'].push({ s: { r: 0, c: c0 + 1 }, e: { r: 0, c: c0 + 2 } }); // Name B1+C1
+      ws['!merges'].push({ s: { r: 0, c: c0 + 4 }, e: { r: 0, c: c0 + 5 } }); // Dept E1+F1
+      ws['!merges'].push({ s: { r: 1, c: c0 + 1 }, e: { r: 1, c: c0 + 2 } }); // Pos B2+C2
+      ws['!merges'].push({ s: { r: 1, c: c0 + 4 }, e: { r: 1, c: c0 + 5 } }); // Branch E2+F2
 
-      // Row 2: DATE | DAY | IN | OUT | REMARKS | (empty)
+      // Row 2 & 3: Table Headers
+      // DATE, DAY, IN, OUT are merged vertically from row index 2 to 3
       setStyledCell(ws, 2, c0, 'DATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 1, 'DAY', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 2, 'IN', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 3, 'OUT', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 4, 'REMARKS', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 2, c0 + 5, '', FILL_NONE);
+      setStyledCell(ws, 2, c0 + 5, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 6, "TOTAL: " + formatTotalLate(empTotalCombinedMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
+
+      setStyledCell(ws, 3, c0, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 1, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 2, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 3, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 4, 'LATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 5, 'UT', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 6, '', FILL_NONE);
+
+      ws['!merges'].push({ s: { r: 2, c: c0 }, e: { r: 3, c: c0 } });         // Date A3+A4
+      ws['!merges'].push({ s: { r: 2, c: c0 + 1 }, e: { r: 3, c: c0 + 1 } }); // Day B3+B4
+      ws['!merges'].push({ s: { r: 2, c: c0 + 2 }, e: { r: 3, c: c0 + 2 } }); // In C3+C4
+      ws['!merges'].push({ s: { r: 2, c: c0 + 3 }, e: { r: 3, c: c0 + 3 } }); // Out D3+D4
+      ws['!merges'].push({ s: { r: 2, c: c0 + 4 }, e: { r: 2, c: c0 + 5 } }); // Remarks E3+F3
 
       // Parse employee work days from shift
       let workDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -742,7 +773,9 @@ export const handleExportAllCompanies = async (
           setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
           setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
           setStyledCell(ws, rowIdx, c0 + 4, '', FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 5, '', ALIGN_CENTER);
+          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+          ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
         } else if (record) {
           // Has attendance record
           const checkIn = new Date(record.checkInTime);
@@ -767,19 +800,6 @@ export const handleExportAllCompanies = async (
           const lateMins = record.lateMinutes ?? 0;
           const utMins = record.undertimeMinutes ?? 0;
 
-          // Remarks: show late H:MM, or keep other labels
-          let remarks = '';
-          if (isHoliday) {
-            const hName = holidayNameMap.get(dateStr);
-            remarks = hName || 'Holiday';
-          } else if (isRestDay) {
-            remarks = 'Rest Day';
-          } else if (lateMins > 0) {
-            remarks = formatTotalLate(lateMins);
-          } else if (utMins > 0) {
-            remarks = `UT ${formatLateHrs(utMins)}`;
-          }
-
           // Priority: Holiday > Rest Day > Late > On Time
           let rowFill: Record<string, unknown>;
           if (isHoliday) rowFill = FILL_HOLIDAY;
@@ -791,8 +811,21 @@ export const handleExportAllCompanies = async (
           setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
           setStyledCell(ws, rowIdx, c0 + 2, checkInStr, mergeStyle(rowFill, ALIGN_RIGHT));
           setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+
+          if (isHoliday || isRestDay) {
+            const hName = holidayNameMap.get(dateStr);
+            const remarks = isHoliday ? (hName || 'Holiday') : 'Rest Day';
+            setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+            setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+            ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+          } else {
+            const lateVal = lateMins > 0 ? formatTotalLate(lateMins) : '';
+            const utVal = utMins > 0 ? formatTotalLate(utMins) : '';
+            setStyledCell(ws, rowIdx, c0 + 4, lateVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 5, utVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+          }
         } else {
           // No record — determine status & fill
           // Priority: Holiday > Rest Day > Absent
@@ -814,8 +847,10 @@ export const handleExportAllCompanies = async (
           setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
           setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(rowFill, ALIGN_RIGHT));
           setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
+          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+          setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+          ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
         }
       }
     }
@@ -836,10 +871,11 @@ export const handleExportAllCompanies = async (
       cols[base + 1] = { wch: 16 }; // DAY / Name
       cols[base + 2] = { wch: 14 }; // IN
       cols[base + 3] = { wch: 14 }; // OUT
-      cols[base + 4] = { wch: 16 }; // REMARKS
-      cols[base + 5] = { wch: 10 }; // Late H:MM
+      cols[base + 4] = { wch: 10 }; // LATE (E)
+      cols[base + 5] = { wch: 10 }; // UT (F)
+      cols[base + 6] = { wch: 15 }; // Summary (G)
       if (i < emps.length - 1) {
-        cols[base + 6] = { wch: 18 }; // Separator (wide gap)
+        cols[base + 7] = { wch: 18 }; // Separator (wide gap)
       }
     }
     ws['!cols'] = cols;

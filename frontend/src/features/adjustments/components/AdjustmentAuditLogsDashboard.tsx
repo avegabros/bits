@@ -297,17 +297,37 @@ export function AdjustmentAuditLogsDashboard() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-[6px] items-end">
-                            {group.logs.map((log: { id: string | number; field: string; oldValue: string | null; newValue: string | null }, idx: number) => (
-                                <div key={`change-${idx}`} className="flex items-center gap-[6px] whitespace-nowrap bg-[#F5F5F5] border border-[#E0E0E0] px-[8px] py-[4px] rounded-[4px] text-[10px]">
-                                <span className="font-bold text-[#9E9E9E] uppercase tracking-tight">{fieldLabels[log.field] || log.field}:</span>
-                                <span className="text-[#9E9E9E] line-through decoration-[#BDBDBD]">
-                                    {formatValue(log.field, log.oldValue)}
-                                </span>
-                                <span className={`font-black ${getChangeColor(log.field, log.newValue)}`}>
-                                    → {formatValue(log.field, log.newValue)}
-                                </span>
+                            {group.logs.map((log: { id: string | number; field: string; oldValue: string | null; newValue: string | null }, idx: number) => {
+                                const isNotes = log.field === 'notes';
+                                return (
+                                <div 
+                                    key={`change-${idx}`} 
+                                    className={`flex ${isNotes ? 'flex-col items-start gap-[4px] text-left max-w-[450px] whitespace-normal' : 'items-center gap-[6px] whitespace-nowrap'} bg-[#F5F5F5] border border-[#E0E0E0] px-[8px] py-[4px] rounded-[4px] text-[10px]`}
+                                >
+                                    <span className="font-bold text-[#9E9E9E] uppercase tracking-tight">{fieldLabels[log.field] || log.field}:</span>
+                                    {isNotes ? (
+                                        <div className="flex flex-col gap-[2px] mt-[2px] w-full text-[9px] leading-snug">
+                                            {log.oldValue && log.oldValue !== 'None' && (
+                                                <div className="text-[#9E9E9E] line-through decoration-[#BDBDBD] break-words">
+                                                    {formatValue(log.field, log.oldValue)}
+                                                </div>
+                                            )}
+                                            <div className={`font-black ${getChangeColor(log.field, log.newValue)} break-words`}>
+                                                → {formatValue(log.field, log.newValue)}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <span className="text-[#9E9E9E] line-through decoration-[#BDBDBD]">
+                                                {formatValue(log.field, log.oldValue)}
+                                            </span>
+                                            <span className={`font-black ${getChangeColor(log.field, log.newValue)}`}>
+                                                → {formatValue(log.field, log.newValue)}
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
-                            ))}
+                            )})}
                             </div>
                         )}
                     </div>

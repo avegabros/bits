@@ -72,6 +72,10 @@ interface SimulationConfig {
         shiftBufferMinutes: number;
     };
     simulationMode: 'sequential' | 'batch';
+    holiday?: {
+        name?: string;
+        type?: string;
+    };
 }
 
 const defaultConfig: SimulationConfig = {
@@ -280,6 +284,7 @@ async function main() {
     }
 
     // 3. Create simulated employee
+    const firstCompany = await prisma.company.findFirst();
     let employee = oldEmp;
     if (!employee) {
         employee = await prisma.employee.create({
@@ -288,13 +293,20 @@ async function main() {
                 lastName: config.employee.lastName,
                 role: 'USER',
                 employmentStatus: 'ACTIVE',
+                companyId: firstCompany?.id ?? null,
                 updatedAt: new Date()
             }
+        });
+    } else if (firstCompany && !employee.companyId) {
+        employee = await prisma.employee.update({
+            where: { id: employee.id },
+            data: { companyId: firstCompany.id }
         });
     }
 
     // 4. Create Shifts & Assignments
     const dbShifts: any[] = [];
+    let dbHoliday: any = null;
     let primaryShiftId: number | null = null;
 
     for (const s of config.shifts) {
@@ -338,6 +350,25 @@ async function main() {
             where: { id: employee.id },
             data: { shiftId: primaryShiftId }
         });
+    }
+
+    // Clear pre-existing holiday on dateOnly
+    await prisma.holiday.deleteMany({ where: { date: dateOnly } });
+
+    // Create Holiday if configured
+    if (config.holiday) {
+        const rawType = (config.holiday.type || '').toUpperCase();
+        const validTypes = ['REGULAR', 'SPECIAL'];
+        const holidayType = validTypes.includes(rawType) ? rawType : 'REGULAR';
+
+        dbHoliday = await prisma.holiday.create({
+            data: {
+                name: config.holiday.name || 'Simulated Holiday',
+                date: dateOnly,
+                type: holidayType as any
+            }
+        });
+        console.log(`Created Holiday: ${colors.green}${dbHoliday.name}${colors.reset}`);
     }
 
     // 5. Create Approved Overtime requests
@@ -421,8 +452,15 @@ async function main() {
         finalAttendance.forEach((att, index) => {
             console.log(`\nRecord #${index + 1}:`);
             console.log(`--------------------------------------------------`);
-            console.log(`Shift Code:       ${colors.green}${att.shift?.shiftCode ?? 'OT-Only (NULL)'}${colors.reset}`);
-            console.log(`Shift Name:       ${att.shift?.name ?? 'Overtime Only'}`);
+            const displayCode = att.shift 
+                ? att.shift.shiftCode 
+                : ((att.overtimeMinutes ?? 0) > 0 ? 'NO_SHIFT_OT' : 'NO_SHIFT');
+            const displayName = att.shift 
+                ? att.shift.name 
+                : ((att.overtimeMinutes ?? 0) > 0 ? 'No Shift (Approved Overtime)' : 'No Shift');
+
+            console.log(`Shift Code:       ${colors.green}${displayCode}${colors.reset}`);
+            console.log(`Shift Name:       ${displayName}`);
             console.log(`Check-In Time:    ${colors.cyan}${formatToLocalISO(att.checkInTime)}${colors.reset}`);
             console.log(`Check-Out Time:   ${att.checkOutTime ? colors.cyan + formatToLocalISO(att.checkOutTime) + colors.reset : colors.red + 'N/A (Open Record)' + colors.reset}`);
             let isHalfDay = false;
@@ -528,6 +566,10 @@ async function main() {
 
         for (const s of dbShifts) {
             await prisma.shift.delete({ where: { id: s.id } });
+        }
+        if (dbHoliday) {
+            await prisma.holiday.delete({ where: { id: dbHoliday.id } });
+            console.log(`Deleted Holiday: ${dbHoliday.name}`);
         }
         console.log(`Database cleaned up successfully.`);
     }
