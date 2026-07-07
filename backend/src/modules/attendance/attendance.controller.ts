@@ -571,18 +571,23 @@ export const updateAttendance = async (req: Request, res: Response) => {
         if (checkInTime) {
             const oldVal = existing.checkInTime ? existing.checkInTime.toISOString() : null;
             const newDate = new Date(checkInTime);
-            updateData.checkInTime = newDate;
-            updateData.checkin_updated = new Date();
-            auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newDate.toISOString() });
+            if (oldVal !== newDate.toISOString()) {
+                updateData.checkInTime = newDate;
+                updateData.checkin_updated = new Date();
+                auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newDate.toISOString() });
+            }
         }
 
         if (checkOutTime !== undefined) {
             const oldVal = existing.checkOutTime ? existing.checkOutTime.toISOString() : null;
             const newVal = checkOutTime ? new Date(checkOutTime) : null;
-            updateData.checkOutTime = newVal;
-            updateData.checkout_updated = new Date();
-            updateData.checkoutSource = 'manual';
-            auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: newVal ? newVal.toISOString() : null });
+            const newValStr = newVal ? newVal.toISOString() : null;
+            if (oldVal !== newValStr) {
+                updateData.checkOutTime = newVal;
+                updateData.checkout_updated = new Date();
+                updateData.checkoutSource = 'manual';
+                auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: newValStr });
+            }
         }
 
         // Centralized status recalculation
@@ -601,8 +606,6 @@ export const updateAttendance = async (req: Request, res: Response) => {
             }
         }
 
-
-
         // Clear missing-checkout flag if a checkout time is being set
         let currentNotes = existing.notes || '';
         if (updateData.checkOutTime && currentNotes.includes('No checkout recorded')) {
@@ -611,6 +614,10 @@ export const updateAttendance = async (req: Request, res: Response) => {
         
         currentNotes = currentNotes.replace(/\s*\|?\s*Manual Edit:.*$/i, ''); // Clean old manual edit notes
         updateData.notes = currentNotes ? `${currentNotes.trim()} | Manual Edit: ${reason}` : `Manual Edit: ${reason}`;
+
+        if (existing.notes !== updateData.notes) {
+            auditEntries.push({ field: 'notes', oldValue: existing.notes, newValue: updateData.notes as string });
+        }
 
         const updated = await prisma.attendance.update({
             where: { id: recordId },
@@ -629,6 +636,13 @@ export const updateAttendance = async (req: Request, res: Response) => {
                 source: 'admin-panel',
                 level: 'WARN',
                 details: `Admin performed an immediate override on attendance for ${existing.employee.firstName} ${existing.employee.lastName}`,
+                metadata: {
+                    reason,
+                    employeeName: `${existing.employee.firstName} ${existing.employee.lastName}`,
+                    branch: (existing.employee as any).Branch?.name || '—',
+                    attendanceDate: existing.date.toISOString(),
+                    changes: auditEntries
+                },
                 correlationId: req.correlationId
             });
         }
@@ -1216,6 +1230,10 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
     currentNotes = currentNotes.replace(/\s*\|?\s*Manual Edit:.*$/i, ''); // Clean old manual edit notes
     updateData.notes = currentNotes ? `${currentNotes.trim()} | Manual Edit: ${adjustment.reason}` : `Manual Edit: ${adjustment.reason}`;
 
+    if (existing.notes !== updateData.notes) {
+      auditEntries.push({ field: 'notes', oldValue: existing.notes, newValue: updateData.notes as string });
+    }
+
     // Apply to attendance record
     const updated = await prisma.attendance.update({
       where: { id: existing.id },
@@ -1578,4 +1596,3 @@ export const reopenAdjustment = async (req: Request, res: Response) => {
         return res.status(500).json({ success: false, message: 'Failed to reopen adjustment' });
     }
 };
-
