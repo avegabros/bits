@@ -767,27 +767,59 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
             let matchedPrev = false;
 
-            if (openPrevAttendance && openPrevAttendance.shift) {
-                const shift = openPrevAttendance.shift;
-                // Night session condition: shift.isNightShift === true OR startTime > endTime
-                const [sH, sM] = shift.startTime.split(':').map(Number);
-                const [eH, eM] = shift.endTime.split(':').map(Number);
-                const isNightSession = shift.isNightShift || (sH * 60 + sM > eH * 60 + eM);
+            if (openPrevAttendance) {
+                if (openPrevAttendance.shift) {
+                    const shift = openPrevAttendance.shift;
+                    // Night session condition: shift.isNightShift === true OR startTime > endTime
+                    const [sH, sM] = shift.startTime.split(':').map(Number);
+                    const [eH, eM] = shift.endTime.split(':').map(Number);
+                    const isNightSession = shift.isNightShift || (sH * 60 + sM > eH * 60 + eM);
 
-                if (isNightSession) {
-                    // Check if current log timestamp is within the check-out window of the previous day's shift
-                    let expectedEnd = new Date(prevDate.getTime() + (eH * 60 + eM) * 60 * 1000);
-                    if (eH * 60 + eM <= sH * 60 + sM) {
-                        expectedEnd.setTime(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+                    if (isNightSession) {
+                        // Check if current log timestamp is within the check-out window of the previous day's shift
+                        let expectedEnd = new Date(prevDate.getTime() + (eH * 60 + eM) * 60 * 1000);
+                        if (eH * 60 + eM <= sH * 60 + sM) {
+                            expectedEnd.setTime(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
+                        }
+
+                        const shiftBufferMins = syncConfig?.shiftBufferMinutes ?? 120;
+                        const nightShiftBufferMins = syncConfig?.nightShiftBufferMinutes ?? 120;
+
+                        const windowStart = new Date(expectedEnd.getTime() - shiftBufferMins * 60 * 1000);
+                        const windowEnd = new Date(expectedEnd.getTime() + nightShiftBufferMins * 60 * 1000);
+
+                        if (log.timestamp >= windowStart && log.timestamp <= windowEnd) {
+                            targetDate = prevDate;
+                            matchedPrev = true;
+                        }
                     }
+                }
 
-                    const shiftBufferMins = syncConfig?.shiftBufferMinutes ?? 120;
-                    const nightShiftBufferMins = syncConfig?.nightShiftBufferMinutes ?? 120;
+                // If not matched by night shift itself, check for approved overnight overtime on the previous day (continuous shift)
+                if (!matchedPrev) {
+                    const dateKey = `${log.employeeId}_${getPhtDateStr(prevDate)}`;
+                    const prevOts = otsByEmpAndDate.get(dateKey) || [];
+                    const crossingMidnightOt = prevOts.find(ot => {
+                        const [sH, sM] = ot.startTime.split(':').map(Number);
+                        const [eH, eM] = ot.endTime.split(':').map(Number);
+                        const isOtPastMidnight = (sH * 60 + sM > eH * 60 + eM);
 
-                    const windowStart = new Date(expectedEnd.getTime() - shiftBufferMins * 60 * 1000);
-                    const windowEnd = new Date(expectedEnd.getTime() + nightShiftBufferMins * 60 * 1000);
+                        if (isOtPastMidnight) {
+                            const expectedEnd = new Date(prevDate.getTime() + (eH * 60 + eM) * 60 * 1000);
+                            expectedEnd.setTime(expectedEnd.getTime() + 24 * 60 * 60 * 1000);
 
-                    if (log.timestamp >= windowStart && log.timestamp <= windowEnd) {
+                            const shiftBufferMins = syncConfig?.shiftBufferMinutes ?? 120;
+                            const nightShiftBufferMins = syncConfig?.nightShiftBufferMinutes ?? 120;
+
+                            const windowStart = new Date(expectedEnd.getTime() - shiftBufferMins * 60 * 1000);
+                            const windowEnd = new Date(expectedEnd.getTime() + nightShiftBufferMins * 60 * 1000);
+
+                            return log.timestamp >= windowStart && log.timestamp <= windowEnd;
+                        }
+                        return false;
+                    });
+
+                    if (crossingMidnightOt) {
                         targetDate = prevDate;
                         matchedPrev = true;
                     }

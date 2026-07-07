@@ -61,6 +61,7 @@ export function SyncConfigForm({ children }: { children?: React.ReactNode }) {
                             <AttendanceRulesSection
                                 globalMinCheckoutMinutes={config.globalMinCheckoutMinutes}
                                 minShiftGapMinutes={config.minShiftGapMinutes}
+                                nightShiftBufferMinutes={config.nightShiftBufferMinutes}
                                 limits={limits}
                                 onChange={handleChange}
                             />

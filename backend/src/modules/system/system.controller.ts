@@ -31,6 +31,10 @@ const updateSyncConfigSchema = z.object({
         .min(SYNC_LIMITS.SHIFT_BUFFER_MIN)
         .max(SYNC_LIMITS.SHIFT_BUFFER_MAX, `Shift buffer cannot exceed ${SYNC_LIMITS.SHIFT_BUFFER_MAX} min`)
         .optional(),
+    nightShiftBufferMinutes: z.number()
+        .min(SYNC_LIMITS.SHIFT_BUFFER_MIN)
+        .max(SYNC_LIMITS.SHIFT_BUFFER_MAX, `Night shift buffer cannot exceed ${SYNC_LIMITS.SHIFT_BUFFER_MAX} min`)
+        .optional(),
     autoTimeSyncEnabled: z.boolean().optional(),
     timeSyncIntervalSec: z.number()
         .min(SYNC_LIMITS.TIME_SYNC_INTERVAL_MIN_SEC, `Time sync interval must be at least ${SYNC_LIMITS.TIME_SYNC_INTERVAL_MIN_SEC}s`)
@@ -106,6 +110,7 @@ export const getSyncConfig = async (req: Request, res: Response) => {
                 lowFreqIntervalSec: true,
                 shiftAwareSyncEnabled: true,
                 shiftBufferMinutes: true,
+                nightShiftBufferMinutes: true,
                 autoTimeSyncEnabled: true,
                 timeSyncIntervalSec: true,
                 globalMinCheckoutMinutes: true,
@@ -173,6 +178,7 @@ export const updateSyncConfig = async (req: Request, res: Response) => {
             { key: 'highFreqIntervalSec', label: 'Peak interval', suffix: 's' },
             { key: 'lowFreqIntervalSec', label: 'Off-peak interval', suffix: 's' },
             { key: 'shiftBufferMinutes', label: 'Shift buffer', suffix: ' min' },
+            { key: 'nightShiftBufferMinutes', label: 'Night shift buffer', suffix: ' min' },
             { key: 'shiftAwareSyncEnabled', label: 'Shift-aware sync' },
             { key: 'autoTimeSyncEnabled', label: 'Automated time sync' },
             { key: 'timeSyncIntervalSec', label: 'Time sync interval', suffix: 's' },

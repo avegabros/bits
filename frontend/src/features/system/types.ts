@@ -25,6 +25,7 @@ export interface SyncConfig {
     lowFreqIntervalSec: number;
     shiftAwareSyncEnabled: boolean;
     shiftBufferMinutes: number;
+    nightShiftBufferMinutes: number;
     autoTimeSyncEnabled: boolean;
     timeSyncIntervalSec: number;
     globalMinCheckoutMinutes: number;

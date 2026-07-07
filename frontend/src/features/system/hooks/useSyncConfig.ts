@@ -125,6 +125,9 @@ export function useSyncConfig() {
         if (config.shiftBufferMinutes < bufferMin || config.shiftBufferMinutes > bufferMax) {
             errors.push(`Shift Buffer Window must be between ${bufferMin} and ${bufferMax} minutes.`);
         }
+        if (config.nightShiftBufferMinutes < bufferMin || config.nightShiftBufferMinutes > bufferMax) {
+            errors.push(`Night Shift Buffer Window must be between ${bufferMin} and ${bufferMax} minutes.`);
+        }
         if (config.shiftAwareSyncEnabled && config.highFreqIntervalSec > config.lowFreqIntervalSec) {
             errors.push("Peak Interval (s) must be less than or equal to Off-Peak Interval (s) so polling is faster during rush hours.");
         }
