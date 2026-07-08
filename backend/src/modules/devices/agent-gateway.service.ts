@@ -18,6 +18,7 @@ export type AgentCommand =
     | { action: 'CLEAR_ATTENDANCE_LOGS'; deviceIp: string; devicePort: number }
     | { action: 'GET_USER_FINGERS_STATUS'; deviceIp: string; devicePort: number; zkId: number }
     | { action: 'START_ENROLLMENT'; deviceIp: string; devicePort: number; zkId: string; fingerIndex: number }
+    | { action: 'PING_DEVICE'; deviceIp: string; devicePort: number }
     | { action: 'GET_DEVICE_INFO'; deviceIp: string; devicePort: number };
 
 export interface CommandResult {
@@ -56,7 +57,9 @@ export function initAgentGateway(httpServer: HttpServer): Server {
             origin: '*',
             methods: ['GET', 'POST']
         },
-        transports: ['websocket']
+        transports: ['websocket'],
+        pingInterval: 60000,
+        pingTimeout: 180000
     });
 
     console.log('[Gateway] Initializing Agent WebSocket Gateway...');

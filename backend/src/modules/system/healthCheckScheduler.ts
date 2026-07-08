@@ -213,7 +213,7 @@ class HealthCheckScheduler {
                     const route = await getDeviceRoute(device.id);
                     if (route.mode === 'agent') {
                         const result = await sendAgentCommand(route.branchId, {
-                            action: 'TEST_CONNECTION',
+                            action: 'PING_DEVICE',
                             deviceIp: device.ip,
                             devicePort: device.port
                         });
