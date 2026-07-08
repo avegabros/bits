@@ -33,8 +33,21 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
 
             switch (action) {
                 case 'TEST_CONNECTION':
-                    await driver.getInfo();
-                    data = { status: 'ONLINE' };
+                    let serialNumber = 'N/A';
+                    let userCount = 0;
+                    try {
+                        const info = await driver.getInfo();
+                        serialNumber = info.serialNumber || 'N/A';
+                    } catch { /* ignore */ }
+                    try {
+                        const users = await driver.getUsers();
+                        userCount = users.length;
+                    } catch { /* ignore */ }
+                    data = {
+                        status: 'ONLINE',
+                        serialNumber,
+                        userCount
+                    };
                     break;
 
                 case 'PULL_ATTENDANCE':

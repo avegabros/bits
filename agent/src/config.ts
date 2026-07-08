@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load env variables
-dotenv.config();
+// Load env variables with override to prevent cached shell values from taking precedence
+dotenv.config({ override: true });
 
 export interface DeviceConfig {
     ip: string;

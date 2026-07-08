@@ -6,7 +6,8 @@ import deviceEmitter from '../../shared/events/deviceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, auditBatch, buildChanges } from '../../shared/lib/auditHelpers';
 import { getQueueHealth, drainAllPendingQueues, retryDeadLetterTasks } from './deviceSyncQueue.service';
-import { getAllConnectedAgents } from './agent-gateway.service';
+import { getAllConnectedAgents, sendAgentCommand } from './agent-gateway.service';
+import { getDeviceRoute } from './device-router.service';
 
 /** Unwrap node-zklib's ZKError: { err: Error, ip, command } → readable string */
 function zkErrMsg(err: unknown): string {
@@ -229,12 +230,54 @@ export const testDeviceConnection = async (req: Request, res: Response) => {
     const id = parseInt(String(req.params.id));
 
     try {
-        const device = await prisma.device.findUnique({ where: { id } });
-        if (!device) {
-            return res.status(404).json({ success: false, message: 'Device not found' });
-        }
+        const route = await getDeviceRoute(id);
+        const device = route.device;
 
-        console.log(`[Devices] Testing connection to "${device.name}" at ${device.ip}:${device.port}...`);
+        console.log(`[Devices] Testing connection to "${device.name}" at ${device.ip}:${device.port} (mode: ${route.mode})...`);
+
+        if (route.mode === 'agent') {
+            const result = await sendAgentCommand(route.branchId, {
+                action: 'TEST_CONNECTION',
+                deviceIp: device.ip,
+                devicePort: device.port
+            });
+
+            const wasActive = device.isActive;
+            const connected = result.success;
+
+            await prisma.device.update({
+                where: { id },
+                data: { isActive: connected, updatedAt: new Date() }
+            });
+
+            if (wasActive !== connected) {
+                deviceEmitter.emit('status-change', {
+                    id: device.id,
+                    name: device.name,
+                    ip: device.ip,
+                    isActive: connected,
+                });
+            }
+
+            if (connected) {
+                console.log(`[Devices] ✓ "${device.name}" is ONLINE via Agent.`);
+                return res.json({
+                    success: true,
+                    message: `Device is online and responding via Agent`,
+                    info: {
+                        serialNumber: result.data?.serialNumber || 'N/A',
+                        userCount: result.data?.userCount || 0,
+                        logCount: 'N/A',
+                        logCapacity: 'N/A',
+                    }
+                });
+            } else {
+                return res.json({
+                    success: false,
+                    message: `Device is unreachable via Agent: ${result.error || 'Connection failed'}`
+                });
+            }
+        }
 
         const timeout = Number(process.env.ZK_TIMEOUT) || 10000;
         const zk = new ZKDriver(device.ip, device.port, timeout);
