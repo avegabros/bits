@@ -28,6 +28,24 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
     const { action, deviceIp, devicePort } = command;
     const port = devicePort || 4370;
 
+    if (action === 'PING_DEVICE') {
+        if (deviceQueue.isBusy(deviceIp)) {
+            console.log(`[Handler] Fast probing "${action}" on ${deviceIp}:${port} - DEVICE IS ACTIVE (Skipping TCP handshake)`);
+            return { success: true, data: { status: 'ONLINE' } };
+        }
+
+        const driver = new ZKDriver(deviceIp, port);
+        try {
+            console.log(`[Handler] Fast probing (no queue) "${action}" on ${deviceIp}:${port}...`);
+            await driver.connect();
+            await driver.disconnect();
+            return { success: true, data: { status: 'ONLINE' } };
+        } catch (error: any) {
+            await driver.disconnect().catch(() => {});
+            return { success: false, error: error.message || String(error) };
+        }
+    }
+
     return deviceQueue.enqueue(deviceIp, async (): Promise<CommandResult> => {
         const driver = new ZKDriver(deviceIp, port);
         let timeoutId: NodeJS.Timeout | null = null;
@@ -147,10 +165,6 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         data = { status: 'SUCCESS' };
                         break;
 
-                    case 'PING_DEVICE':
-                        data = { status: 'ONLINE' };
-                        break;
-
                     case 'GET_DEVICE_INFO':
                         const info = await driver.getInfo();
                         const time = await driver.getTime();
@@ -172,7 +186,7 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
         const timeoutPromise = new Promise<never>((_, reject) => {
             timeoutId = setTimeout(() => {
                 reject(new Error('DEVICE_COMMAND_TIMEOUT'));
-            }, 25000);
+            }, 180000); // 3 minutes timeout to handle large backlog downloads
         });
 
         try {

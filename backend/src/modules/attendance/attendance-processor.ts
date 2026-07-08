@@ -1442,7 +1442,8 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                                 performedBy: log.employeeId,
                                 details: `Punch ignored (Within minimum checkout gap of ${(effectiveMinCheckout * 60).toFixed(0)} minutes)`,
                                 metadata: {
-                                    equals: { snapshot }
+                                    path: ['ignoredPunchTime'],
+                                    equals: formatToPhilippineTime(log.timestamp)
                                 }
                             }
                         });

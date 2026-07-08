@@ -19,7 +19,7 @@ const socket = io(config.cloudUrl, {
     reconnectionDelayMax: 30000,       // Max delay 30s
     randomizationFactor: 0.3,          // Jitter to prevent concurrent reconnections
     transports: ['websocket'],         // Skip long-polling
-    timeout: 20000,
+    timeout: 60000,                    // 60s connection timeout to survive large log downloads
 });
 
 const deviceQueue = new DeviceQueue();

@@ -203,7 +203,7 @@ export function initAgentGateway(httpServer: HttpServer): Server {
 export async function sendAgentCommand(
     branchId: number,
     command: AgentCommand,
-    timeoutMs: number = 60_000
+    timeoutMs: number = 180_000
 ): Promise<CommandResult> {
     const agent = connectedAgents.get(branchId);
 

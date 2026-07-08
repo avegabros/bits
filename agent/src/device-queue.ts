@@ -13,11 +13,33 @@
  */
 export class DeviceQueue {
     private chains: Map<string, Promise<unknown>> = new Map();
+    private activeDevices: Set<string> = new Set();
 
     async enqueue<T>(deviceIp: string, fn: () => Promise<T>): Promise<T> {
         const prev = this.chains.get(deviceIp) ?? Promise.resolve();
-        const next = prev.then(fn, fn); // Run fn regardless of previous result
+        const next = prev.then(
+            async () => {
+                this.activeDevices.add(deviceIp);
+                try {
+                    return await fn();
+                } finally {
+                    this.activeDevices.delete(deviceIp);
+                }
+            },
+            async () => {
+                this.activeDevices.add(deviceIp);
+                try {
+                    return await fn();
+                } finally {
+                    this.activeDevices.delete(deviceIp);
+                }
+            }
+        );
         this.chains.set(deviceIp, next.catch(() => {})); // Prevent unhandled rejections
         return next;
+    }
+
+    isBusy(deviceIp: string): boolean {
+        return this.activeDevices.has(deviceIp);
     }
 }

@@ -488,18 +488,42 @@ export class ZKDriver {
     }
 
     /**
-     * Get attendance logs
+     * Get attendance logs.
+     * Uses setImmediate to yield the event loop between the TCP fetch
+     * and the CPU-intensive parsing so Socket.io heartbeats are not blocked.
      */
     async getLogs(): Promise<DeviceLog[]> {
         if (!this.zkInstance) throw new Error('Not connected');
+
+        // Fetch raw data from device (network I/O - non-blocking)
         const result = await this.zkInstance.getAttendances();
+
+        // Yield the event loop before parsing to let Socket.io process heartbeats
+        await new Promise<void>(resolve => setImmediate(resolve));
+
         const rawResult = Array.isArray(result) ? result : (result as { data?: unknown[] });
         const logs = Array.isArray(rawResult) ? rawResult : rawResult.data;
 
         if (!Array.isArray(logs)) {
             return [];
         }
-        return this.parseLogs(logs as Record<string, unknown>[]);
+
+        // For very large log sets, parse in chunks to avoid blocking
+        const rawLogs = logs as Record<string, unknown>[];
+        if (rawLogs.length > 500) {
+            const parsed: DeviceLog[] = [];
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < rawLogs.length; i += CHUNK_SIZE) {
+                const chunk = rawLogs.slice(i, i + CHUNK_SIZE);
+                parsed.push(...this.parseLogs(chunk));
+                // Yield event loop between chunks
+                await new Promise<void>(resolve => setImmediate(resolve));
+            }
+            console.log(`[ZKDriver] Parsed ${parsed.length} logs in chunks (${rawLogs.length} raw)`);
+            return parsed;
+        }
+
+        return this.parseLogs(rawLogs);
     }
 
     /**
