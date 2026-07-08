@@ -1104,9 +1104,9 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
     const route = await getDeviceRoute(dbDevice.id);
     const isAgent = route.mode === 'agent';
 
-    // Poll 15 times (60s) for enrollment completion.	
-    for (let attempts = 0; attempts < 15; attempts++) {	
-        await new Promise(r => setTimeout(r, 4000)); // wait 4 seconds	
+    // Poll 8 times (64s) for enrollment completion, with a gentler 8s interval to prevent lagging the device
+    for (let attempts = 0; attempts < 8; attempts++) {	
+        await new Promise(r => setTimeout(r, 8000)); // wait 8 seconds	
         
         let zk: any = null;
         try {
@@ -1135,7 +1135,7 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
                 console.log(	
                     `[BiometricSync] ✓ Detected template for ${employee.firstName}`,	
                     `on "${dbDevice.name}" — slot ${fingerIndex}, ${template.length} bytes.`,	
-                    `(attempt ${attempts + 1}/15)`	
+                    `(attempt ${attempts + 1}/8)`	
                 );	
             }	
         } catch (e) {	

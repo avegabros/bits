@@ -270,7 +270,8 @@ async function flushOfflineQueue(branchId: number): Promise<void> {
     const pendingTasks = await prisma.deviceSyncTask.findMany({
         where: {
             deviceId: { in: deviceIds },
-            status: 'PENDING'
+            status: 'PENDING',
+            entityId: { startsWith: 'AGENT_CMD_' }
         },
         orderBy: { createdAt: 'asc' }
     });

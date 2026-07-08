@@ -32,16 +32,15 @@ export interface SyncZkDataResult {
     newLogs: number;
 }
 
-const convertPHTtoUTC = (deviceDate: Date): Date => {
-    // Extract what the device screen actually printed (which was mapped blindly to local OS components)
-    const year = deviceDate.getFullYear();
-    const month = deviceDate.getMonth();
-    const date = deviceDate.getDate();
-    const hours = deviceDate.getHours();
-    const minutes = deviceDate.getMinutes();
-    const seconds = deviceDate.getSeconds();
+const convertPHTtoUTC = (deviceDate: Date | string): Date => {
+    const d = typeof deviceDate === 'string' ? new Date(deviceDate) : deviceDate;
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const date = d.getDate();
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const seconds = d.getSeconds();
 
-    // Map those raw screen components to a UTC string format, then subtract exactly 8 hours.
     const rawUTC = new Date(Date.UTC(year, month, date, hours, minutes, seconds));
     return new Date(rawUTC.getTime() - (8 * 60 * 60 * 1000));
 };
