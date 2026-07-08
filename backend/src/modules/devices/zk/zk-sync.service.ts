@@ -46,7 +46,7 @@ const convertPHTtoUTC = (deviceDate: Date): Date => {
     return new Date(rawUTC.getTime() - (8 * 60 * 60 * 1000));
 };
 
-async function syncSingleDevice(dbDevice: {
+export async function syncSingleDevice(dbDevice: {
     id: number;
     name: string;
     ip: string;
@@ -253,7 +253,18 @@ async function syncSingleDevice(dbDevice: {
 
         if (clearLogsOnSuccess) {
             console.log(`[ZK] [LogBufferMaintenance] Safely clearing attendance logs on "${dbDevice.name}"...`);
-            await zk.clearAttendanceLogs();
+            if (route.mode === 'agent') {
+                const clearResult = await sendAgentCommand(route.branchId, {
+                    action: 'CLEAR_ATTENDANCE_LOGS',
+                    deviceIp: dbDevice.ip,
+                    devicePort: dbDevice.port
+                });
+                if (!clearResult.success) {
+                    throw new Error(clearResult.error || 'Failed to clear attendance logs via Agent');
+                }
+            } else {
+                await zk.clearAttendanceLogs();
+            }
             console.log(`[ZK] [LogBufferMaintenance] ✓ "${dbDevice.name}" logs cleared.`);
         }
 
@@ -427,15 +438,31 @@ export const syncAllDeviceClocks = async (): Promise<SyncZkTimeResult> => {
             continue;
         }
         try {
-            const zk = getDriver(device.ip, device.port || 4370);
-            await zk.connect();
-            try {
+            const route = await getDeviceRoute(device.id);
+            if (route.mode === 'agent') {
                 const nowUTC = new Date();
-                await zk.setTime(nowUTC);
-                console.log(`[ClockSync] ✓ "${device.name}" (${device.ip}) — time set to PHT`);
+                const result = await sendAgentCommand(route.branchId, {
+                    action: 'SET_TIME',
+                    deviceIp: device.ip,
+                    devicePort: device.port,
+                    utcTime: nowUTC.toISOString()
+                });
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to sync time via Agent');
+                }
+                console.log(`[ClockSync] ✓ "${device.name}" (${device.ip}) — time set via Agent`);
                 successfulDevices++;
-            } finally {
-                await zk.disconnect();
+            } else {
+                const zk = getDriver(device.ip, device.port || 4370);
+                await zk.connect();
+                try {
+                    const nowUTC = new Date();
+                    await zk.setTime(nowUTC);
+                    console.log(`[ClockSync] ✓ "${device.name}" (${device.ip}) — time set to PHT`);
+                    successfulDevices++;
+                } finally {
+                    await zk.disconnect();
+                }
             }
         } catch (err: unknown) {
             console.warn(`[ClockSync] ✗ "${device.name}" (${device.ip}) — failed: ${zkErrMsg(err)}`);

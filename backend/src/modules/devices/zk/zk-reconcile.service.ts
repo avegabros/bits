@@ -3,6 +3,8 @@ import { ZKDriver } from '../../../shared/lib/zk-driver';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { acquireDeviceLock, releaseDeviceLock } from './zk-lock.service';
 import { PROTECTED_DEVICE_UIDS } from './zk-user.service';
+import { getDeviceRoute } from '../device-router.service';
+import { sendAgentCommand } from '../agent-gateway.service';
 
 
 export interface ReconcileReport {
@@ -66,17 +68,30 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
     });
     const dbByZkId = new Map(dbEmployees.map(e => [e.zkId!.toString(), e]));
 
-    await acquireDeviceLock(deviceId);
-    const zk = getDriver(dbDevice.ip, dbDevice.port);
+    const route = await getDeviceRoute(deviceId);
+    let zk: any = null;
 
     try {
-        console.log(`[Reconcile] Connecting to "${dbDevice.name}" (${dbDevice.ip}:${dbDevice.port})...`);
-        await connectWithRetry(zk, 2);
+        let deviceUsers: any[] = [];
 
-        // ── PRE-RECONCILE: Global Deletions Sweep (Handled by Queue) ───────
-
-        // 3. Get all users currently on device
-        const deviceUsers = await zk.getUsers();
+        if (route.mode === 'agent') {
+            console.log(`[Reconcile] Fetching users from "${dbDevice.name}" via Agent...`);
+            const result = await sendAgentCommand(route.branchId, {
+                action: 'GET_USERS',
+                deviceIp: dbDevice.ip,
+                devicePort: dbDevice.port
+            });
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to fetch users via Agent');
+            }
+            deviceUsers = result.data || [];
+        } else {
+            await acquireDeviceLock(deviceId);
+            zk = getDriver(dbDevice.ip, dbDevice.port);
+            console.log(`[Reconcile] Connecting to "${dbDevice.name}" (${dbDevice.ip}:${dbDevice.port})...`);
+            await connectWithRetry(zk, 2);
+            deviceUsers = await zk.getUsers();
+        }
         console.log(`[Reconcile] Device has ${deviceUsers.length} users. DB has ${dbEmployees.length} active employees.`);
 
         // Convert userId to trimmed format for accurate comparison.
@@ -209,6 +224,25 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                 // User exists on device — check finger count and check card state
                 const dUser = deviceByVisibleId.get(visibleId) ?? deviceByUid.get(zkId);
                 if (!dUser) continue; // Should not happen given existsOnDevice check above
+
+                let enrolledFingers: number[] = [];
+                const isAgent = route.mode === 'agent';
+                if (isAgent) {
+                    try {
+                        const statusResult = await sendAgentCommand(route.branchId, {
+                            action: 'GET_USER_FINGERS_STATUS',
+                            deviceIp: dbDevice.ip,
+                            devicePort: dbDevice.port,
+                            zkId
+                        });
+                        if (statusResult.success && statusResult.data) {
+                            enrolledFingers = statusResult.data.enrolledFingers || [];
+                        }
+                    } catch (err) {
+                        console.warn(`[Reconcile] Failed to get user finger status via agent for ${fullName}:`, err);
+                    }
+                }
+
                 const actualCard = Number(dUser.cardno || 0);
 
                 if (actualCard !== expectedCard && !dryRun) {
@@ -236,7 +270,9 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                         if (dbFingers.length > 0) {
                             let deviceFingerCount = 0;
                             for (const { fingerIndex } of dbFingers) {
-                                const hasFinger = await zk.hasFingerTemplate(dUser.uid, fingerIndex);
+                                const hasFinger = isAgent
+                                    ? enrolledFingers.includes(fingerIndex)
+                                    : await zk.hasFingerTemplate(dUser.uid, fingerIndex);
                                 if (hasFinger) {
                                     deviceFingerCount++;
                                 } else {
@@ -247,7 +283,9 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                                         console.log(`[Reconcile] 🔍 Would sync missing finger index ${fingerIndex} for "${fullName}" (UID=${dUser.uid}).`);
                                     }
                                 }
-                                await new Promise(r => setTimeout(r, 50)); // 50ms rate limit delay
+                                if (!isAgent) {
+                                    await new Promise(r => setTimeout(r, 50)); // 50ms rate limit delay
+                                }
                             }
                             
                             // If they have fingers in DB but 0 were found on device, mark as needs enrollment
@@ -257,7 +295,9 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
                         } else {
                             // If they have 0 fingers in DB, query device finger count to see if they need enrollment
                             try {
-                                const fingerCount = await zk.getFingerCount(dUser.uid);
+                                const fingerCount = isAgent
+                                    ? enrolledFingers.length
+                                    : await zk.getFingerCount(dUser.uid);
                                 if (fingerCount === 0) {
                                     report.needsEnrollment.push({ zkId, name: fullName });
                                     console.log(`[Reconcile] ⚠ "${fullName}" (UID=${dUser.uid}) has 0 fingerprints — needs enrollment.`);
@@ -302,8 +342,12 @@ export const reconcileDeviceWithDB = async (deviceId: number, dryRun: boolean = 
         // The healthCheckScheduler is the single source of truth for device connectivity.
         throw new Error(`Reconcile failed: ${msg}`);
     } finally {
-        try { await zk.disconnect(); } catch { /* ignore */ }
-        releaseDeviceLock(deviceId);
+        if (zk) {
+            try { await zk.disconnect(); } catch { /* ignore */ }
+        }
+        if (route && route.mode === 'direct') {
+            releaseDeviceLock(deviceId);
+        }
     }
 };
 

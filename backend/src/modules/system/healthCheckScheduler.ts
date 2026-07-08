@@ -2,6 +2,8 @@ import { prisma } from '../../shared/lib/prisma';
 import deviceEmitter from '../../shared/events/deviceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
 import { triggerAutoReconcile } from '../devices/zk';
+import { getDeviceRoute } from '../devices/device-router.service';
+import { sendAgentCommand } from '../devices/agent-gateway.service';
 
 /** Returns a formatted timestamp string for console logging (e.g. "11:15:30") */
 function ts(): string {
@@ -206,7 +208,23 @@ class HealthCheckScheduler {
 
         const results = await Promise.allSettled(
             devices.map(async (device) => {
-                const reachable = await tcpProbe(device.ip, device.port, timeout);
+                let reachable = false;
+                try {
+                    const route = await getDeviceRoute(device.id);
+                    if (route.mode === 'agent') {
+                        const result = await sendAgentCommand(route.branchId, {
+                            action: 'TEST_CONNECTION',
+                            deviceIp: device.ip,
+                            devicePort: device.port
+                        });
+                        reachable = result.success;
+                    } else {
+                        reachable = await tcpProbe(device.ip, device.port, timeout);
+                    }
+                } catch (err) {
+                    console.error(`[HealthCheck] Failed to route health check for device ${device.id}:`, err);
+                }
+
                 const previouslyActive = device.isActive;
 
                 // Only write to DB if state actually changed

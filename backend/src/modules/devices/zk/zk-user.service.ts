@@ -2,6 +2,8 @@ import { prisma } from '../../../shared/lib/prisma';
 import { ZKDriver } from '../../../shared/lib/zk-driver';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { tryAcquireDeviceLock, releaseDeviceLock, acquireDeviceLock } from './zk-lock.service';
+import { getDeviceRoute } from '../device-router.service';
+import { sendAgentCommand } from '../agent-gateway.service';
 export const PROTECTED_DEVICE_UIDS = [1];
 const MIN_EMPLOYEE_ZK_ID = 2;
 
@@ -35,11 +37,30 @@ export const findNextSafeZkId = async (): Promise<SafeZkIdResult> => {
     const unreachableDevices: string[] = [];
 
     for (const dbDevice of activeDevices) {
-        const zk = getDriver(dbDevice.ip, dbDevice.port);
         try {
-            await connectWithRetry(zk, 1);
-            const deviceUsers = await zk.getUsers();
-            
+            const route = await getDeviceRoute(dbDevice.id);
+            let deviceUsers: any[] = [];
+
+            if (route.mode === 'agent') {
+                const result = await sendAgentCommand(route.branchId, {
+                    action: 'GET_USERS',
+                    deviceIp: dbDevice.ip,
+                    devicePort: dbDevice.port
+                });
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to fetch users via Agent');
+                }
+                deviceUsers = result.data || [];
+            } else {
+                const zk = getDriver(dbDevice.ip, dbDevice.port);
+                try {
+                    await connectWithRetry(zk, 1);
+                    deviceUsers = await zk.getUsers();
+                } finally {
+                    try { await zk.disconnect(); } catch { /* ignore */ }
+                }
+            }
+
             deviceUsers.forEach((u) => {
                 // Scan both internal UID and external userId
                 if (typeof u.uid === 'number') usedIds.add(u.uid);
@@ -54,8 +75,6 @@ export const findNextSafeZkId = async (): Promise<SafeZkIdResult> => {
         } catch (err: unknown) {
             unreachableDevices.push(dbDevice.name);
             console.warn(`[ZK] findNextSafeZkId — could not reach "${dbDevice.name}" (${zkErrMsg(err)}).`);
-        } finally {
-            try { await zk.disconnect(); } catch { /* ignore */ }
         }
     }
 

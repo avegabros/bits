@@ -14,6 +14,10 @@ export type AgentCommand =
     | { action: 'DELETE_USER'; deviceIp: string; devicePort: number; zkId: number }
     | { action: 'DELETE_FINGER'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number }
     | { action: 'SET_TIME'; deviceIp: string; devicePort: number; utcTime: string }
+    | { action: 'GET_USERS'; deviceIp: string; devicePort: number }
+    | { action: 'CLEAR_ATTENDANCE_LOGS'; deviceIp: string; devicePort: number }
+    | { action: 'GET_USER_FINGERS_STATUS'; deviceIp: string; devicePort: number; zkId: number }
+    | { action: 'START_ENROLLMENT'; deviceIp: string; devicePort: number; zkId: string; fingerIndex: number }
     | { action: 'GET_DEVICE_INFO'; deviceIp: string; devicePort: number };
 
 export interface CommandResult {

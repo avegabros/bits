@@ -132,23 +132,37 @@ export const enrollEmployeeFingerprint = async (
     const visibleId = currentZkId.toString();
     const deviceUid = currentZkId;
 
-    // Acquire interactive device lock for priority handling.
-    await acquireInteractiveDeviceLock(dbDevice.id);
-    const zk = getDriver(dbDevice.ip, dbDevice.port);
-
+    const route = await getDeviceRoute(dbDevice.id);
+    let zk: any = null;
 
     try {
-        console.log(`[Enrollment] Connecting to "${dbDevice.name}" (${dbDevice.ip}:${dbDevice.port})...`);
-        // Connect with 1 retry for interactive flow.
-        await connectWithRetry(zk, 1);
+        let deviceUsers: any[] = [];
+        const isAgent = route.mode === 'agent';
 
-        const deviceUsers = await zk.getUsers();
+        if (isAgent) {
+            console.log(`[Enrollment] Fetching users from "${dbDevice.name}" via Agent...`);
+            const result = await sendAgentCommand(route.branchId, {
+                action: 'GET_USERS',
+                deviceIp: dbDevice.ip,
+                devicePort: dbDevice.port
+            });
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to fetch users via Agent');
+            }
+            deviceUsers = result.data || [];
+        } else {
+            await acquireInteractiveDeviceLock(dbDevice.id);
+            zk = getDriver(dbDevice.ip, dbDevice.port);
+            console.log(`[Enrollment] Connecting to "${dbDevice.name}" (${dbDevice.ip}:${dbDevice.port})...`);
+            await connectWithRetry(zk, 1);
+            deviceUsers = await zk.getUsers();
+        }
+
         // Slot occupancy check.
         const slotOccupant = deviceUsers.find((u) => u.uid === deviceUid);
         const userByVisibleId = deviceUsers.find((u) => String(u.userId).trim() === visibleId.trim());
 
         if (slotOccupant && String(slotOccupant.userId).trim() !== visibleId.trim()) {
-            // Guard 1: A DIFFERENT person occupies the target slot — refuse immediately.
             console.warn(`[Enrollment] ⚠ UID conflict: slot UID=${deviceUid} is occupied by userId="${slotOccupant.userId}" ("${slotOccupant.name}") — refusing enrollment for "${fullName}" (visibleId="${visibleId}").`);
             return {
                 success: false,
@@ -158,25 +172,60 @@ export const enrollEmployeeFingerprint = async (
         }
 
         if (slotOccupant && String(slotOccupant.userId).trim() === visibleId.trim()) {
-            // Guard 2 (short-circuit): The correct user is already in the correct slot.
-            // Do NOT fall through to userByVisibleId — that Array.find() could return a
-            // ghost user with the same userId at a different uid, triggering a false rewrite.
             console.log(`[Enrollment] User already at correct slot UID=${deviceUid}. Proceeding to enroll.`);
         } else if (!userByVisibleId) {
-            // Slot is empty and no other record claims this visibleId — safe to write fresh.
             console.log(`[Enrollment] User not found on device — force-clearing slot UID=${deviceUid} and adding (visibleId="${visibleId}")...`);
-            try { await zk.deleteUser(deviceUid); } catch { /* slot empty — ok */ }
-            await zk.clearUserFingerprints(deviceUid);
-            await zk.setUser(deviceUid, fullName, '', 0, employee.cardNumber ?? 0, visibleId);
-            await zk.refreshData();
+            if (isAgent) {
+                try {
+                    await sendAgentCommand(route.branchId, {
+                        action: 'DELETE_USER',
+                        deviceIp: dbDevice.ip,
+                        devicePort: dbDevice.port,
+                        zkId: deviceUid
+                    });
+                } catch { /* empty */ }
+                await sendAgentCommand(route.branchId, {
+                    action: 'UPSERT_USER',
+                    deviceIp: dbDevice.ip,
+                    devicePort: dbDevice.port,
+                    zkId: deviceUid,
+                    name: fullName,
+                    card: employee.cardNumber ?? 0,
+                    role: 0
+                });
+            } else {
+                try { await zk.deleteUser(deviceUid); } catch { /* slot empty — ok */ }
+                await zk.clearUserFingerprints(deviceUid);
+                await zk.setUser(deviceUid, fullName, '', 0, employee.cardNumber ?? 0, visibleId);
+                await zk.refreshData();
+            }
             console.log(`[Enrollment] User written to UID=${deviceUid}.`);
         } else if (userByVisibleId.uid !== deviceUid) {
-            // User exists at the wrong UID (target slot is confirmed empty from Guard 1 pass).
             console.warn(`[Enrollment] ⚠ User found at wrong UID=${userByVisibleId.uid} — re-writing to correct slot UID=${deviceUid}.`);
-            try { await zk.deleteUser(deviceUid); } catch { /* slot may be empty */ }
-            await zk.clearUserFingerprints(deviceUid);
-            await zk.setUser(deviceUid, fullName, '', 0, employee.cardNumber ?? 0, visibleId);
-            await zk.refreshData();
+            if (isAgent) {
+                try {
+                    await sendAgentCommand(route.branchId, {
+                        action: 'DELETE_USER',
+                        deviceIp: dbDevice.ip,
+                        devicePort: dbDevice.port,
+                        zkId: deviceUid
+                    });
+                } catch { /* slot may be empty */ }
+                await sendAgentCommand(route.branchId, {
+                    action: 'UPSERT_USER',
+                    deviceIp: dbDevice.ip,
+                    devicePort: dbDevice.port,
+                    zkId: deviceUid,
+                    name: fullName,
+                    card: employee.cardNumber ?? 0,
+                    role: 0
+                });
+            } else {
+                try { await zk.deleteUser(deviceUid); } catch { /* slot may be empty */ }
+                await zk.clearUserFingerprints(deviceUid);
+                await zk.setUser(deviceUid, fullName, '', 0, employee.cardNumber ?? 0, visibleId);
+                await zk.refreshData();
+            }
             console.log(`[Enrollment] User re-written to UID=${deviceUid}.`);
         } else {
             console.log(`[Enrollment] User already at correct slot UID=${deviceUid}. Proceeding to enroll.`);
@@ -185,7 +234,21 @@ export const enrollEmployeeFingerprint = async (
         // 4. Send enrollment command
         const fingerName = FINGER_MAP[fingerIndex] || `Finger ${fingerIndex}`;
         console.log(`[Enrollment] Sending CMD_STARTENROLL for "${fullName}" (${fingerName}) on "${dbDevice.name}"...`);
-        await zk.startEnrollment(visibleId, fingerIndex);
+        
+        if (isAgent) {
+            const startRes = await sendAgentCommand(route.branchId, {
+                action: 'START_ENROLLMENT',
+                deviceIp: dbDevice.ip,
+                devicePort: dbDevice.port,
+                zkId: visibleId,
+                fingerIndex
+            });
+            if (!startRes.success) {
+                throw new Error(startRes.error || 'Failed to start enrollment on Agent');
+            }
+        } else {
+            await zk.startEnrollment(visibleId, fingerIndex);
+        }
 
         // Extract template in background.
         extractAndDistributeTemplate(dbDevice.id, employee.id, fingerIndex).catch((err: unknown) => {
@@ -243,8 +306,10 @@ export const enrollEmployeeFingerprint = async (
             error: zkErrMsg(error),
         };
     } finally {
-        try { await zk.disconnect(); } catch { /* ignore */ }
-        releaseDeviceLock(dbDevice.id);
+        if (zk) {
+            try { await zk.disconnect(); } catch { /* ignore */ }
+            releaseDeviceLock(dbDevice.id);
+        }
     }
 };
 
@@ -527,28 +592,43 @@ export const deleteFingerprintFromDevice = async (
     const fullName = `${employee.firstName} ${employee.lastName}`;
     const fingerLabel = `Finger ${fingerIndex + 1}`;
 
-    await acquireInteractiveDeviceLock(deviceId);
-    const zk = getDriver(device.ip, device.port);
+    const route = await getDeviceRoute(deviceId);
+    let zk: any = null;
 
     try {
-        await connectWithRetry(zk, 1);
+        const isAgent = route.mode === 'agent';
+        console.log(`[DeleteFinger] Deleting ${fingerLabel} for ${fullName} from "${device.name}" (mode: ${route.mode})...`);
 
-        console.log(`[DeleteFinger] Deleting ${fingerLabel} for ${fullName} from "${device.name}"...`);
+        if (isAgent) {
+            const res = await sendAgentCommand(route.branchId, {
+                action: 'DELETE_FINGER',
+                deviceIp: device.ip,
+                devicePort: device.port,
+                zkId: employee.zkId,
+                fingerIndex
+            });
+            if (!res.success) {
+                throw new Error(res.error || 'Failed to delete fingerprint via Agent');
+            }
+        } else {
+            await acquireInteractiveDeviceLock(deviceId);
+            zk = getDriver(device.ip, device.port);
+            await connectWithRetry(zk, 1);
 
-        // Step 1: Delete only the specific finger index
-        await zk.deleteFingerTemplate(employee.zkId, fingerIndex);
-        await zk.refreshData();
+            // Step 1: Delete only the specific finger index
+            await zk.deleteFingerTemplate(employee.zkId, fingerIndex);
+            await zk.refreshData();
 
-        // Step 2: Verify the target slot is actually empty
-        const verifyTemplate = await zk.getFingerTemplate(employee.zkId, fingerIndex);
-        if (verifyTemplate !== null) {
-            console.warn(`[DeleteFinger] ⚠ Verification failed — template still present in slot ${fingerIndex} on "${device.name}". Retrying clear...`);
-            // Retry clear just this specific slot
-            try {
-                await zk.deleteFingerTemplate(employee.zkId, fingerIndex);
-                await zk.refreshData();
-            } catch { /* best effort retry */ }
-            verifyTemplate.fill(0);
+            // Step 2: Verify the target slot is actually empty
+            const verifyTemplate = await zk.getFingerTemplate(employee.zkId, fingerIndex);
+            if (verifyTemplate !== null) {
+                console.warn(`[DeleteFinger] ⚠ Verification failed — template still present in slot ${fingerIndex} on "${device.name}". Retrying clear...`);
+                try {
+                    await zk.deleteFingerTemplate(employee.zkId, fingerIndex);
+                    await zk.refreshData();
+                } catch { /* best effort retry */ }
+                verifyTemplate.fill(0);
+            }
         }
 
         console.log(`[DeleteFinger] ✓ Deleted ${fingerLabel} for ${fullName} from "${device.name}".`);
@@ -576,8 +656,10 @@ export const deleteFingerprintFromDevice = async (
         console.error(`[DeleteFinger] Error:`, error);
         return { success: false, message: `Failed to delete fingerprint: ${zkErrMsg(error)}` };
     } finally {
-        try { await zk.disconnect(); } catch { /* ignore */ }
-        releaseDeviceLock(deviceId);
+        if (zk) {
+            try { await zk.disconnect(); } catch { /* ignore */ }
+            releaseDeviceLock(deviceId);
+        }
     }
 };
 
@@ -1019,15 +1101,35 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
 	
     console.log(`[BiometricSync] Waiting for user to scan finger... started polling device "${dbDevice.name}".`);	
 	
+    const route = await getDeviceRoute(dbDevice.id);
+    const isAgent = route.mode === 'agent';
+
     // Poll 15 times (60s) for enrollment completion.	
     for (let attempts = 0; attempts < 15; attempts++) {	
         await new Promise(r => setTimeout(r, 4000)); // wait 4 seconds	
-        	
-        await acquireDeviceLock(dbDevice.id);	
-        const zk = getDriver(dbDevice.ip, dbDevice.port);	
-        try {	
-            await connectWithRetry(zk, 0);	
-            const template = await zk.getFingerTemplate(deviceUid, fingerIndex);	
+        
+        let zk: any = null;
+        try {
+            let template: Buffer | null = null;
+
+            if (isAgent) {
+                const res = await sendAgentCommand(route.branchId, {
+                    action: 'READ_FINGERPRINT',
+                    deviceIp: dbDevice.ip,
+                    devicePort: dbDevice.port,
+                    zkId: deviceUid,
+                    fingerIndex
+                });
+                if (res.success && res.data) {
+                    template = Buffer.from(res.data);
+                }
+            } else {
+                await acquireDeviceLock(dbDevice.id);	
+                zk = getDriver(dbDevice.ip, dbDevice.port);	
+                await connectWithRetry(zk, 0);	
+                template = await zk.getFingerTemplate(deviceUid, fingerIndex);
+            }
+
             if (template && template.length > 8) {	
                 found = true;	
                 console.log(	
@@ -1039,8 +1141,10 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
         } catch (e) {	
             // ignore — device may still be processing enrollment	
         } finally {	
-            try { await zk.disconnect(); } catch {}	
-            releaseDeviceLock(dbDevice.id);	
+            if (zk) {
+                try { await zk.disconnect(); } catch {}	
+                releaseDeviceLock(dbDevice.id);	
+            }
         }	
 	
         if (found) break;	

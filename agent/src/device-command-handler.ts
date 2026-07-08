@@ -11,6 +11,10 @@ export type AgentCommand =
     | { action: 'DELETE_USER'; deviceIp: string; devicePort: number; zkId: number }
     | { action: 'DELETE_FINGER'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number }
     | { action: 'SET_TIME'; deviceIp: string; devicePort: number; utcTime: string }
+    | { action: 'GET_USERS'; deviceIp: string; devicePort: number }
+    | { action: 'CLEAR_ATTENDANCE_LOGS'; deviceIp: string; devicePort: number }
+    | { action: 'GET_USER_FINGERS_STATUS'; deviceIp: string; devicePort: number; zkId: number }
+    | { action: 'START_ENROLLMENT'; deviceIp: string; devicePort: number; zkId: string; fingerIndex: number }
     | { action: 'GET_DEVICE_INFO'; deviceIp: string; devicePort: number };
 
 export interface CommandResult {
@@ -109,6 +113,35 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                 case 'SET_TIME':
                     const timeCmd = command as any;
                     await driver.setTime(new Date(timeCmd.utcTime));
+                    data = { status: 'SUCCESS' };
+                    break;
+
+                case 'GET_USERS':
+                    const users = await driver.getUsers();
+                    data = users;
+                    break;
+
+                case 'CLEAR_ATTENDANCE_LOGS':
+                    await driver.clearAttendanceLogs();
+                    data = { status: 'SUCCESS' };
+                    break;
+
+                case 'GET_USER_FINGERS_STATUS':
+                    const statusCmd = command as any;
+                    const enrolledFingers: number[] = [];
+                    for (let finger = 0; finger <= 2; finger++) {
+                        const hasTemplate = await driver.hasFingerTemplate(statusCmd.zkId, finger);
+                        if (hasTemplate) {
+                            enrolledFingers.push(finger);
+                        }
+                        await new Promise(r => setTimeout(r, 50)); // 50ms politeness delay
+                    }
+                    data = { enrolledFingers };
+                    break;
+
+                case 'START_ENROLLMENT':
+                    const startCmd = command as any;
+                    await driver.startEnrollment(String(startCmd.zkId), startCmd.fingerIndex);
                     data = { status: 'SUCCESS' };
                     break;
 
