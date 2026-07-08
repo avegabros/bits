@@ -6,7 +6,7 @@ import deviceEmitter from '../../shared/events/deviceEmitter';
 
 export type AgentCommand =
     | { action: 'TEST_CONNECTION'; deviceIp: string; devicePort: number }
-    | { action: 'PULL_ATTENDANCE'; deviceIp: string; devicePort: number }
+    | { action: 'PULL_ATTENDANCE'; deviceIp: string; devicePort: number; since?: string }
     | { action: 'WRITE_FINGERPRINT'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number; templateData: Buffer }
     | { action: 'READ_FINGERPRINT'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number }
     | { action: 'READ_ALL_FINGERPRINTS'; deviceIp: string; devicePort: number; zkId: number }
@@ -59,7 +59,8 @@ export function initAgentGateway(httpServer: HttpServer): Server {
         },
         transports: ['websocket'],
         pingInterval: 60000,
-        pingTimeout: 180000
+        pingTimeout: 180000,
+        maxHttpBufferSize: 50 * 1024 * 1024  // 50MB — safety net for large attendance payloads
     });
 
     console.log('[Gateway] Initializing Agent WebSocket Gateway...');

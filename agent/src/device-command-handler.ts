@@ -3,7 +3,7 @@ import { DeviceQueue } from './device-queue';
 
 export type AgentCommand =
     | { action: 'TEST_CONNECTION'; deviceIp: string; devicePort: number }
-    | { action: 'PULL_ATTENDANCE'; deviceIp: string; devicePort: number }
+    | { action: 'PULL_ATTENDANCE'; deviceIp: string; devicePort: number; since?: string }
     | { action: 'WRITE_FINGERPRINT'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number; templateData: Buffer }
     | { action: 'READ_FINGERPRINT'; deviceIp: string; devicePort: number; zkId: number; fingerIndex: number }
     | { action: 'READ_ALL_FINGERPRINTS'; deviceIp: string; devicePort: number; zkId: number }
@@ -77,8 +77,15 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         break;
 
                     case 'PULL_ATTENDANCE':
-                        const logs = await driver.getLogs();
-                        data = logs;
+                        const allLogs = await driver.getLogs();
+                        const sinceFilter = (command as any).since ? new Date((command as any).since) : null;
+                        if (sinceFilter) {
+                            const filtered = allLogs.filter(log => new Date(log.recordTime) > sinceFilter);
+                            console.log(`[Handler] Filtered ${allLogs.length} total logs to ${filtered.length} (since ${sinceFilter.toISOString()})`);
+                            data = filtered;
+                        } else {
+                            data = allLogs;
+                        }
                         break;
 
                     case 'WRITE_FINGERPRINT':

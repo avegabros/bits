@@ -90,7 +90,8 @@ export async function syncSingleDevice(dbDevice: {
             const result = await sendAgentCommand(route.branchId, {
                 action: 'PULL_ATTENDANCE',
                 deviceIp: dbDevice.ip,
-                devicePort: dbDevice.port
+                devicePort: dbDevice.port,
+                since: watermark.toISOString()
             });
             if (!result.success) {
                 throw new Error(result.error || 'Agent sync command failed');
