@@ -171,6 +171,8 @@ model Branch {
   Employee  Employee[]
   companies CompanyBranch[]
   holidays  HolidayBranch[]
+  devices   Device[]          // NEW
+  agents    BranchAgent[]     // NEW
 }
 
 model CompanyBranch {
@@ -188,6 +190,7 @@ model Device {
   ip                            String                          @unique
   port                          Int                             @default(4370)
   location                      String?
+  branchId                      Int?                            // NEW
   isActive                      Boolean                         @default(true)
   syncEnabled                   Boolean                         @default(true)
   lastSyncedAt                  DateTime?
@@ -197,6 +200,7 @@ model Device {
   lastReconciledAt              DateTime?
   createdAt                     DateTime                        @default(now())
   updatedAt                     DateTime
+  branch                        Branch?                         @relation(fields: [branchId], references: [id], onDelete: SetNull)  // NEW
   AttendanceCheckIns            Attendance[]                    @relation("AttCheckIn")
   AttendanceCheckOuts           Attendance[]                    @relation("AttCheckOut")
   AttendanceLog                 AttendanceLog[]
@@ -206,6 +210,7 @@ model Device {
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
   DeviceBiometricExclusion      DeviceBiometricExclusion[]
 
+  @@index([branchId])           // NEW
   @@index([isActive])
   @@index([syncEnabled])
 }
@@ -261,6 +266,7 @@ model Employee {
   EmployeeFingerprintEnrollment EmployeeFingerprintEnrollment[]
   DeviceBiometricExclusion      DeviceBiometricExclusion[]
   RefreshToken                  RefreshToken[]
+  FingerprintTemplate           FingerprintTemplate[]          // NEW
 
   @@index([departmentId])
   @@index([sectionId])
@@ -519,4 +525,38 @@ model OvertimeRequest {
   @@index([employeeId])
   @@index([date])
   @@index([status])
+}
+
+model FingerprintTemplate {
+  id          Int      @id @default(autoincrement())
+  employeeId  Int
+  fingerIndex Int
+  templateData Bytes   // Raw binary — maps to PostgreSQL `bytea`
+  capturedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, fingerIndex])
+  @@index([employeeId])
+}
+
+model BranchAgent {
+  id              Int       @id @default(autoincrement())
+  branchId        Int       @unique           // One agent per branch
+  label           String                      // Human-readable name, e.g. "Makati Office Agent"
+  tokenHash       String    @unique           // bcrypt hash of the agent's auth token
+  isEnabled       Boolean   @default(true)
+  lastHeartbeatAt DateTime?
+  lastConnectedAt DateTime?
+  lastDisconnectedAt DateTime?
+  agentVersion    String?                     // Reported by agent on connect
+  metadata        Json?                       // Agent-reported info (OS, hostname, device count)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  branch          Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@index([isEnabled])
 }

@@ -19,6 +19,7 @@ export interface FingerprintSlot {
   label: string
   fingerIndex: number | null
   enrolled: boolean
+  isBackedUp?: boolean
   devices: DeviceSyncStatus[]
 }
 

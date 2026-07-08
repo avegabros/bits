@@ -63,6 +63,25 @@ export function DeviceCard({
                             >
                                 {device.syncEnabled ? '⟳ Sync On' : '⏸ Sync Off'}
                             </Badge>
+                            {device.branch?.name && (
+                                <Badge
+                                    variant="outline"
+                                    className="text-[10px] bg-primary/10 text-primary border-primary/20"
+                                >
+                                    🏢 {device.branch.name}
+                                </Badge>
+                            )}
+                            {device.isRemoteAgent && (
+                                <Badge
+                                    variant="outline"
+                                    className={`text-[10px] ${device.isAgentOnline
+                                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                        : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                        }`}
+                                >
+                                    {device.isAgentOnline ? '🔌 Agent: Live' : '🔌 Agent: Offline'}
+                                </Badge>
+                            )}
                         </div>
                     </div>
                 </div>

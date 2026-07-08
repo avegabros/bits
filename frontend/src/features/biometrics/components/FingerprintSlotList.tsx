@@ -35,8 +35,13 @@ export function FingerprintSlotList({
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] px-2.5 py-1 rounded-lg font-bold bg-green-50 text-green-700 uppercase tracking-wider border border-green-100">
+                <div className="flex items-center gap-2">
+                  {slot.isBackedUp && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-lg font-bold bg-indigo-50 text-indigo-700 uppercase tracking-wider border border-indigo-100 flex items-center gap-1">
+                      ☁ Backed Up
+                    </span>
+                  )}
+                  <span className="text-[10px] px-2 py-0.5 rounded-lg font-bold bg-green-50 text-green-700 uppercase tracking-wider border border-green-100">
                     Enrolled
                   </span>
                   <button

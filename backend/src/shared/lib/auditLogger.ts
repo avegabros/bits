@@ -29,6 +29,7 @@ const ENTITY_TO_CATEGORY: Record<string, AuditCategory> = {
     'Company': 'config',
     'Holiday': 'config',
     'System': 'system',
+    'BranchAgent': 'device',
 };
 
 /** Keys that must never be persisted in audit log metadata */

@@ -387,12 +387,20 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
 
         // Build slots array (Finger 1/2/3) — map existing enrollments to slots
         const MAX_SLOTS = 3;
+        // Check cloud DB templates backup
+        const dbTemplates = await prisma.fingerprintTemplate.findMany({
+            where: { employeeId },
+            select: { fingerIndex: true }
+        });
+        const backedUpFingerIndices = new Set(dbTemplates.map(t => t.fingerIndex));
+
         const enrolledFingerIndices = Array.from(fingerMap.keys()).sort((a, b) => a - b);
         const slots: Array<{
             slot: number;
             label: string;
             fingerIndex: number | null;
             enrolled: boolean;
+            isBackedUp: boolean;
             devices: {
                 deviceId: number;
                 deviceName: string;
@@ -427,6 +435,7 @@ export const getEmployeeFingerprintStatus = async (req: Request, res: Response) 
                 label: `Finger ${i + 1}`,
                 fingerIndex,
                 enrolled: fingerData !== null,
+                isBackedUp: fingerIndex !== null && backedUpFingerIndices.has(fingerIndex),
                 devices,
             });
         }

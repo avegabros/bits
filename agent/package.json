@@ -1,0 +1,20 @@
+{
+  "name": "bits-agent",
+  "version": "1.0.0",
+  "description": "BITS Local Branch Agent for ZKTeco device communication",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

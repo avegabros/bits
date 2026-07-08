@@ -6,6 +6,7 @@ import { SyncStatusCard } from './SyncStatusCard';
 import { SyncConfigForm } from './SyncConfigForm';
 import { DatabaseBackupManagerCard } from './DatabaseBackupManagerCard';
 import { DeviceSyncTable } from './DeviceSyncTable';
+import { AgentManagerCard } from './AgentManagerCard';
 import {
     useDeviceStream,
     DeviceConnectedPayload,
@@ -120,6 +121,9 @@ export function SystemDashboard() {
                 loading={statusLoading}
                 onStatusRefresh={fetchSyncStatus}
             />
+
+            {/* ── Section 1.5: Branch Agents ────────────────────────────── */}
+            <AgentManagerCard />
 
             {/* ── Section 2–4: Configuration ────────────────────────────── */}
             <SyncConfigForm>

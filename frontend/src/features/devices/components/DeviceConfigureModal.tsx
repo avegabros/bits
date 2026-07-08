@@ -9,6 +9,8 @@ export interface Device {
     ip: string
     port: number
     location: string | null
+    branchId?: number | null
+    branch?: { name: string } | null
     isActive: boolean
     syncEnabled: boolean
     lastPolledAt?: string | null
@@ -17,6 +19,8 @@ export interface Device {
     lastSyncError?: string | null
     lastReconciledAt?: string | null
     pendingTasks?: number
+    isRemoteAgent?: boolean
+    isAgentOnline?: boolean
     createdAt: string
     updatedAt: string
 }
@@ -26,6 +30,7 @@ export interface FormState {
     ip: string
     port: string
     location: string
+    branchId: string
 }
 
 interface DeviceConfigureModalProps {
@@ -35,6 +40,7 @@ interface DeviceConfigureModalProps {
     setForm: React.Dispatch<React.SetStateAction<FormState>>;
     formError: string | null;
     saving: boolean;
+    branches: any[];
     onClose: () => void;
     onSave: () => void;
 }
@@ -46,6 +52,7 @@ export function DeviceConfigureModal({
     setForm,
     formError,
     saving,
+    branches,
     onClose,
     onSave
 }: DeviceConfigureModalProps) {
@@ -118,6 +125,20 @@ export function DeviceConfigureModal({
                             onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                             className="bg-secondary/40 border-border"
                         />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Branch Assignment</label>
+                        <select
+                            value={form.branchId}
+                            onChange={e => setForm(f => ({ ...f, branchId: e.target.value }))}
+                            className="w-full px-3 py-2 bg-secondary/40 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-foreground"
+                        >
+                            <option value="">No Branch Assigned</option>
+                            {branches.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="bg-secondary/30 border border-border rounded-xl p-3 text-xs text-muted-foreground flex items-start gap-2">

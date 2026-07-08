@@ -15,6 +15,12 @@ import {
     setDeviceAdministrators,
     removeDeviceAdministrator,
 } from './device.controller';
+import {
+    getAllAgents,
+    createAgent,
+    toggleAgent,
+    deleteAgent
+} from './agent.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
 
@@ -299,5 +305,11 @@ router.post('/queue/retry/:id', retryDeviceDeadLetters);
 router.get('/administrators', getDeviceAdministrators);
 router.post('/administrators', setDeviceAdministrators);
 router.delete('/administrators/:employeeId', removeDeviceAdministrator);
+
+// ─── Agent Routes ────────────────────────────────────────────────────────────
+router.get('/agents', getAllAgents);
+router.post('/agents', createAgent);
+router.post('/agents/:id/toggle', toggleAgent);
+router.delete('/agents/:id', deleteAgent);
 
 export default router;

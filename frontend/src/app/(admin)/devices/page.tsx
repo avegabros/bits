@@ -14,7 +14,7 @@ import { DeviceReconcileModal } from '@/features/devices/components/DeviceReconc
 import { DeviceDeleteConfirmModal } from '@/features/devices/components/DeviceDeleteConfirmModal'
 import { DeviceCard } from '@/features/devices/components/DeviceCard'
 
-const EMPTY_FORM: FormState = { name: '', ip: '', port: '4370', location: '' }
+const EMPTY_FORM: FormState = { name: '', ip: '', port: '4370', location: '', branchId: '' }
 
 interface AdminEnrollment {
     id: number
@@ -56,6 +56,9 @@ export default function DevicesPage() {
     const [form, setForm] = useState<FormState>(EMPTY_FORM)
     const [saving, setSaving] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
+
+    // Branches state
+    const [branches, setBranches] = useState<any[]>([])
 
     // Global Sync State
     const [globalSyncEnabled, setGlobalSyncEnabled] = useState(true)
@@ -171,11 +174,24 @@ export default function DevicesPage() {
         }
     }, [])
 
+    const fetchBranches = useCallback(async () => {
+        try {
+            const res = await fetch('/api/branches', { credentials: 'include' })
+            const data = await res.json()
+            if (data.success) {
+                setBranches(data.branches)
+            }
+        } catch (e) {
+            console.error('Error fetching branches:', e)
+        }
+    }, [])
+
     useEffect(() => {
         fetchDevices()
         fetchAdministrators()
         fetchEmployees()
-    }, [fetchDevices, fetchAdministrators, fetchEmployees])
+        fetchBranches()
+    }, [fetchDevices, fetchAdministrators, fetchEmployees, fetchBranches])
 
     const handleDeviceConnected = useCallback((payload: DeviceConnectedPayload) => {
         setDevices(prev => prev.map(device => {
@@ -238,7 +254,13 @@ export default function DevicesPage() {
 
     const openEdit = (device: Device) => {
         setEditingDevice(device)
-        setForm({ name: device.name, ip: device.ip, port: String(device.port), location: device.location || '' })
+        setForm({
+            name: device.name,
+            ip: device.ip,
+            port: String(device.port),
+            location: device.location || '',
+            branchId: device.branchId ? String(device.branchId) : ''
+        })
         setFormError(null)
         setShowModal(true)
     }
@@ -266,7 +288,13 @@ export default function DevicesPage() {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ name: form.name.trim(), ip: form.ip.trim(), port, location: form.location.trim() || null })
+                body: JSON.stringify({
+                    name: form.name.trim(),
+                    ip: form.ip.trim(),
+                    port,
+                    location: form.location.trim() || null,
+                    branchId: form.branchId ? Number(form.branchId) : null
+                })
             })
             const data = await res.json()
             if (data.success) {
@@ -728,6 +756,7 @@ export default function DevicesPage() {
                 setForm={setForm} 
                 formError={formError} 
                 saving={saving} 
+                branches={branches}
                 onClose={closeModal} 
                 onSave={handleSave} 
             />

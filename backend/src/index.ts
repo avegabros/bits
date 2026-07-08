@@ -1,6 +1,7 @@
 import app from './app';
 import { startCronJobs } from './shared/lib/cronJobs';
 import { repairMissingCheckouts } from './modules/attendance/attendance.service';
+import { initAgentGateway } from './modules/devices/agent-gateway.service';
 
 const port = process.env.PORT || 3001;
 
@@ -16,7 +17,7 @@ process.on('uncaughtException', (error) => {
   // which causes "Unexpected token I" parse errors. Log and continue instead.
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Backend server running on port ${port}`);
 
   // Run startup repair for missing checkouts
@@ -25,3 +26,7 @@ app.listen(port, () => {
   // Initialize automated cron jobs
   startCronJobs();
 });
+
+// Initialize WebSocket gateway for branch agents
+initAgentGateway(server);
+

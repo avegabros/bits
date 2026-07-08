@@ -8,6 +8,8 @@ import {
 } from './zk';
 import { audit } from '../../shared/lib/auditLogger';
 import deviceEmitter from '../../shared/events/deviceEmitter';
+import { getDeviceRoute } from './device-router.service';
+import { sendAgentCommand } from './agent-gateway.service';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -261,7 +263,11 @@ const MAX_RETRIES = 6;
  * Execute a single queue task idempotently.
  * Throws an Error if it fails and needs retry, otherwise returns void for success.
  */
-async function executeTask(task: { id: number; deviceId: number; actionType: string; entityId: string; payload: unknown; retryCount: number }, zk: InstanceType<typeof import('../../shared/lib/zk-driver').ZKDriver>): Promise<void> {
+async function executeTask(
+    task: { id: number; deviceId: number; actionType: string; entityId: string; payload: unknown; retryCount: number },
+    route: any,
+    zk: any
+): Promise<void> {
     const actionType = task.actionType as SyncActionType;
     
     try {
@@ -269,27 +275,42 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
             const payload = task.payload as UpsertUserPayload;
             const deviceUid = payload.zkId;
             const visibleId = payload.zkId.toString();
-            
-            // Porting the robust pre-write occupancy check from addUserToDevice
-            const deviceUsers = await zk.getUsers() || [];
-            const occupant = deviceUsers.find((u) => u.uid === deviceUid);
-            const visibleConflict = deviceUsers.find((u) =>
-                String(u.userId).trim() === visibleId.trim() && u.uid !== deviceUid
-            );
 
-            if (occupant) {
-                if (String(occupant.userId).trim() === visibleId.trim()) {
-                    // Safe to update in place
-                    await zk.setUser(deviceUid, payload.name, "", payload.role, payload.card, visibleId);
-                } else {
-                    throw new Error(`UID conflict: slot ${deviceUid} occupied by another user ("${occupant.name}")`);
+            if (route.mode === 'agent') {
+                const res = await sendAgentCommand(route.branchId, {
+                    action: 'UPSERT_USER',
+                    deviceIp: route.device.ip,
+                    devicePort: route.device.port,
+                    zkId: payload.zkId,
+                    name: payload.name,
+                    card: payload.card,
+                    role: payload.role
+                });
+                if (!res.success) {
+                    throw new Error(res.error || 'Agent upsert user failed');
                 }
-            } else if (visibleConflict) {
-                throw new Error(`visibleId conflict: userId=${visibleId} already claimed by uid=${visibleConflict.uid}`);
             } else {
-                // Empty slot, write user record
-                try { await zk.deleteUser(deviceUid); } catch { /* empty */ }
-                await zk.setUser(deviceUid, payload.name, "", payload.role, payload.card, visibleId);
+                // Porting the robust pre-write occupancy check from addUserToDevice
+                const deviceUsers = await zk.getUsers() || [];
+                const occupant = deviceUsers.find((u: any) => u.uid === deviceUid);
+                const visibleConflict = deviceUsers.find((u: any) =>
+                    String(u.userId).trim() === visibleId.trim() && u.uid !== deviceUid
+                );
+
+                if (occupant) {
+                    if (String(occupant.userId).trim() === visibleId.trim()) {
+                        // Safe to update in place
+                        await zk.setUser(deviceUid, payload.name, "", payload.role, payload.card, visibleId);
+                    } else {
+                        throw new Error(`UID conflict: slot ${deviceUid} occupied by another user ("${occupant.name}")`);
+                    }
+                } else if (visibleConflict) {
+                    throw new Error(`visibleId conflict: userId=${visibleId} already claimed by uid=${visibleConflict.uid}`);
+                } else {
+                    // Empty slot, write user record
+                    try { await zk.deleteUser(deviceUid); } catch { /* empty */ }
+                    await zk.setUser(deviceUid, payload.name, "", payload.role, payload.card, visibleId);
+                }
             }
 
             // Sync the database state for the card based on the successful device write
@@ -316,51 +337,115 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
         } 
         else if (actionType === 'DELETE_USER') {
             const payload = task.payload as DeleteUserPayload;
-            await zk.deleteUser(payload.zkId);
+            if (route.mode === 'agent') {
+                const res = await sendAgentCommand(route.branchId, {
+                    action: 'DELETE_USER',
+                    deviceIp: route.device.ip,
+                    devicePort: route.device.port,
+                    zkId: payload.zkId
+                });
+                if (!res.success) throw new Error(res.error || 'Agent delete user failed');
+            } else {
+                await zk.deleteUser(payload.zkId);
+            }
         }
         else if (actionType === 'DELETE_FINGER') {
             const payload = task.payload as DeleteFingerPayload;
-            await zk.deleteFingerTemplate(payload.zkId, payload.fingerIndex);
+            if (route.mode === 'agent') {
+                const res = await sendAgentCommand(route.branchId, {
+                    action: 'DELETE_FINGER',
+                    deviceIp: route.device.ip,
+                    devicePort: route.device.port,
+                    zkId: payload.zkId,
+                    fingerIndex: payload.fingerIndex
+                });
+                if (!res.success) throw new Error(res.error || 'Agent delete finger failed');
+            } else {
+                await zk.deleteFingerTemplate(payload.zkId, payload.fingerIndex);
+            }
         }
         else if (actionType === 'SYNC_FINGER_FROM_SOURCE') {
             const payload = task.payload as SyncFingerPayload;
             
-            // 1. Evaluate possible source devices
-            const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
-                where: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex },
-                select: { deviceId: true }
-            });
-            const sourceCandidateIds = enrollments.map(e => e.deviceId).filter(id => id !== task.deviceId);
-            
-            if (sourceCandidateIds.length === 0) {
-                throw new Error(`Finger ${payload.fingerIndex} has no source devices (record might be corrupted or source devices deleted)`);
-            }
-
+            // 1. Evaluate possible source devices or Cloud DB
             let sourceTemplateData: Buffer | null = null;
-            const sourceDevices = await prisma.device.findMany({
-                where: { id: { in: sourceCandidateIds }, isActive: true }
+
+            // Check Cloud Database first
+            const dbTemplate = await prisma.fingerprintTemplate.findFirst({
+                where: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex }
             });
 
-            // 2. Iterate and securely extract template
-            for (const srcDb of sourceDevices) {
-                await acquireDeviceLock(srcDb.id);
+            if (dbTemplate) {
+                sourceTemplateData = Buffer.from(dbTemplate.templateData);
+                console.log(`[SyncQueue] Loaded template for finger ${payload.fingerIndex} from Cloud DB for task.`);
+            } else {
+                const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
+                    where: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex },
+                    select: { deviceId: true }
+                });
+                const sourceCandidateIds = enrollments.map(e => e.deviceId).filter(id => id !== task.deviceId);
+                
+                if (sourceCandidateIds.length === 0) {
+                    throw new Error(`Finger ${payload.fingerIndex} has no source devices (record might be corrupted or source devices deleted)`);
+                }
 
-                const srcZk = getDriver(srcDb.ip, srcDb.port);
-                try {
-                    await connectWithRetry(srcZk, 1);
-                    const raw = await srcZk.getFingerTemplate(payload.zkId, payload.fingerIndex);
-                    if (raw && raw.length > 0) {
-                        sourceTemplateData = Buffer.alloc(raw.length);
-                        raw.copy(sourceTemplateData);
-                        raw.fill(0); // Secure wipe
-                        break;
+                const sourceDevices = await prisma.device.findMany({
+                    where: { id: { in: sourceCandidateIds }, isActive: true }
+                });
+
+                // 2. Iterate and securely extract template
+                for (const srcDb of sourceDevices) {
+                    const srcRoute = await getDeviceRoute(srcDb.id);
+
+                    if (srcRoute.mode === 'agent') {
+                        try {
+                            console.log(`[SyncQueue] Reading template for finger ${payload.fingerIndex} from "${srcDb.name}" via Agent...`);
+                            const res = await sendAgentCommand(srcRoute.branchId, {
+                                action: 'READ_FINGERPRINT',
+                                deviceIp: srcDb.ip,
+                                devicePort: srcDb.port,
+                                zkId: payload.zkId,
+                                fingerIndex: payload.fingerIndex
+                            });
+                            if (res.success && res.data) {
+                                sourceTemplateData = Buffer.from(res.data);
+                                await prisma.fingerprintTemplate.upsert({
+                                    where: { employeeId_fingerIndex: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex } },
+                                    update: { templateData: sourceTemplateData as any, updatedAt: new Date() },
+                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: sourceTemplateData as any }
+                                });
+                                break;
+                            }
+                        } catch (err) {
+                            console.warn(`[SyncQueue] Agent read failed from source "${srcDb.name}":`, err);
+                        }
+                    } else {
+                        await acquireDeviceLock(srcDb.id);
+                        const srcZk = getDriver(srcDb.ip, srcDb.port);
+                        try {
+                            await connectWithRetry(srcZk, 1);
+                            const raw = await srcZk.getFingerTemplate(payload.zkId, payload.fingerIndex);
+                            if (raw && raw.length > 0) {
+                                sourceTemplateData = Buffer.alloc(raw.length);
+                                raw.copy(sourceTemplateData);
+                                raw.fill(0); // Secure wipe
+
+                                // Save to cloud DB
+                                await prisma.fingerprintTemplate.upsert({
+                                    where: { employeeId_fingerIndex: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex } },
+                                    update: { templateData: sourceTemplateData as any, updatedAt: new Date() },
+                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: sourceTemplateData as any }
+                                });
+                                break;
+                            }
+                        } catch (err: unknown) {
+                            console.warn(`[SyncQueue] Failed reading finger from source device ${srcDb.name}: ${zkErrMsg(err)}`);
+                        } finally {
+                            try { await srcZk.disconnect(); } catch { /* ignore */ }
+                            await sleep(300);
+                            releaseDeviceLock(srcDb.id);
+                        }
                     }
-                } catch (err: unknown) {
-                    console.warn(`[SyncQueue] Failed reading finger from source device ${srcDb.name}: ${zkErrMsg(err)}`);
-                } finally {
-                    try { await srcZk.disconnect(); } catch { /* ignore */ }
-                    await sleep(300);
-                    releaseDeviceLock(srcDb.id);
                 }
             }
 
@@ -371,7 +456,22 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
 
             // 3. Write securely to target
             try {
-                await zk.setFingerTemplate(payload.zkId, payload.fingerIndex, sourceTemplateData);
+                if (route.mode === 'agent') {
+                    console.log(`[SyncQueue] Writing finger ${payload.fingerIndex} to "${route.device.name}" via Agent...`);
+                    const res = await sendAgentCommand(route.branchId, {
+                        action: 'WRITE_FINGERPRINT',
+                        deviceIp: route.device.ip,
+                        devicePort: route.device.port,
+                        zkId: payload.zkId,
+                        fingerIndex: payload.fingerIndex,
+                        templateData: sourceTemplateData
+                    });
+                    if (!res.success) {
+                        throw new Error(res.error || 'Agent write failed');
+                    }
+                } else {
+                    await zk.setFingerTemplate(payload.zkId, payload.fingerIndex, sourceTemplateData);
+                }
                 
                 await prisma.employeeFingerprintEnrollment.upsert({
                     where: { employeeId_deviceId_fingerIndex: { employeeId: payload.employeeId, deviceId: task.deviceId, fingerIndex: payload.fingerIndex } },
@@ -386,7 +486,7 @@ async function executeTask(task: { id: number; deviceId: number; actionType: str
                     create: { employeeId: payload.employeeId, deviceId: task.deviceId }
                 });
                 
-                console.log(`[SyncQueue] ✓ Synced finger ${payload.fingerIndex} for zkId ${payload.zkId} securely over the network from device.`);
+                console.log(`[SyncQueue] ✓ Synced finger ${payload.fingerIndex} for zkId ${payload.zkId} securely over the network.`);
             } finally {
                 sourceTemplateData.fill(0); // Final wipe
             }
@@ -428,25 +528,31 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
     const device = await prisma.device.findUnique({ where: { id: deviceId } });
     if (!device || !device.isActive) return;
 
-    await acquireDeviceLock(deviceId);
-    
-    const zk = getDriver(device.ip, device.port);
+    const route = await getDeviceRoute(deviceId);
+    let zk: any = null;
     let successfullyConnected = false;
     
     try {
-        console.log(`[SyncQueue] Processing ${pendingTasks.length} queued task(s) for "${device.name}"...`);
-        await connectWithRetry(zk, 1);
-        successfullyConnected = true;
+        console.log(`[SyncQueue] Processing ${pendingTasks.length} queued task(s) for "${device.name}" (mode: ${route.mode})...`);
+        
+        if (route.mode === 'direct') {
+            await acquireDeviceLock(deviceId);
+            zk = getDriver(device.ip, device.port);
+            await connectWithRetry(zk, 1);
+            successfullyConnected = true;
+        } else {
+            successfullyConnected = true; // WebSocket agent is assumed online/handled in gateway
+        }
 
         let processedCount = 0;
         let deadLetterCount = 0;
 
         for (const task of pendingTasks) {
             try {
-                if (processedCount > 0) {
+                if (processedCount > 0 && route.mode === 'direct') {
                     await sleep(300);
                 }
-                await executeTask(task, zk);
+                await executeTask(task, route, zk);
                 
                 await prisma.deviceSyncTask.update({
                     where: { id: task.id },
@@ -512,7 +618,7 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
         }
 
         // Refresh device data so its internal memory maps the changes
-        if (processedCount > 0) {
+        if (processedCount > 0 && route.mode === 'direct' && zk) {
             await zk.refreshData();
         }
 
@@ -525,10 +631,12 @@ export async function processDeviceSyncQueue(deviceId: number): Promise<void> {
             console.error(`[SyncQueue] Critical error processing queue for "${device?.name}": ${zkErrMsg(err)}`);
         }
     } finally {
-        if (successfullyConnected) {
+        if (zk) {
             try { await zk.disconnect(); } catch { /* ignore */ }
         }
-        releaseDeviceLock(deviceId);
+        if (route && route.mode === 'direct') {
+            releaseDeviceLock(deviceId);
+        }
     }
 }
 

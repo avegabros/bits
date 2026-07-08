@@ -6,6 +6,8 @@ import { audit } from '../../../shared/lib/auditLogger';
 import { auditBatch } from '../../../shared/lib/auditHelpers';
 import { getDriver, connectWithRetry, zkErrMsg } from './zk-connection.service';
 import { tryAcquireDeviceLock, releaseDeviceLock } from './zk-lock.service';
+import { getDeviceRoute } from '../device-router.service';
+import { sendAgentCommand } from '../agent-gateway.service';
 
 function getAuthMethodFromVerifyMode(verifyMode: number): string {
     switch (verifyMode) {
@@ -79,25 +81,41 @@ async function syncSingleDevice(dbDevice: {
 
     console.log(`[ZK] "${dbDevice.name}" watermark: ${watermark.toISOString()} (${deviceRecord?.lastSyncedAt ? 'from DB' : '48h fallback'})`);
 
-    const zk = getDriver(dbDevice.ip, dbDevice.port);
+    let allLogs: any[] = [];
+    const route = await getDeviceRoute(dbDevice.id);
+    let zk: any = null;
+
     try {
-        console.log(`[ZK] Syncing device "${dbDevice.name}" at ${dbDevice.ip}:${dbDevice.port}...`);
-        // Use 30s cron interval as the retry mechanism.
-        await connectWithRetry(zk, 0);
-
-        // Optional: Get serial info (UDP).
-        try {
-            const info = await zk.getInfo();
-            if (!info?.serialNumber || info.serialNumber === 'N/A') {
-                console.warn(`[ZK] "${dbDevice.name}" Serial N/A — UDP may be blocked. Device may be slow.`);
-            } else {
-                console.log(`[ZK] Connected! Serial: ${info.serialNumber}`);
+        if (route.mode === 'agent') {
+            console.log(`[ZK] Routing sync for "${dbDevice.name}" through Agent for Branch ${route.branchId}`);
+            const result = await sendAgentCommand(route.branchId, {
+                action: 'PULL_ATTENDANCE',
+                deviceIp: dbDevice.ip,
+                devicePort: dbDevice.port
+            });
+            if (!result.success) {
+                throw new Error(result.error || 'Agent sync command failed');
             }
-        } catch {
-            console.warn(`[ZK] getInfo() failed (UDP may be blocked) — continuing with TCP only.`);
-        }
+            allLogs = result.data || [];
+        } else {
+            console.log(`[ZK] Syncing device "${dbDevice.name}" directly at ${dbDevice.ip}:${dbDevice.port}...`);
+            zk = getDriver(dbDevice.ip, dbDevice.port);
+            await connectWithRetry(zk, 0);
 
-        const allLogs = await zk.getLogs();
+            // Optional: Get serial info (UDP).
+            try {
+                const info = await zk.getInfo();
+                if (!info?.serialNumber || info.serialNumber === 'N/A') {
+                    console.warn(`[ZK] "${dbDevice.name}" Serial N/A — UDP may be blocked. Device may be slow.`);
+                } else {
+                    console.log(`[ZK] Connected! Serial: ${info.serialNumber}`);
+                }
+            } catch {
+                console.warn(`[ZK] getInfo() failed (UDP may be blocked) — continuing with TCP only.`);
+            }
+
+            allLogs = await zk.getLogs();
+        }
 
         // 3. Filter and sort logs by watermark.
         const logs = allLogs
@@ -279,7 +297,9 @@ async function syncSingleDevice(dbDevice: {
 
         return { deviceId: dbDevice.id, newLogs: 0, skipped: false, error: zkErrMsg(deviceErr) };
     } finally {
-        try { await zk.disconnect(); } catch { /* ignore */ }
+        if (zk) {
+            try { await zk.disconnect(); } catch { /* ignore */ }
+        }
         releaseDeviceLock(dbDevice.id);
     }
 }

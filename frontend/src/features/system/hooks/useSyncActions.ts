@@ -95,24 +95,10 @@ export function useSyncActions({ onStatusRefresh }: UseSyncActionsOptions) {
             );
             onStatusRefresh();
 
-            const data: SyncResultData | undefined = res.data;
-
-            if (data?.status === 'SUCCESS' || data?.status === 'PARTIAL' || data?.status === 'FAILED') {
-                // Open rich modal for all device-level sync results (success or failure)
-                setSyncResult({ ...data, type: 'data' });
-                setShowResultModal(true);
-            } else if (data?.status === 'NO_DEVICES') {
-                toast({
-                    title: 'No Devices',
-                    description: 'There are no active devices configured to sync.',
-                });
-            } else {
-                toast({
-                    title: res.success ? 'Sync Complete' : 'Sync Issue',
-                    description: res.message,
-                    variant: res.success ? 'default' : 'destructive',
-                });
-            }
+            toast({
+                title: 'Sync Initiated',
+                description: res.message || 'Manual sync has been initiated in the background. Live status will update in real-time.',
+            });
         } catch (error: unknown) {
             toast({
                 title: 'Manual Sync Failed',

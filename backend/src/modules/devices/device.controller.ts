@@ -6,6 +6,7 @@ import deviceEmitter from '../../shared/events/deviceEmitter';
 import { audit } from '../../shared/lib/auditLogger';
 import { auditUpdate, auditCreate, auditDelete, auditBatch, buildChanges } from '../../shared/lib/auditHelpers';
 import { getQueueHealth, drainAllPendingQueues, retryDeadLetterTasks } from './deviceSyncQueue.service';
+import { getAllConnectedAgents } from './agent-gateway.service';
 
 /** Unwrap node-zklib's ZKError: { err: Error, ip, command } → readable string */
 function zkErrMsg(err: unknown): string {
@@ -26,18 +27,35 @@ export const getAllDevices = async (req: Request, res: Response) => {
         const devicesRaw = await prisma.device.findMany({
             orderBy: { createdAt: 'asc' },
             include: {
+                branch: {
+                    include: {
+                        agents: {
+                            where: { isEnabled: true }
+                        }
+                    }
+                },
                 _count: {
                     select: { DeviceSyncTasks: { where: { status: 'PENDING' } } }
                 }
             }
         });
 
-        // Flatten the count into the payload
+        // Correlate with active WebSocket connection state
+        const connectedAgents = getAllConnectedAgents();
+        const connectedBranchIds = new Set(connectedAgents.map(a => a.branchId));
+
+        // Flatten the count and agent status into the payload
         const devices = devicesRaw.map(d => {
-            const { _count, ...rest } = d;
+            const { _count, branch, ...rest } = d;
+            const hasAgent = branch?.agents && branch.agents.length > 0;
+            const isAgentOnline = hasAgent && branch ? connectedBranchIds.has(branch.id) : false;
+
             return {
                 ...rest,
-                pendingTasks: _count.DeviceSyncTasks
+                branch: branch ? { name: branch.name } : null,
+                pendingTasks: _count.DeviceSyncTasks,
+                isRemoteAgent: hasAgent,
+                isAgentOnline: isAgentOnline
             };
         });
 
@@ -51,7 +69,7 @@ export const getAllDevices = async (req: Request, res: Response) => {
 // ─── POST /api/devices ───────────────────────────────────────────────────────
 export const createDevice = async (req: Request, res: Response) => {
     try {
-        const { name, ip, port = 4370, location } = req.body;
+        const { name, ip, port = 4370, location, branchId } = req.body;
 
         if (!name?.trim()) {
             return res.status(400).json({ success: false, message: 'Device name is required' });
@@ -79,6 +97,7 @@ export const createDevice = async (req: Request, res: Response) => {
                 ip: ip.trim(),
                 port: Number(port),
                 location: location?.trim() || null,
+                branchId: branchId ? Number(branchId) : null,
                 isActive: false, // Unknown until tested
                 updatedAt: new Date(),
             }
@@ -109,7 +128,7 @@ export const createDevice = async (req: Request, res: Response) => {
 export const updateDevice = async (req: Request, res: Response) => {
     try {
         const id = parseInt(String(req.params.id));
-        const { name, ip, port, location } = req.body;
+        const { name, ip, port, location, branchId } = req.body;
 
         const existing = await prisma.device.findUnique({ where: { id } });
         if (!existing) {
@@ -144,6 +163,7 @@ export const updateDevice = async (req: Request, res: Response) => {
                 ip: ip?.trim() ?? existing.ip,
                 port: port ? Number(port) : existing.port,
                 location: location !== undefined ? (location?.trim() || null) : existing.location,
+                branchId: branchId !== undefined ? (branchId ? Number(branchId) : null) : existing.branchId,
                 isActive: false, // Reset status since config changed — must re-test
                 updatedAt: new Date(),
             }

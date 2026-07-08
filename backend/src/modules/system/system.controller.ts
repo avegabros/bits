@@ -287,37 +287,40 @@ export const triggerManualSync = async (req: Request, res: Response) => {
     try {
         console.log(`[System] Manual sync triggered by user ${req.user?.employeeId || 'unknown'}`);
         
-        // This runs the sync and waits for it to finish.
-        // It relies on the internal tryAcquireDeviceLock inside syncZkData to avoid conflicts
-        // with the background scheduler.
-        const result = await syncScheduler.triggerNow();
-        const syncResult = result.result;
-
-        const level = syncResult?.status === 'SUCCESS' ? 'INFO' : (syncResult?.status === 'PARTIAL' ? 'WARN' : 'ERROR');
-
-        void audit({
-            action: 'MANUAL_SYNC',
-            entityType: 'System',
-            source: 'admin-panel',
-            level,
-            performedBy: req.user?.employeeId,
-            details: syncResult?.message || (result.success ? 'Manual sync completed successfully' : 'Manual sync failed'),
-            metadata: syncResult ? { 
-                snapshot: {
-                    'Sync Status': syncResult.status,
-                    'Total Devices': String(syncResult.totalDevices),
-                    'Successful Devices': String(syncResult.successfulDevices),
-                    'New Logs Count': String(syncResult.newLogs),
-                }
-            } : undefined,
-            correlationId: req.correlationId
+        // Return 202 Accepted immediately
+        res.status(202).json({ 
+            success: true, 
+            message: 'Manual sync initiated in the background. Please check sync logs or wait a moment.' 
         });
 
-        if (result.success) {
-            res.json({ success: true, message: 'Manual sync completed', data: syncResult });
-        } else {
-            res.status(200).json({ success: false, message: 'Manual sync completed with failures', data: syncResult });
-        }
+        // Run sync asynchronously in the background
+        setImmediate(async () => {
+            try {
+                const result = await syncScheduler.triggerNow();
+                const syncResult = result.result;
+                const level = syncResult?.status === 'SUCCESS' ? 'INFO' : (syncResult?.status === 'PARTIAL' ? 'WARN' : 'ERROR');
+
+                void audit({
+                    action: 'MANUAL_SYNC',
+                    entityType: 'System',
+                    source: 'admin-panel',
+                    level,
+                    performedBy: req.user?.employeeId,
+                    details: syncResult?.message || (result.success ? 'Manual sync completed successfully' : 'Manual sync failed'),
+                    metadata: syncResult ? { 
+                        snapshot: {
+                            'Sync Status': syncResult.status,
+                            'Total Devices': String(syncResult.totalDevices),
+                            'Successful Devices': String(syncResult.successfulDevices),
+                            'New Logs Count': String(syncResult.newLogs),
+                        }
+                    } : undefined,
+                    correlationId: req.correlationId
+                });
+            } catch (syncErr) {
+                console.error('[System] Manual sync background task failed:', syncErr);
+            }
+        });
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error('[System] Error triggering manual sync:', error);
