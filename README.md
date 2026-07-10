@@ -78,6 +78,14 @@ bits/
 │   ├── Dockerfile
 │   └── next.config.ts           # API proxy rewrites to backend
 │
+├── agent/                       # Local Branch Agent (Biometric Gateway)
+│   ├── src/
+│   │   ├── index.ts             # Agent entry point & WebSocket connection
+│   │   ├── zk-driver.ts         # Local ZKTeco protocol wrapper (TCP)
+│   │   ├── device-queue.ts      # Command queue preventing device concurrency locks
+│   │   └── device-command-handler.ts # Command routing execution
+│   └── Dockerfile
+│
 ├── backend/                     # Express.js 5 API server
 │   ├── src/
 │   │   ├── app.ts               # Express app setup
@@ -112,6 +120,42 @@ bits/
 ├── .env.docker.example          # Env template for Docker Compose (secrets + overrides only)
 └── .gitignore
 ```
+
+## Branch Agent: Setup and Execution
+
+The **Branch Agent** is a lightweight node service designed to run on the same local network as the biometric hardware (ZKTeco devices). It acts as a bridge, converting REST API calls from the central BITS server into the proprietary TCP protocol required by the devices.
+
+### 1. Configuration
+The agent requires connectivity to both the central API server and the local biometric devices.
+1. Create a `.env` in the `agent/` directory using the `.env.example`.
+2. Configure `CENTRAL_SERVER_URL`: The URL of your deployed BITS backend.
+3. Configure `AGENT_TOKEN`: A unique shared secret used to authenticate the agent with the central server to prevent unauthorized command execution.
+
+### 2. Execution
+
+**Using Portainer (For Local Network Deployment):**
+1. Copy the contents of [agent/docker-compose.yml](bits/agent/docker-compose.yml) into Portainer as a new Stack.
+2. In Portainer, define the following Environment Variables in the stack:
+   * `BITS_CLOUD_URL` (e.g., `wss://bits.abas.ph` or your cloud server URL)
+   * `AGENT_TOKEN` (the authentication token you generated for the branch)
+   * `DEVICES` (e.g., `192.168.1.201:4370`)
+   * `AGENT_LABEL` (optional label for the branch agent)
+3. Deploy the Stack. Portainer will build and run the agent container locally, bridging local devices to the cloud.
+
+**Manual Setup (Local Network Command Line):**
+If the device network is isolated from the central server, run the agent locally:
+```bash
+cd agent
+npm install
+npm run build
+# Ensure variables are set in .env
+npm start
+```
+
+### 3. Workflow
+- **Handshake**: On startup, the agent initiates a WebSocket connection to the backend.
+- **Command Routing**: The backend queues "sync" or "fetch" tasks. When the agent is connected, the backend pushes commands through the socket.
+- **Biometric Processing**: The agent interacts with the hardware via TCP (Port 4370), processes fingerprints/logs, and reports status updates back to the API.
 
 ## Quick Start
 
@@ -258,6 +302,35 @@ npm install
 npm run dev              # Next.js dev server on port 3000 (automatically resolves root .env)
 ```
 
+
+## Environment Variables Reference
+
+### BITS Backend / Server Variables (Root `.env`)
+
+| Variable Name | Description | Default Value | Required in Production? |
+| --- | --- | --- | --- |
+| `DB_USER` | PostgreSQL Username | `root` | Recommended to change |
+| `DB_PASSWORD` | PostgreSQL Password | `root` | **Yes** (Change to strong secret) |
+| `DB_NAME` | PostgreSQL Database Name | `db_bits` | No |
+| `DATABASE_URL` | Prisma DB connection URL *(Local dev only)* | `postgresql://root:root@127.0.0.1:5432/db_bits` | No (derived inside Docker) |
+| `JWT_SECRET` | Secret key used to sign Access Tokens | `your-secret-key-change-this-in-production` | **Yes** (Change to strong secret) |
+| `JWT_REFRESH_SECRET` | Secret key used to sign Refresh Tokens | `your-refresh-secret-key-change-this-in-production` | **Yes** (Change to strong secret) |
+| `FRONTEND_URL` | Allowed CORS origin (Must match browser URL bar) | `http://localhost:3000` | **Yes** (e.g., `http://192.168.1.50:3013`) |
+| `BACKUP_ENCRYPTION_KEY` | Key used to encrypt database backups at rest | `bits-backup-secure-encryption-key-2026` | **Yes** (Change to strong secret) |
+| `BIOMETRIC_ENCRYPTION_KEY` | Key used to encrypt biometric template caches | `bits-biometric-secure-encryption-key-2026` | **Yes** (Change to strong secret) |
+| `SMTP_HOST` | Outgoing SMTP server address | `smtp.gmail.com` | Optional |
+| `SMTP_PORT` | Outgoing SMTP port | `587` | Optional |
+| `SMTP_USER` | Outgoing SMTP email account username | *(Empty)* | Optional (Required for credentials) |
+| `SMTP_PASS` | Outgoing SMTP email account app password | *(Empty)* | Optional (Required for credentials) |
+
+### Branch Agent Variables (`agent/.env`)
+
+| Variable Name | Description | Default Value | Required? |
+| --- | --- | --- | --- |
+| `BITS_CLOUD_URL` | WebSocket URL of the central BITS server | `ws://localhost:3001` | **Yes** (Use `wss://` in prod) |
+| `AGENT_TOKEN` | Unique authentication token matching hashed DB records | `agent_token_here` | **Yes** |
+| `DEVICES` | Comma-separated local ZKTeco devices (`IP:Port`) | `192.168.1.201:4370` | **Yes** |
+| `AGENT_LABEL` | Optional identification name for this agent | `Branch Office Agent` | No |
 
 ## Build Notes & Troubleshooting
 

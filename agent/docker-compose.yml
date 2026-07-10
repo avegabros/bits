@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bits_agent
+    restart: unless-stopped
+    network_mode: host  # Highly recommended for ZKTeco TCP/UDP local network communication
+    environment:
+      BITS_CLOUD_URL: ${BITS_CLOUD_URL:-ws://localhost:3001}
+      AGENT_TOKEN: ${AGENT_TOKEN}
+      DEVICES: ${DEVICES}
+      AGENT_LABEL: ${AGENT_LABEL:-Branch Office Agent}
