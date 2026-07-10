@@ -1,5 +1,5 @@
 {
-  "referenceDate": "2026-07-06",
+  "referenceDate": "2026-07-10",
   "employee": {
     "firstName": "Simulated",
     "lastName": "Employee"
@@ -26,6 +26,29 @@
       "sortOrder": 1,
       "isPrimary": true,
       "isNightShift": false
+    },
+
+    {
+      "shiftCode": "S_PM",
+      "name": "PM Shift (13-22)",
+      "startTime": "17:30",
+      "endTime": "06:00",
+      "graceMinutes": 30,
+      "workDays": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun"
+      ],
+      "halfDays": [],
+      "breakMinutes": 0,
+      "breaks": [],
+      "sortOrder": 1,
+      "isPrimary": true,
+      "isNightShift": true
     }
   ],
   "_comment": "overtimes format: { 'startTime': 'HH:MM', 'endTime': 'HH:MM', 'status': 'APPROVED' | 'PENDING', 'reason': 'text' }",
@@ -39,19 +62,19 @@
   ],
   "punches": [
     {
-      "timestamp": "2026-07-06T08:12:00+08:00"
+      "timestamp": "2026-07-10T08:12:00+08:00"
     },
     {
-      "timestamp": "2026-07-06T17:32:00+08:00"
+      "timestamp": "2026-07-10T17:32:00+08:00"
     },
     {
-      "timestamp": "2026-07-06T22:45:00+08:00"
+      "timestamp": "2026-07-10T17:45:00+08:00"
     },
     {
-      "timestamp": "2026-07-07T02:10:00+08:00"
+      "timestamp": "2026-07-11T06:10:00+08:00"
     },
     {
-      "timestamp": "2026-07-07T17:12:00+08:00"
+      "timestamp": "2026-07-11T08:10:00+08:00"
     }
   ],
   "syncConfigOverrides": {

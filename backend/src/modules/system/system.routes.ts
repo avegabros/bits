@@ -14,7 +14,7 @@ import {
     triggerManualBackup
 } from './system.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
-import { adminManagerOrHR } from '../../shared/middleware/role.middleware';
+import { adminManagerOrHR, adminOnly } from '../../shared/middleware/role.middleware';
 
 const router = Router();
 
@@ -238,8 +238,8 @@ router.get('/logs', getSystemLogs);
 router.post('/clear-device-logs', triggerManualLogBufferClear);
 
 // ─── Backup Management Routes ────────────────────────────────────────────────
-router.get('/backups', getBackupsList);
-router.get('/backups/download/:filename', downloadBackup);
-router.post('/backups/trigger', triggerManualBackup);
+router.get('/backups', adminOnly, getBackupsList);
+router.get('/backups/download/:filename', adminOnly, downloadBackup);
+router.post('/backups/trigger', adminOnly, triggerManualBackup);
 
 export default router;

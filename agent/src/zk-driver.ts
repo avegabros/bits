@@ -430,7 +430,10 @@ export class ZKDriver {
      */
     async readAllFingerprintTemplates(uid: number): Promise<{ finger: number; data: Buffer }[]> {
         const templates: { finger: number; data: Buffer }[] = [];
-        for (let finger = 0; finger <= 9; finger++) {
+        for (const finger of [0, 1, 2]) {
+            if (templates.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
             const data = await this.getFingerTemplate(uid, finger);
             if (data && data.length > 0) {
                 templates.push({ finger, data });
@@ -473,7 +476,15 @@ export class ZKDriver {
             await zkInfo.executeCmd(COMMANDS.CMD_REFRESHDATA, '');
             await zkInfo.executeCmd(COMMANDS.CMD_ENABLEDEVICE, '');
 
-            const verifySuccess = await this.hasFingerTemplate(uid, fingerIndex);
+            // Step 10: Verify template actually exists on the device (allow settle time & retry to avoid TCP socket race conditions)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            let verifySuccess = await this.hasFingerTemplate(uid, fingerIndex);
+            if (!verifySuccess) {
+                console.log(`[ZKDriver] Initial verification failed for slot ${fingerIndex}. Retrying in 500ms...`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                verifySuccess = await this.hasFingerTemplate(uid, fingerIndex);
+            }
+
             if (!verifySuccess) {
                 throw new Error(`Device rejected or failed to write fingerprint template on slot ${fingerIndex}`);
             }
