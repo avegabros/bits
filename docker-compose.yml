@@ -54,6 +54,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
 
+      # Backup and Biometric Template Encryption Keys
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-bits-backup-secure-encryption-key-2026}
+      BIOMETRIC_ENCRYPTION_KEY: ${BIOMETRIC_ENCRYPTION_KEY:-bits-biometric-secure-encryption-key-2026}
+
       TZ: Asia/Manila
     volumes:
       - ./backend:/app

@@ -48,6 +48,8 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       TZ: Asia/Manila
       BACKUP_PATH: ${BACKUP_PATH:-/app/backups}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      BIOMETRIC_ENCRYPTION_KEY: ${BIOMETRIC_ENCRYPTION_KEY:-}
     volumes:
       - bits_uploads:/app/uploads
       - bits_backups:/app/backups
