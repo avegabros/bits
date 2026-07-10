@@ -496,6 +496,18 @@ export const propagateFingerprintToAllDevices = async (
 
                 for (const { finger, data } of templates) {
                     console.log(`[Propagate] Writing slot ${finger} to "${targetDevice.name}" via Agent...`);
+
+                    // ZKTeco devices reject writes to occupied slots — delete first
+                    try {
+                        await sendAgentCommand(route.branchId, {
+                            action: 'DELETE_FINGER',
+                            deviceIp: targetDevice.ip,
+                            devicePort: targetDevice.port,
+                            zkId: employee.zkId,
+                            fingerIndex: finger
+                        });
+                    } catch { /* ignore if slot was already empty */ }
+
                     const res = await sendAgentCommand(route.branchId, {
                         action: 'WRITE_FINGERPRINT',
                         deviceIp: targetDevice.ip,
@@ -1035,6 +1047,18 @@ export const syncEmployeeFingerprints = async (
                 if (route.mode === 'agent') {
                     try {
                         console.log(`[SyncFingers] Writing finger ${fingerIndex} (${templateData.length}B) to "${targetDevice.name}" via Agent...`);
+
+                        // ZKTeco devices reject writes to occupied slots — delete first
+                        try {
+                            await sendAgentCommand(route.branchId, {
+                                action: 'DELETE_FINGER',
+                                deviceIp: targetDevice.ip,
+                                devicePort: targetDevice.port,
+                                zkId: employee.zkId,
+                                fingerIndex
+                            });
+                        } catch { /* ignore if slot was already empty */ }
+
                         const res = await sendAgentCommand(route.branchId, {
                             action: 'WRITE_FINGERPRINT',
                             deviceIp: targetDevice.ip,

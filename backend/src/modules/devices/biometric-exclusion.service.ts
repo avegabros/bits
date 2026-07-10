@@ -62,15 +62,11 @@ export async function addExclusion(
 
     // 2. Perform side effects
     if (type === 'FINGERPRINT') {
-        // Enqueue DELETE_FINGER for all currently enrolled fingers on this device
-        const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
-            where: { employeeId, deviceId }
-        });
-
-        for (const enr of enrollments) {
+        // Always delete fingers 0, 1, 2 — the only slots used for enrollment
+        for (const fingerIndex of [0, 1, 2]) {
             await enqueueDeleteFinger(deviceId, {
                 zkId: employee.zkId,
-                fingerIndex: enr.fingerIndex
+                fingerIndex
             });
         }
 
