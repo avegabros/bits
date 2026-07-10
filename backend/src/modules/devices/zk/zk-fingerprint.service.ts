@@ -5,6 +5,7 @@ import { acquireDeviceLock, releaseDeviceLock, acquireInteractiveDeviceLock } fr
 import { getExcludedDeviceIds } from '../biometric-exclusion.service';
 import { getDeviceRoute } from '../device-router.service';
 import { sendAgentCommand } from '../agent-gateway.service';
+import { encryptTemplate, decryptTemplate } from '../../../shared/utils/biometric-crypto';
 
 const FINGER_MAP: { [key: number]: string } = { 5: 'Right Thumb', 6: 'Right Index', 7: 'Right Middle', 8: 'Right Ring', 9: 'Right Little', 4: 'Left Thumb', 3: 'Left Index', 2: 'Left Middle', 1: 'Left Ring', 0: 'Left Little' };
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -384,7 +385,7 @@ export const propagateFingerprintToAllDevices = async (
     if (cloudTemplates.length > 0) {
         templates = cloudTemplates.map(t => ({
             finger: t.fingerIndex,
-            data: Buffer.from(t.templateData)
+            data: decryptTemplate(Buffer.from(t.templateData))
         }));
         console.log(`[Propagate] Read ${templates.length} template(s) from Cloud DB for employeeId ${employeeId}.`);
     } else {
@@ -412,8 +413,8 @@ export const propagateFingerprintToAllDevices = async (
                             // Persist read template to cloud DB for future use
                             await prisma.fingerprintTemplate.upsert({
                                 where: { employeeId_fingerIndex: { employeeId, fingerIndex: fi } },
-                                update: { templateData: templateData as any, updatedAt: new Date() },
-                                create: { employeeId, fingerIndex: fi, templateData: templateData as any }
+                                update: { templateData: encryptTemplate(templateData) as any, updatedAt: new Date() },
+                                create: { employeeId, fingerIndex: fi, templateData: encryptTemplate(templateData) as any }
                             });
                         }
                     }
@@ -454,8 +455,8 @@ export const propagateFingerprintToAllDevices = async (
                 for (const { finger, data } of templates) {
                     await prisma.fingerprintTemplate.upsert({
                         where: { employeeId_fingerIndex: { employeeId, fingerIndex: finger } },
-                        update: { templateData: data as any, updatedAt: new Date() },
-                        create: { employeeId, fingerIndex: finger, templateData: data as any }
+                        update: { templateData: encryptTemplate(data) as any, updatedAt: new Date() },
+                        create: { employeeId, fingerIndex: finger, templateData: encryptTemplate(data) as any }
                     });
                 }
             } catch (err: unknown) {
@@ -916,7 +917,7 @@ export const syncEmployeeFingerprints = async (
             });
 
             for (const ct of cloudTemplates) {
-                retrievedTemplates.set(ct.fingerIndex, Buffer.from(ct.templateData));
+                retrievedTemplates.set(ct.fingerIndex, decryptTemplate(Buffer.from(ct.templateData)));
                 remainingFingers.delete(ct.fingerIndex);
                 console.log(`[SyncFingers] Loaded template for finger ${ct.fingerIndex} directly from cloud DB.`);
             }
@@ -977,8 +978,8 @@ export const syncEmployeeFingerprints = async (
                                         // Save to cloud DB
                                         await prisma.fingerprintTemplate.upsert({
                                             where: { employeeId_fingerIndex: { employeeId, fingerIndex } },
-                                            update: { templateData: templateData as any, updatedAt: new Date() },
-                                            create: { employeeId, fingerIndex, templateData: templateData as any }
+                                            update: { templateData: encryptTemplate(templateData) as any, updatedAt: new Date() },
+                                            create: { employeeId, fingerIndex, templateData: encryptTemplate(templateData) as any }
                                         });
                                     }
                                 }
@@ -1011,8 +1012,8 @@ export const syncEmployeeFingerprints = async (
                                     // Save to cloud DB
                                     await prisma.fingerprintTemplate.upsert({
                                         where: { employeeId_fingerIndex: { employeeId, fingerIndex } },
-                                        update: { templateData: templateData as any, updatedAt: new Date() },
-                                        create: { employeeId, fingerIndex, templateData: templateData as any }
+                                        update: { templateData: encryptTemplate(templateData) as any, updatedAt: new Date() },
+                                        create: { employeeId, fingerIndex, templateData: encryptTemplate(templateData) as any }
                                     });
                                 }
                             }
@@ -1295,13 +1296,13 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
                 }
             },
             update: {
-                templateData: finalTemplate as any,
+                templateData: encryptTemplate(finalTemplate) as any,
                 updatedAt: new Date()
             },
             create: {
                 employeeId,
                 fingerIndex,
-                templateData: finalTemplate as any
+                templateData: encryptTemplate(finalTemplate) as any
             }
         });
         console.log(`[BiometricSync] Saved enrolled template for finger ${fingerIndex} to cloud DB.`);

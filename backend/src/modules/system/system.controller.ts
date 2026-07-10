@@ -428,27 +428,21 @@ export const getBackupsList = async (req: Request, res: Response) => {
         }
 
         const files = fs.readdirSync(backupDir)
-            .filter(f => f.startsWith('backup_') && (f.endsWith('.sql.gz') || f.endsWith('.sql')))
+            .filter(f => f.startsWith('backup_') && (f.endsWith('.sql.gz.enc') || f.endsWith('.sql.enc') || f.endsWith('.sql.gz') || f.endsWith('.sql')))
             .map(f => {
                 const filePath = path.join(backupDir, f);
                 const stats = fs.statSync(filePath);
                 return {
                     filename: f,
                     size: stats.size,
-                    createdAt: stats.birthtime || stats.mtime
+                    createdAt: stats.birthtime.toISOString()
                 };
             })
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Newest first
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-        // Query database size
-        const [{ size }] = await prisma.$queryRawUnsafe<{ size: string }[]>(
-            `SELECT pg_database_size(current_database())::text as size`
-        );
-
-        res.json({
+        return res.status(200).json({
             success: true,
             backups: files,
-            dbSize: parseInt(size, 10)
         });
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -461,8 +455,8 @@ export const getBackupsList = async (req: Request, res: Response) => {
 export const downloadBackup = async (req: Request, res: Response) => {
     try {
         const filename = req.params.filename as string;
-        // Prevent directory traversal
-        const safeRegex = /^backup_[a-zA-Z0-9-]+\.sql(?:\.gz)?$/;
+        // Prevent directory traversal and validate secure format
+        const safeRegex = /^backup_[a-zA-Z0-9-]+\.sql(?:\.gz)?(?:\.enc)?$/;
         if (!safeRegex.test(filename)) {
             return res.status(400).json({ success: false, message: 'Invalid filename' });
         }

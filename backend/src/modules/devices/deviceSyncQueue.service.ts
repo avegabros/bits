@@ -10,6 +10,7 @@ import { audit } from '../../shared/lib/auditLogger';
 import deviceEmitter from '../../shared/events/deviceEmitter';
 import { getDeviceRoute } from './device-router.service';
 import { sendAgentCommand } from './agent-gateway.service';
+import { encryptTemplate, decryptTemplate } from '../../shared/utils/biometric-crypto';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -376,7 +377,7 @@ async function executeTask(
             });
 
             if (dbTemplate) {
-                sourceTemplateData = Buffer.from(dbTemplate.templateData);
+                sourceTemplateData = decryptTemplate(Buffer.from(dbTemplate.templateData));
                 console.log(`[SyncQueue] Loaded template for finger ${payload.fingerIndex} from Cloud DB for task.`);
             } else {
                 const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
@@ -411,8 +412,8 @@ async function executeTask(
                                 sourceTemplateData = Buffer.from(res.data);
                                 await prisma.fingerprintTemplate.upsert({
                                     where: { employeeId_fingerIndex: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex } },
-                                    update: { templateData: sourceTemplateData as any, updatedAt: new Date() },
-                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: sourceTemplateData as any }
+                                    update: { templateData: encryptTemplate(sourceTemplateData) as any, updatedAt: new Date() },
+                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: encryptTemplate(sourceTemplateData) as any }
                                 });
                                 break;
                             }
@@ -433,8 +434,8 @@ async function executeTask(
                                 // Save to cloud DB
                                 await prisma.fingerprintTemplate.upsert({
                                     where: { employeeId_fingerIndex: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex } },
-                                    update: { templateData: sourceTemplateData as any, updatedAt: new Date() },
-                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: sourceTemplateData as any }
+                                    update: { templateData: encryptTemplate(sourceTemplateData) as any, updatedAt: new Date() },
+                                    create: { employeeId: payload.employeeId, fingerIndex: payload.fingerIndex, templateData: encryptTemplate(sourceTemplateData) as any }
                                 });
                                 break;
                             }

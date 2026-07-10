@@ -120,7 +120,41 @@ Remote enrollment is not natively trivial in the ZK protocol. The system impleme
 3. **Physical Action** — The employee presses their finger **3 times** on the device terminal.
 4. **Template Saved** — The device stores the biometric template internally.
 
-> **Security Note:** Fingerprint templates are **never stored in our database**. The device handles all biometric data at the hardware level.
+> **Security Note:** To enable robust propagation and agent routing, fingerprint templates are securely cached in the Cloud PostgreSQL database (`FingerprintTemplate` table). They are stored as raw binary minutiae vectors (not images) and cannot be used to reconstruct visual fingerprints.
+
+---
+
+## 📂 Database Backups & Encryption
+
+BITS features an automated database backup utility that schedules daily snapshots and allows manual backup triggers from the Admin Dashboard.
+
+### 1. Access Control
+Database backup listings, downloads, and manual triggers are restricted strictly to users with the **System Administrator (`ADMIN`)** role. HR and Manager accounts are blocked from accessing these routes.
+
+### 2. Backup Encryption (AES-256-CBC)
+Backups are compressed and encrypted on-the-fly when created. They are stored in the server's `backups/` directory as encrypted binary files with the `.sql.gz.enc` extension.
+* **Encryption Key:** Configured via the `BACKUP_ENCRYPTION_KEY` environment variable in the server's `.env` file.
+* **Output Format:** Completely encrypted; raw binary data cannot be read or unzipped using WinRAR/7-Zip directly.
+
+### 3. Decrypting & Restoring Backups
+If you download an encrypted backup file and need to restore it to the database, you must decrypt it first using the CLI utility:
+
+#### Inside Portainer Console:
+1. Connect to the **backend** container's console.
+2. Run the decryption script (specify the path to the `.enc` file):
+   * **Production mode:**
+     ```bash
+     node dist/scripts/maintenance/decrypt-backup.js backups/backup_xxxx.sql.gz.enc
+     ```
+   * **Development mode:**
+     ```bash
+     npx ts-node src/scripts/maintenance/decrypt-backup.ts backups/backup_xxxx.sql.gz.enc
+     ```
+3. The script will parse the file's Initialization Vector (IV), verify the signature against your `BACKUP_ENCRYPTION_KEY`, and output the decrypted compressed backup file: `backups/backup_xxxx.sql.gz`.
+4. Unzip the `.gz` file to get the standard `.sql` script and restore it using Postgres:
+   ```bash
+   psql -U postgres -d db_bits -f backups/backup_xxxx.sql
+   ```
 
 ---
 

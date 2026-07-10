@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
+import * as crypto from 'crypto';
 import { URL } from 'url';
 import { prisma } from '../../shared/lib/prisma';
 import { audit } from '../../shared/lib/auditLogger';
@@ -116,11 +117,11 @@ export class BackupScheduler {
         const databaseName = parsedUrl.pathname.substring(1);
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const extension = this.compress ? '.sql.gz' : '.sql';
+        const extension = this.compress ? '.sql.gz.enc' : '.sql.enc';
         const filename = `backup_${timestamp}${extension}`;
         const outputPath = path.join(backupDir, filename);
 
-        console.log(`[${ts()}] [BackupScheduler] Exporting database to ${outputPath}...`);
+        console.log(`[${ts()}] [BackupScheduler] Exporting encrypted database to ${outputPath}...`);
 
         const args = [
             '-h', hostname,
@@ -129,6 +130,10 @@ export class BackupScheduler {
             '-F', 'p', // Plain SQL text format, suitable for piping to gzip
             databaseName
         ];
+
+        // Derive 32-byte key from BACKUP_ENCRYPTION_KEY env variable
+        const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
+        const key = crypto.createHash('sha256').update(rawKey || 'default-fallback-key').digest();
 
         try {
             await new Promise<void>((resolve, reject) => {
@@ -141,11 +146,20 @@ export class BackupScheduler {
 
                 const writeStream = fs.createWriteStream(outputPath);
 
+                // Generate a random 16-byte IV (Initialization Vector)
+                const iv = crypto.randomBytes(16);
+                
+                // Write IV as the first 16 bytes of the file
+                writeStream.write(iv);
+
+                // Create the AES-256-CBC cipher stream
+                const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+
                 if (this.compress) {
                     const gzip = zlib.createGzip();
-                    pgDump.stdout.pipe(gzip).pipe(writeStream);
+                    pgDump.stdout.pipe(gzip).pipe(cipher).pipe(writeStream);
                 } else {
-                    pgDump.stdout.pipe(writeStream);
+                    pgDump.stdout.pipe(cipher).pipe(writeStream);
                 }
 
                 let stderrData = '';
@@ -223,7 +237,7 @@ export class BackupScheduler {
     private pruneOldBackups(backupDir: string): void {
         try {
             const files = fs.readdirSync(backupDir)
-                .filter(f => f.startsWith('backup_') && (f.endsWith('.sql.gz') || f.endsWith('.sql')))
+                .filter(f => f.startsWith('backup_') && (f.endsWith('.sql.gz.enc') || f.endsWith('.sql.enc') || f.endsWith('.sql.gz') || f.endsWith('.sql')))
                 .sort(); // Lexicographical sorting works chronologically for ISO filenames
 
             if (files.length > this.retention) {
