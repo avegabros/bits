@@ -184,7 +184,16 @@ export function useEmployeeList({ statusFilter = 'Active', role = 'admin' }: Use
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fingerIndex, deviceId }),
       });
-      const data = await res.json();
+      
+      let data: any
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        throw new Error(text || `Server returned status ${res.status}: ${res.statusText}`)
+      }
+
       setEnrollStatus(p => { const next = { ...p }; delete next[employeeId]; return next; });
       setEnrollMsg(p => { const next = { ...p }; delete next[employeeId]; return next; });
       if (data.success) {
@@ -195,10 +204,11 @@ export function useEmployeeList({ statusFilter = 'Active', role = 'admin' }: Use
       } else {
         showToast('error', 'Enrollment Failed', data.message || 'Could not start enrollment');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Enrollment error:', err)
       setEnrollStatus(p => { const next = { ...p }; delete next[employeeId]; return next; });
       setEnrollMsg(p => { const next = { ...p }; delete next[employeeId]; return next; });
-      showToast('error', 'Enrollment Failed', 'Could not reach the server');
+      showToast('error', 'Enrollment Failed', err.message || 'Could not reach the server');
     }
   };
 

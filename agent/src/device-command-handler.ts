@@ -24,6 +24,25 @@ export interface CommandResult {
     error?: string;
 }
 
+export function parseTemplateData(data: any): Buffer {
+    if (Buffer.isBuffer(data)) {
+        return data;
+    }
+    if (data && typeof data === 'object') {
+        if (data.type === 'Buffer' && Array.isArray(data.data)) {
+            return Buffer.from(data.data);
+        }
+        if (Array.isArray(data)) {
+            return Buffer.from(data);
+        }
+        if (data.buffer instanceof ArrayBuffer || data instanceof Uint8Array) {
+            return Buffer.from(data.buffer || data);
+        }
+    }
+    return Buffer.from(data);
+}
+
+
 export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQueue): Promise<CommandResult> {
     const { action, deviceIp, devicePort } = command;
     const port = devicePort || 4370;
@@ -93,7 +112,7 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         await driver.setFingerTemplate(
                             writeCmd.zkId,
                             writeCmd.fingerIndex,
-                            Buffer.from(writeCmd.templateData)
+                            parseTemplateData(writeCmd.templateData)
                         );
                         data = { status: 'SUCCESS' };
                         break;

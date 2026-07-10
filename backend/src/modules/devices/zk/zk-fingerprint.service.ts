@@ -11,6 +11,25 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 import { audit } from '../../../shared/lib/auditLogger';
 interface SyncResult { success: boolean; message?: string; error?: string; newLogs?: number; count?: number; results?: Record<string, unknown>[]; }
 
+export function parseTemplateData(data: any): Buffer {
+    if (Buffer.isBuffer(data)) {
+        return data;
+    }
+    if (data && typeof data === 'object') {
+        if (data.type === 'Buffer' && Array.isArray(data.data)) {
+            return Buffer.from(data.data);
+        }
+        if (Array.isArray(data)) {
+            return Buffer.from(data);
+        }
+        if (data.buffer instanceof ArrayBuffer || data instanceof Uint8Array) {
+            return Buffer.from(data.buffer || data);
+        }
+    }
+    return Buffer.from(data);
+}
+
+
 
 export const deleteFingerprintGlobally = async (
     employeeId: number,
@@ -370,37 +389,82 @@ export const propagateFingerprintToAllDevices = async (
         console.log(`[Propagate] Read ${templates.length} template(s) from Cloud DB for employeeId ${employeeId}.`);
     } else {
         // Fallback: Read templates from source device
-        await acquireInteractiveDeviceLock(sourceDeviceId);
-        const srcZk = getDriver(sourceDevice.ip, sourceDevice.port);
+        const srcRoute = await getDeviceRoute(sourceDeviceId);
+        const isSrcAgent = srcRoute.mode === 'agent';
 
-        try {
-            await connectWithRetry(srcZk, 2);
-            templates = await srcZk.readAllFingerprintTemplates(employee.zkId);
+        if (isSrcAgent) {
+            try {
+                const fingersToRead = fingerIndex !== undefined ? [fingerIndex] : Array.from({ length: 10 }, (_, i) => i);
+                for (const fi of fingersToRead) {
+                    console.log(`[Propagate] Reading finger ${fi} from "${sourceDevice.name}" via Agent...`);
+                    const res = await sendAgentCommand(srcRoute.branchId, {
+                        action: 'READ_FINGERPRINT',
+                        deviceIp: sourceDevice.ip,
+                        devicePort: sourceDevice.port,
+                        zkId: employee.zkId,
+                        fingerIndex: fi
+                    });
+                    if (res.success && res.data) {
+                        const templateData = parseTemplateData(res.data);
+                        if (templateData && templateData.length > 0) {
+                            templates.push({ finger: fi, data: templateData });
 
-            if (fingerIndex !== undefined) {
-                templates = templates.filter(t => t.finger === fingerIndex);
+                            // Persist read template to cloud DB for future use
+                            await prisma.fingerprintTemplate.upsert({
+                                where: { employeeId_fingerIndex: { employeeId, fingerIndex: fi } },
+                                update: { templateData: templateData as any, updatedAt: new Date() },
+                                create: { employeeId, fingerIndex: fi, templateData: templateData as any }
+                            });
+                        }
+                    }
+                }
+                console.log(`[Propagate] Read ${templates.length} template(s) from "${sourceDevice.name}" via Agent for ${fullName}.`);
+            } catch (err: any) {
+                return {
+                    success: false,
+                    pushed: 0,
+                    errors: [`Failed to read from source via Agent: ${err.message || String(err)}`]
+                };
             }
+        } else {
+            await acquireInteractiveDeviceLock(sourceDeviceId);
+            const srcZk = getDriver(sourceDevice.ip, sourceDevice.port);
 
-            console.log(
-                `[Propagate] Read ${templates.length} template(s) from`,
-                `"${sourceDevice.name}" for ${fullName} (zkId: ${employee.zkId}).`,
-                templates.map(t => `slot${t.finger}=${t.data.length}B`).join(', ')
-            );
+            try {
+                await connectWithRetry(srcZk, 2);
+                const rawTemplates = await srcZk.readAllFingerprintTemplates(employee.zkId);
 
-            // Persist read templates to cloud DB for future use
-            for (const { finger, data } of templates) {
-                await prisma.fingerprintTemplate.upsert({
-                    where: { employeeId_fingerIndex: { employeeId, fingerIndex: finger } },
-                    update: { templateData: data as any, updatedAt: new Date() },
-                    create: { employeeId, fingerIndex: finger, templateData: data as any }
-                });
+                let filteredTemplates = rawTemplates;
+                if (fingerIndex !== undefined) {
+                    filteredTemplates = rawTemplates.filter(t => t.finger === fingerIndex);
+                }
+
+                templates = filteredTemplates.map(t => ({
+                    finger: t.finger,
+                    data: t.data
+                }));
+
+                console.log(
+                    `[Propagate] Read ${templates.length} template(s) from`,
+                    `"${sourceDevice.name}" for ${fullName} (zkId: ${employee.zkId}).`,
+                    templates.map(t => `slot${t.finger}=${t.data.length}B`).join(', ')
+                );
+
+                // Persist read templates to cloud DB for future use
+                for (const { finger, data } of templates) {
+                    await prisma.fingerprintTemplate.upsert({
+                        where: { employeeId_fingerIndex: { employeeId, fingerIndex: finger } },
+                        update: { templateData: data as any, updatedAt: new Date() },
+                        create: { employeeId, fingerIndex: finger, templateData: data as any }
+                    });
+                }
+            } catch (err: unknown) {
+                return { success: false, pushed: 0,
+                    errors: [`Failed to read from source: ${zkErrMsg(err)}`] };
+            } finally {
+                try { await srcZk.disconnect(); } catch { /* ignore */ }
+                releaseDeviceLock(sourceDeviceId);
             }
-        } catch (err: unknown) {
-            return { success: false, pushed: 0,
-                errors: [`Failed to read from source: ${zkErrMsg(err)}`] };
-        } finally {
-            try { await srcZk.disconnect(); } catch { /* ignore */ }
-            releaseDeviceLock(sourceDeviceId);
         }
     }
 
@@ -875,43 +939,83 @@ export const syncEmployeeFingerprints = async (
 
                 const srcDevice = rawDevices.find(d => d.id === bestSourceId);
                 if (srcDevice) {
-                    await acquireInteractiveDeviceLock(bestSourceId);
-                    const srcZk = getDriver(srcDevice.ip, srcDevice.port);
-                    let connected = false;
-                    try {
-                        await connectWithRetry(srcZk, 1);
-                        connected = true;
-                        for (const fingerIndex of bestFingersToFetch) {
-                            const raw = await srcZk.getFingerTemplate(employee.zkId, fingerIndex);
-                            if (raw && raw.length > 0) {
-                                const templateData = Buffer.alloc(raw.length);
-                                raw.copy(templateData);
-                                raw.fill(0);
-                                retrievedTemplates.set(fingerIndex, templateData);
-                                remainingFingers.delete(fingerIndex);
-                                console.log(
-                                    `[SyncFingers] Batched read finger ${fingerIndex} (${templateData.length}B) from "${srcDevice.name}".`
-                                );
+                    const srcRoute = await getDeviceRoute(srcDevice.id);
+                    const isSrcAgent = srcRoute.mode === 'agent';
 
-                                // Save to cloud DB
-                                await prisma.fingerprintTemplate.upsert({
-                                    where: { employeeId_fingerIndex: { employeeId, fingerIndex } },
-                                    update: { templateData, updatedAt: new Date() },
-                                    create: { employeeId, fingerIndex, templateData }
+                    if (isSrcAgent) {
+                        try {
+                            for (const fingerIndex of bestFingersToFetch) {
+                                console.log(`[SyncFingers] Reading finger ${fingerIndex} from "${srcDevice.name}" via Agent...`);
+                                const res = await sendAgentCommand(srcRoute.branchId, {
+                                    action: 'READ_FINGERPRINT',
+                                    deviceIp: srcDevice.ip,
+                                    devicePort: srcDevice.port,
+                                    zkId: employee.zkId,
+                                    fingerIndex
                                 });
+                                if (res.success && res.data) {
+                                    const templateData = parseTemplateData(res.data);
+                                    if (templateData && templateData.length > 0) {
+                                        retrievedTemplates.set(fingerIndex, templateData);
+                                        remainingFingers.delete(fingerIndex);
+                                        console.log(
+                                            `[SyncFingers] Batched read finger ${fingerIndex} (${templateData.length}B) from "${srcDevice.name}" via Agent.`
+                                        );
+
+                                        // Save to cloud DB
+                                        await prisma.fingerprintTemplate.upsert({
+                                            where: { employeeId_fingerIndex: { employeeId, fingerIndex } },
+                                            update: { templateData: templateData as any, updatedAt: new Date() },
+                                            create: { employeeId, fingerIndex, templateData: templateData as any }
+                                        });
+                                    }
+                                }
                             }
+                        } catch (err: any) {
+                            console.warn(
+                                `[SyncFingers] Failed batched read of fingers [${bestFingersToFetch.join(', ')}] from "${srcDevice.name}" via Agent:`, err
+                            );
+                            sourceToFingersMap.delete(bestSourceId);
                         }
-                    } catch (err: unknown) {
-                        console.warn(
-                            `[SyncFingers] Failed batched read of fingers [${bestFingersToFetch.join(', ')}] from "${srcDevice.name}": ${zkErrMsg(err)}`
-                        );
-                        sourceToFingersMap.delete(bestSourceId);
-                    } finally {
-                        if (connected) {
-                            try { await srcZk.disconnect(); } catch { /* ignore */ }
-                            await sleep(300);
+                    } else {
+                        await acquireInteractiveDeviceLock(bestSourceId);
+                        const srcZk = getDriver(srcDevice.ip, srcDevice.port);
+                        let connected = false;
+                        try {
+                            await connectWithRetry(srcZk, 1);
+                            connected = true;
+                            for (const fingerIndex of bestFingersToFetch) {
+                                const raw = await srcZk.getFingerTemplate(employee.zkId, fingerIndex);
+                                if (raw && raw.length > 0) {
+                                    const templateData = Buffer.alloc(raw.length);
+                                    raw.copy(templateData);
+                                    raw.fill(0);
+                                    retrievedTemplates.set(fingerIndex, templateData);
+                                    remainingFingers.delete(fingerIndex);
+                                    console.log(
+                                        `[SyncFingers] Batched read finger ${fingerIndex} (${templateData.length}B) from "${srcDevice.name}".`
+                                    );
+
+                                    // Save to cloud DB
+                                    await prisma.fingerprintTemplate.upsert({
+                                        where: { employeeId_fingerIndex: { employeeId, fingerIndex } },
+                                        update: { templateData: templateData as any, updatedAt: new Date() },
+                                        create: { employeeId, fingerIndex, templateData: templateData as any }
+                                    });
+                                }
+                            }
+                        } catch (err: unknown) {
+                            console.warn(
+                                `[SyncFingers] Failed batched read of fingers [${bestFingersToFetch.join(', ')}] from "${srcDevice.name}": ${zkErrMsg(err)}`
+                            );
+                            sourceToFingersMap.delete(bestSourceId);
+                        } finally {
+                            if (connected) {
+                                try { await srcZk.disconnect(); } catch { /* ignore */ }
+                                await sleep(300);
+                            }
+                            releaseDeviceLock(bestSourceId);
                         }
-                        releaseDeviceLock(bestSourceId);
                     }
                 } else {
                     sourceToFingersMap.delete(bestSourceId);
@@ -1098,6 +1202,7 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
 	
     const deviceUid = employee.zkId;	
     let found = false;	
+    let finalTemplate: Buffer | null = null;
 	
     console.log(`[BiometricSync] Waiting for user to scan finger... started polling device "${dbDevice.name}".`);	
 	
@@ -1121,7 +1226,7 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
                     fingerIndex
                 });
                 if (res.success && res.data) {
-                    template = Buffer.from(res.data);
+                    template = parseTemplateData(res.data);
                 }
             } else {
                 await acquireDeviceLock(dbDevice.id);	
@@ -1132,6 +1237,7 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
 
             if (template && template.length > 8) {	
                 found = true;	
+                finalTemplate = template;
                 console.log(	
                     `[BiometricSync] ✓ Detected template for ${employee.firstName}`,	
                     `on "${dbDevice.name}" — slot ${fingerIndex}, ${template.length} bytes.`,	
@@ -1150,10 +1256,34 @@ async function extractAndDistributeTemplate(deviceId: number, employeeId: number
         if (found) break;	
     }	
 	
-    if (!found) {	
+    if (!found || !finalTemplate) {	
         console.warn(`[BiometricSync] ⚠ Failed to detect template for ${employee.firstName} from ${dbDevice.name} after 60s. User may have aborted enrollment.`);	
         return;	
     }	
+
+    // Save the template directly to the cloud DB
+    try {
+        await prisma.fingerprintTemplate.upsert({
+            where: {
+                employeeId_fingerIndex: {
+                    employeeId,
+                    fingerIndex
+                }
+            },
+            update: {
+                templateData: finalTemplate as any,
+                updatedAt: new Date()
+            },
+            create: {
+                employeeId,
+                fingerIndex,
+                templateData: finalTemplate as any
+            }
+        });
+        console.log(`[BiometricSync] Saved enrolled template for finger ${fingerIndex} to cloud DB.`);
+    } catch (dbErr) {
+        console.error(`[BiometricSync] Failed to save enrolled template to cloud DB:`, dbErr);
+    }
 
     if (employee.employmentStatus === 'STAGED') {
         const { generateRandomPassword } = require('../../../shared/utils/password.utils');

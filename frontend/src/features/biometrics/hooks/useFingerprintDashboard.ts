@@ -109,7 +109,16 @@ export function useFingerprintDashboard(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId })
       })
-      const data = await res.json()
+      
+      let data: any
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        throw new Error(text || `Server returned status ${res.status}: ${res.statusText}`)
+      }
+
       setSyncResult({
         success: data.success,
         type: data.type || (data.success ? 'success' : 'error'),
@@ -118,8 +127,9 @@ export function useFingerprintDashboard(
       if (data.success) {
         await fetchStatus()
       }
-    } catch {
-      setSyncResult({ success: false, type: 'error', message: 'Network error during sync' })
+    } catch (err: any) {
+      console.error('Sync error:', err)
+      setSyncResult({ success: false, type: 'error', message: err.message || 'Network error during sync' })
     } finally {
       setSyncingDevice(null)
     }
@@ -144,15 +154,25 @@ export function useFingerprintDashboard(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type })
       })
-      const data = await res.json()
+
+      let data: any
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        throw new Error(text || `Server returned status ${res.status}: ${res.statusText}`)
+      }
+
       if (data.success) {
         setSyncResult({ success: true, message: data.message })
         await fetchStatus()
       } else {
         setSyncResult({ success: false, message: data.message || 'Failed to update exclusion.' })
       }
-    } catch {
-      setSyncResult({ success: false, message: 'Network error while updating exclusion' })
+    } catch (err: any) {
+      console.error('Exclusion error:', err)
+      setSyncResult({ success: false, message: err.message || 'Network error while updating exclusion' })
     }
   }, [employeeId, fetchStatus, slots, devices])
 
@@ -163,7 +183,16 @@ export function useFingerprintDashboard(
       const res = await fetch(`/api/employees/${employeeId}/fingerprint/${fingerIndex}`, {
         method: 'DELETE'
       })
-      const data = await res.json()
+
+      let data: any
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        throw new Error(text || `Server returned status ${res.status}: ${res.statusText}`)
+      }
+
       setSyncResult({
         success: data.success,
         message: data.message || (data.success ? 'Fingerprint deleted successfully' : 'Failed to delete fingerprint')
@@ -171,8 +200,9 @@ export function useFingerprintDashboard(
       if (data.success) {
         await fetchStatus()
       }
-    } catch {
-      setSyncResult({ success: false, message: 'Network error during deletion' })
+    } catch (err: any) {
+      console.error('Delete fingerprint error:', err)
+      setSyncResult({ success: false, message: err.message || 'Network error during deletion' })
     } finally {
       setLoading(false)
     }

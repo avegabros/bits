@@ -209,6 +209,15 @@ export async function sendAgentCommand(
     const agent = connectedAgents.get(branchId);
 
     if (!agent) {
+        // PING_DEVICE is an ephemeral health check — no point queuing it
+        if (command.action === 'PING_DEVICE') {
+            return {
+                success: false,
+                error: 'AGENT_OFFLINE',
+                message: `Agent for branch ${branchId} is offline. Ping not queued.`
+            };
+        }
+
         // Agent offline -> Queue the command for later
         await queueOfflineCommand(branchId, command);
         return {
