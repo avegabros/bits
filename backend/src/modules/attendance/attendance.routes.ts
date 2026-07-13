@@ -15,6 +15,7 @@ import {
     cancelAdjustment,
     reopenAdjustment,
 } from './attendance.controller';
+import { getRawAttendanceLogs } from './attendance-raw-logs.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
 import { adminManagerOrHR, managerOrAdmin, adminOrHR } from '../../shared/middleware/role.middleware';
 import { departmentScope } from '../../shared/middleware/departmentScope.middleware';
@@ -183,6 +184,7 @@ router.get('/stream', streamAttendance);
  *       200:
  *         description: List of attendance records
  */
+router.get('/raw-logs', getRawAttendanceLogs);
 router.get('/', getAttendance);
 
 /**
