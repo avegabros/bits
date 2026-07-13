@@ -54,7 +54,8 @@ interface OvertimeConfig {
 
 interface PunchConfig {
     timestamp: string; // ISO date string or local datetime (e.g. 2026-06-03T09:12:00+08:00)
-    type: 'IN' | 'OUT';
+    type?: 'IN' | 'OUT';
+    status?: number;
 }
 
 interface SimulationConfig {
@@ -393,10 +394,15 @@ async function main() {
     // 6. Punch Simulation
     // Sort punches by chronological timestamp
     const sortedPunches = [...config.punches].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    // Auto-infer punch type if missing
+    // Auto-infer punch status/type if missing
     for (let i = 0; i < sortedPunches.length; i++) {
-        if (!sortedPunches[i].type) {
-            sortedPunches[i].type = i % 2 === 0 ? 'IN' : 'OUT';
+        if (sortedPunches[i].status !== undefined) {
+            sortedPunches[i].type = (sortedPunches[i].status === 0 || sortedPunches[i].status === 4) ? 'IN' : 'OUT';
+        } else {
+            if (!sortedPunches[i].type) {
+                sortedPunches[i].type = i % 2 === 0 ? 'IN' : 'OUT';
+            }
+            sortedPunches[i].status = sortedPunches[i].type === 'IN' ? 0 : 1;
         }
     }
 
@@ -404,13 +410,13 @@ async function main() {
     if (config.simulationMode === 'sequential') {
         for (const p of sortedPunches) {
             const punchTime = new Date(p.timestamp);
-            console.log(`-> Scanning ${colors.cyan}${p.type}${colors.reset} at ${colors.yellow}${p.timestamp}${colors.reset}`);
+            console.log(`-> Scanning ${colors.cyan}${p.type}${colors.reset} (Status: ${p.status}) at ${colors.yellow}${p.timestamp}${colors.reset}`);
             
             await prisma.attendanceLog.create({
                 data: {
                     employeeId: employee.id,
                     timestamp: punchTime,
-                    status: p.type === 'IN' ? 0 : 1
+                    status: p.status!
                 }
             });
 
@@ -422,12 +428,12 @@ async function main() {
         // Batch mode: insert all logs first, then call processAttendanceLogs once
         for (const p of sortedPunches) {
             const punchTime = new Date(p.timestamp);
-            console.log(`-> Queueing ${colors.cyan}${p.type}${colors.reset} at ${colors.yellow}${p.timestamp}${colors.reset}`);
+            console.log(`-> Queueing ${colors.cyan}${p.type}${colors.reset} (Status: ${p.status}) at ${colors.yellow}${p.timestamp}${colors.reset}`);
             await prisma.attendanceLog.create({
                 data: {
                     employeeId: employee.id,
                     timestamp: punchTime,
-                    status: p.type === 'IN' ? 0 : 1
+                    status: p.status!
                 }
             });
         }
