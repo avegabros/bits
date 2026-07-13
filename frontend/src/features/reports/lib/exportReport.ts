@@ -503,7 +503,7 @@ export const handleExportAllCompanies = async (
 ): Promise<{ excludedCount: number; truncationWarning: boolean }> => {
   // ── 1. Fetch all required data ─────────────────────────────────────
   const startYear = new Date(startDate + 'T00:00:00Z').getFullYear();
-  const [empRes, attRes, branchRes, holRes] = await Promise.all([
+  const [empRes, attRes, branchRes, holRes, rawLogsRes] = await Promise.all([
     fetch('/api/employees?limit=5000', { credentials: 'include' }),
     fetch(
       `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=10000`,
@@ -511,6 +511,10 @@ export const handleExportAllCompanies = async (
     ),
     fetch('/api/branches', { credentials: 'include' }),
     fetch(`/api/holidays?year=${startYear}`, { credentials: 'include' }),
+    fetch(
+      `/api/attendance/raw-logs?startDate=${startDate}&endDate=${endDate}`,
+      { credentials: 'include' }
+    ),
   ]);
 
   const empData = await empRes.json();
@@ -519,6 +523,7 @@ export const handleExportAllCompanies = async (
     ? await branchRes.json()
     : { success: false };
   const holData = holRes.ok ? await holRes.json() : { success: false };
+  const rawLogsData = rawLogsRes.ok ? await rawLogsRes.json() : { success: false };
 
   // ── 2. Parse & filter ──────────────────────────────────────────────
   const allEmps: any[] = (
@@ -533,6 +538,7 @@ export const handleExportAllCompanies = async (
     ? branchData.branches || branchData.data || []
     : [];
   const holidays: any[] = holData.success ? holData.holidays || [] : [];
+  const rawLogs: any[] = rawLogsData.success ? rawLogsData.data || [] : [];
 
   // ── 3. Truncation check ────────────────────────────────────────────
   const truncationWarning = allEmps.length >= 5000 || records.length >= 10000;
@@ -598,6 +604,23 @@ export const handleExportAllCompanies = async (
     attByEmployee.set(empId, mergedDateMap);
   }
 
+  // Raw Logs: employeeId → dateStr → logs
+  const rawLogsByEmployee = new Map<number, Map<string, any[]>>();
+  for (const log of rawLogs) {
+    const empId = log.employeeId;
+    if (!rawLogsByEmployee.has(empId)) {
+      rawLogsByEmployee.set(empId, new Map());
+    }
+    const phtDate = new Date(new Date(log.timestamp).getTime() + 8 * 60 * 60 * 1000);
+    const dateStr = phtDate.toISOString().slice(0, 10);
+
+    const dateMap = rawLogsByEmployee.get(empId)!;
+    if (!dateMap.has(dateStr)) {
+      dateMap.set(dateStr, []);
+    }
+    dateMap.get(dateStr)!.push(log);
+  }
+
   // ── 5. Group employees by company (direct companyId) ────────────────
   const companyEmployees = new Map<string, any[]>();
   let excludedCount = 0;
@@ -646,6 +669,7 @@ export const handleExportAllCompanies = async (
     );
 
     const ws: any = {};
+    let maxRowIdx = HEADER_ROWS + calDates.length;
 
     if (emps.length === 0) {
       setStyledCell(ws, 0, 0, 'No employees found.', STYLE_BOLD);
@@ -853,15 +877,87 @@ export const handleExportAllCompanies = async (
           ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
         }
       }
+
+      // ── Spacer Rows (Rows 18–19) ───────────────────────────────
+      // (Rows are left blank as in reference.xlsx)
+
+      // ── Row 20: Punches Header ──────────────────────────────────
+      const punchesHeaderRowIdx = HEADER_ROWS + calDates.length + 2;
+      setStyledCell(ws, punchesHeaderRowIdx, c0, 'Punches', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 1, 'Check-in', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 2, 'Check-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 3, 'Overtime-In', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 4, 'Overtime-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 5, 'Overtime-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 6, '', FILL_NONE);
+
+      ws['!merges'].push({ s: { r: punchesHeaderRowIdx, c: c0 + 4 }, e: { r: punchesHeaderRowIdx, c: c0 + 5 } });
+
+      // ── Detail Rows (Row 21 onwards): Every raw punch ────────────
+      let punchRowIdx = HEADER_ROWS + calDates.length + 3;
+      let alternateColorFlag = false;
+
+      for (let dayIdx = 0; dayIdx < calDates.length; dayIdx++) {
+        const date = calDates[dayIdx];
+        const dateStr = date.toISOString().split('T')[0];
+        const dateLogsMap = rawLogsByEmployee.get(emp.id);
+        const dayLogs = dateLogsMap ? dateLogsMap.get(dateStr) || [] : [];
+
+        if (dayLogs.length > 0) {
+          const rowFill = {
+            fill: { patternType: 'solid', fgColor: { rgb: alternateColorFlag ? 'FFEDEDED' : 'FFFFFFFF' } },
+            border: THIN_BORDER
+          };
+          alternateColorFlag = !alternateColorFlag;
+
+          const formattedDate = fmtFullDate(date);
+
+          for (const log of dayLogs) {
+            // Column A: Date
+            setStyledCell(ws, punchRowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
+
+            // Format log timestamp to local time string (HH:MM:SS) in PHT
+            const phtTime = new Date(new Date(log.timestamp).getTime() + 8 * 60 * 60 * 1000);
+            const timeStr = phtTime.toISOString().slice(11, 19);
+
+            // Populate columns B–F with rowFill (bordered), and G with no style
+            for (let c = 1; c <= 5; c++) {
+              setStyledCell(ws, punchRowIdx, c0 + c, '', rowFill);
+            }
+            setStyledCell(ws, punchRowIdx, c0 + 6, '', FILL_NONE);
+
+            const status = log.status;
+            if (status === 0 || status === 4) {
+              const colOffset = status === 0 ? 1 : 3;
+              setStyledCell(ws, punchRowIdx, c0 + colOffset, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
+            } else if (status === 1 || status === 5) {
+              if (status === 1) {
+                setStyledCell(ws, punchRowIdx, c0 + 2, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
+              } else {
+                setStyledCell(ws, punchRowIdx, c0 + 4, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
+                setStyledCell(ws, punchRowIdx, c0 + 5, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
+              }
+            }
+
+            // Always merge columns E+F on every punch row (matches reference layout)
+            ws['!merges'].push({ s: { r: punchRowIdx, c: c0 + 4 }, e: { r: punchRowIdx, c: c0 + 5 } });
+
+            punchRowIdx++;
+          }
+        }
+      }
+
+      if (punchRowIdx > maxRowIdx) {
+        maxRowIdx = punchRowIdx;
+      }
     }
 
     // ── Set worksheet range & column widths ─────────────────────────
     const totalCols =
       emps.length * (COLS_PER_EMP + SEPARATOR_COLS) - SEPARATOR_COLS;
-    const totalRows = HEADER_ROWS + calDates.length;
     ws['!ref'] = XLSXS.utils.encode_range({
       s: { r: 0, c: 0 },
-      e: { r: totalRows - 1, c: totalCols - 1 },
+      e: { r: maxRowIdx - 1, c: totalCols - 1 },
     });
 
     const cols: any[] = [];
