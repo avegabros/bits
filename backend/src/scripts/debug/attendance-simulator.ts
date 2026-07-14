@@ -24,7 +24,8 @@ const colors = {
 };
 
 // Helper to format UTC Date to local Philippine Time ISO string (e.g. YYYY-MM-DDTHH:mm:ss+08:00)
-function formatToLocalISO(date: Date): string {
+function formatToLocalISO(date: Date | null | undefined): string {
+    if (!date) return 'NULL';
     const localTime = new Date(date.getTime() + 8 * 60 * 60 * 1000);
     return localTime.toISOString().slice(0, 19) + '+08:00';
 }

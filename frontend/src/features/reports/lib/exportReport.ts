@@ -250,9 +250,11 @@ export const handleExportIndividual = (
 
     if (dayRecords.length > 0) {
       // Sort day records chronologically by check-in time
-      const sortedDayRecords = [...dayRecords].sort((a, b) => 
-        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
-      );
+      const sortedDayRecords = [...dayRecords].sort((a, b) => {
+        const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
+        const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
+        return timeA - timeB;
+      });
 
       const firstRecord = sortedDayRecords[0];
       const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
@@ -278,8 +280,9 @@ export const handleExportIndividual = (
         status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
       };
 
-      const checkIn = new Date(firstRecord.checkInTime);
+      const checkIn = firstRecord.checkInTime ? new Date(firstRecord.checkInTime) : null;
       const checkOut = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+      const checkInLabel = checkIn ? checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
       const hoursWorked = workedHrsVal > 0 ? workedHrsVal.toFixed(2) : '—';
       const statusLabel = getRecordStatusFromBackend(mergedRecord);
       const lateMins = lateMinsVal;
@@ -324,7 +327,7 @@ export const handleExportIndividual = (
       allRows.push([
         fmtFullDate(cursor),
         DAYS[dayOfWeek],
-        checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        checkInLabel,
         checkOutLabel,
         hoursLabel,
         lateLabel,
@@ -571,9 +574,11 @@ export const handleExportAllCompanies = async (
   for (const [empId, dateMap] of attByEmployeeTemp.entries()) {
     const mergedDateMap = new Map<string, any>();
     for (const [dateStr, dayRecords] of dateMap.entries()) {
-      const sortedDayRecords = [...dayRecords].sort((a, b) => 
-        new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
-      );
+      const sortedDayRecords = [...dayRecords].sort((a, b) => {
+        const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
+        const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
+        return timeA - timeB;
+      });
       const firstRecord = sortedDayRecords[0];
       const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
       const isShiftActive = dayRecords.some(r => r.isShiftActive);
@@ -802,16 +807,18 @@ export const handleExportAllCompanies = async (
           ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
         } else if (record) {
           // Has attendance record
-          const checkIn = new Date(record.checkInTime);
+          const checkIn = record.checkInTime ? new Date(record.checkInTime) : null;
           const checkOut = record.checkOutTime
             ? new Date(record.checkOutTime)
             : null;
-          const checkInStr = checkIn.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          });
+          const checkInStr = checkIn
+            ? checkIn.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })
+            : '';
           const checkOutStr = checkOut
             ? checkOut.toLocaleTimeString('en-US', {
               hour12: false,

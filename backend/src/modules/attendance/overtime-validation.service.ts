@@ -186,7 +186,7 @@ export async function validateOvertimeRequest(
     });
 
     for (const att of attendanceRecords) {
-        if (!att.checkOutTime) continue; // Open attendance — no definitive window
+        if (!att.checkOutTime || !att.checkInTime) continue; // Open or missing check-in — no definitive window
 
         const checkInMin = dateToMinutesPHT(att.checkInTime);
         const checkOutMin = dateToMinutesPHT(att.checkOutTime);

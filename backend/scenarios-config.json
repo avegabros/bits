@@ -1,0 +1,381 @@
+{
+  "scenarios": [
+    {
+      "name": "Scenario 1: Standard On-Time Day Shift",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "AM Shift (8-17)",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 08:00", "status": 0 },
+        { "timestamp": "Day 1 17:00", "status": 1 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 9.0,
+            "isAnomaly": false,
+            "checkInTime": "08:00",
+            "checkOutTime": "17:00"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 2: Late Check-In with Undertime",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "AM Shift (8-17)",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 09:20", "status": 0 },
+        { "timestamp": "Day 1 16:00", "status": 1 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes": 50,
+            "undertimeMinutes": 60,
+            "totalHours": 7.17,
+            "isAnomaly": false,
+            "checkInTime": "09:20",
+            "checkOutTime": "16:00"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 3: Orphan OUT Punch (Nullable Check-In)",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "AM Shift (8-17)",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 18:32", "status": 5 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": null,
+            "status": "incomplete",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 0.0,
+            "isAnomaly": false,
+            "checkInTime": null,
+            "checkOutTime": "18:32"
+          }
+        ]
+      }
+    },
+
+
+        {
+      "name": "Scenario 4: Overnight Overtime",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "AM Shift (8-17)",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 07:32", "status": 0 },
+        { "timestamp": "Day 1 17:03", "status": 1 },
+        { "timestamp": "Day 1 17:32", "status": 4 },
+        { "timestamp": "Day 2 06:35", "status": 5 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 9.0,
+            "isAnomaly": false,
+            "checkInTime": "07:32",
+            "checkOutTime": "17:03"
+          },
+          {
+            "shiftCode": null,
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 13.05,
+            "isAnomaly": false,
+            "checkInTime": "17:32",
+            "checkOutTime": "06:35"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 5: Day Shift with Auto Break Time Deduction",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AMB",
+          "name": "AM Shift with Break",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true,
+          "breakMinutes": 60
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 08:00", "status": 0 },
+        { "timestamp": "Day 1 17:00", "status": 1 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AMB",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 8.0,
+            "isAnomaly": false,
+            "checkInTime": "08:00",
+            "checkOutTime": "17:00"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 6: Night Shift Crossing Midnight",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_NIGHT",
+          "name": "Night Shift (22-06)",
+          "startTime": "22:00",
+          "endTime": "06:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "sortOrder": 1,
+          "isPrimary": true,
+          "breakMinutes": 60,
+          "isNightShift": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 22:00", "status": 0 },
+        { "timestamp": "Day 2 06:00", "status": 1 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_NIGHT",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 7.0,
+            "isAnomaly": false,
+            "checkInTime": "22:00",
+            "checkOutTime": "06:00"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 7: Half-Day Shift",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_HALF",
+          "name": "Half-Day Shift",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "halfDays": ["Mon"],
+          "halfDayHours": 4,
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 08:00", "status": 0 },
+        { "timestamp": "Day 1 12:00", "status": 1 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_HALF",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 4.0,
+            "isAnomaly": false,
+            "checkInTime": "08:00",
+            "checkOutTime": "12:00"
+          }
+        ]
+      }
+    },
+
+
+    {
+      "name": "Scenario 8: No check-out only Overtime-out",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "Shift",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "halfDays": ["Sat"],
+          "halfDayHours": 4,
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 08:00", "status": 0 },
+        { "timestamp": "Day 2 06:00", "status": 5 }
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 9.0,
+            "isAnomaly": false,
+            "checkInTime": "08:00",
+            "checkOutTime": "06:00"
+          }
+        ]
+      }
+    },
+
+
+
+    {
+      "name": "Scenario 9: Open Clock-In",
+      "referenceDate": "2026-07-13",
+      "shifts": [
+        {
+          "shiftCode": "S_AM",
+          "name": "Shift",
+          "startTime": "08:00",
+          "endTime": "17:00",
+          "graceMinutes": 30,
+          "workDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          "halfDays": ["Sat"],
+          "halfDayHours": 4,
+          "sortOrder": 1,
+          "isPrimary": true
+        }
+      ],
+      "punches": [
+        { "timestamp": "Day 1 08:00", "status": 0 },
+        { "timestamp": "Day 1 17:00", "status": 1 },
+        { "timestamp": "Day 1 17:30", "status": 4 },
+        { "timestamp": "Day 2 09:30", "status": 5 },
+        { "timestamp": "Day 2 09:31", "status": 0 }    
+      ],
+      "expected": {
+        "records": [
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 9.0,
+            "isAnomaly": false,
+            "checkInTime": "08:00",
+            "checkOutTime": "17:00"
+          },
+          {
+            "shiftCode": null,
+            "status": "present",
+            "lateMinutes": 0,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 16.0,
+            "isAnomaly": false,
+            "checkInTime": "17:30",
+            "checkOutTime": "09:30"
+          },
+          {
+            "shiftCode": "S_AM",
+            "status": "present",
+            "lateMinutes":61,
+            "undertimeMinutes": 0,
+            "overtimeMinutes": 0,
+            "totalHours": 0.0,
+            "isAnomaly": false,
+            "checkInTime": "09:31",
+            "checkOutTime": null
+          }
+        ]
+      }
+    }
+  ]
+}

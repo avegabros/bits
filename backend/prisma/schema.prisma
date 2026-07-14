@@ -12,7 +12,7 @@ model Attendance {
   employeeId           Int
   date                 DateTime
   shiftId              Int?
-  checkInTime          DateTime
+  checkInTime          DateTime?
   checkOutTime         DateTime?
   checkin_updated      DateTime?
   checkout_updated     DateTime?

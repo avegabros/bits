@@ -671,8 +671,8 @@ async function runAll() {
         records.length === 1 ? pass('Record created for check-out punch') : fail('Record created', `got ${records.length}`);
         att = records[0];
         if (att) {
-            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '16:55').getUTCHours() ? pass('Initially treated as late Check-In at 16:55') : fail('Treated as late Check-In', `got ${att.checkInTime.toISOString()}`);
-            att.checkOutTime === null ? pass('Check-out is initially null') : fail('Check-out is null', `got ${att.checkOutTime}`);
+            att.checkInTime === null ? pass('Initially treated as missing Check-In (null)') : fail('Treated as missing Check-In', `got ${att.checkInTime}`);
+            att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '16:55').getUTCHours() ? pass('Check-out time is initially 16:55') : fail('Check-out time is 16:55', `got ${att.checkOutTime?.toISOString()}`);
         }
 
         info(`Step 2: Delayed Punch IN at 08:00 arrives (Device A - reconnected)`);
@@ -725,7 +725,7 @@ async function runAll() {
         
         let att = records[0];
         if (att) {
-            att.checkInTime.getUTCHours() === phtTime(DATE_ONLY, '18:30').getUTCHours() ? pass('Check-in remains 18:30 PM') : fail('Check-in remains 18:30', `got ${att.checkInTime.toISOString()}`);
+            att.checkInTime === null ? pass('Check-in remains null') : fail('Check-in remains null', `got ${att.checkInTime}`);
             att.checkOutTime?.getUTCHours() === phtTime(DATE_ONLY, '19:30').getUTCHours() ? pass('Check-out successfully set to 19:30 PM under No Shift') : fail('Check-out set to 19:30', `got ${att.checkOutTime?.toISOString()}`);
         }
 

@@ -177,6 +177,7 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
             let maxOverlapMs = 0;
 
             for (const att of empAttRecords) {
+                if (!att.checkInTime) continue;
                 const checkInMs = normalizeTime(new Date(att.checkInTime)).getTime();
                 const checkOutMs = att.checkOutTime ? normalizeTime(new Date(att.checkOutTime)).getTime() : null;
 

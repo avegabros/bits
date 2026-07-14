@@ -418,7 +418,8 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
                 // 24-hour expiration: prevent punches from attaching to records from previous days
                 if (openRecord) {
-                    const hoursSinceCheckIn = (log.timestamp.getTime() - openRecord.checkInTime.getTime()) / (1000 * 60 * 60);
+                    const checkInTimeBase = openRecord.checkInTime ?? openRecord.date;
+                    const hoursSinceCheckIn = (log.timestamp.getTime() - checkInTimeBase.getTime()) / (1000 * 60 * 60);
                     if (hoursSinceCheckIn > 24) {
                         console.log(`[Attendance] Open record id=${openRecord.id} expired (${hoursSinceCheckIn.toFixed(1)}h since check-in) — will not attach punch`);
                         openRecord = null;
@@ -441,7 +442,8 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
 
                     if (closedRecord && log.timestamp > closedRecord.checkOutTime!) {
                         // 24-hour expiration: don't update records where check-in was >24h ago
-                        const hoursSinceCheckIn = (log.timestamp.getTime() - closedRecord.checkInTime.getTime()) / (1000 * 60 * 60);
+                        const checkInTimeBase = closedRecord.checkInTime ?? closedRecord.date;
+                        const hoursSinceCheckIn = (log.timestamp.getTime() - checkInTimeBase.getTime()) / (1000 * 60 * 60);
 
                         if (hoursSinceCheckIn <= 24) {
                             const updatedRecord = await prisma.attendance.update({
@@ -496,9 +498,9 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                             employeeId: log.employeeId,
                             date: dateOnly,
                             shiftId: null,
-                            checkInTime: log.timestamp,
+                            checkInTime: null,
                             checkOutTime: log.timestamp,
-                            status: 'present',
+                            status: 'incomplete',
                             notes: 'Missing Check-In (orphan punch)',
                             checkOutDeviceId: log.deviceId,
                             checkoutSource: 'device',

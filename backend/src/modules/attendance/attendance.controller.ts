@@ -209,8 +209,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         const userRole = req.user?.role;
         const isHRWorkflow = userRole === 'HR' || roleContext === 'hr';
 
-        if (!adjustedById || !employeeId || !date || !checkInTime) {
-            return res.status(400).json({ success: false, message: 'Missing required fields: employeeId, date, checkInTime' });
+        if (!adjustedById || !employeeId || !date || (!checkInTime && !checkOutTime)) {
+            return res.status(400).json({ success: false, message: 'Missing required fields: employeeId, date, and at least one timestamp (checkInTime or checkOutTime)' });
         }
 
         if (!reason || !String(reason).trim()) {
@@ -218,10 +218,10 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         }
 
         // Time Validation
-        const effectiveCheckIn = new Date(checkInTime);
+        const effectiveCheckIn = checkInTime ? new Date(checkInTime) : null;
         const effectiveCheckOut = checkOutTime ? new Date(checkOutTime) : null;
 
-        if (effectiveCheckOut) {
+        if (effectiveCheckIn && effectiveCheckOut) {
             if (effectiveCheckOut <= effectiveCheckIn) {
                 return res.status(400).json({ success: false, message: 'Check-out time must be later than check-in time.' });
             }
@@ -242,7 +242,8 @@ export const createManualAttendance = async (req: Request, res: Response) => {
              return res.status(404).json({ success: false, message: 'Employee not found' });
         }
 
-        const { shift: resolvedShift } = await resolveShiftForTimestamp(Number(employeeId), effectiveCheckIn, recordDate);
+        const shiftResolveTime = effectiveCheckIn ?? effectiveCheckOut!;
+        const { shift: resolvedShift } = await resolveShiftForTimestamp(Number(employeeId), shiftResolveTime, recordDate);
 
         // Check if an attendance record already exists for this date and shift to prevent duplicates
         const existingRecord = await prisma.attendance.findFirst({
@@ -259,7 +260,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
         const isNightShift = resolvedShift?.isNightShift ?? false;
         
         console.log(`[DEBUG] createManualAttendance - employee: ${employee.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
-        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
+        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn ? effectiveCheckIn.toISOString() : 'NULL'}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -267,7 +268,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
                 return res.status(400).json({ success: false, message: 'Cannot set check-in for a future date.' });
             }
         } else {
-            if (effectiveCheckIn > new Date()) {
+            if (effectiveCheckIn && effectiveCheckIn > new Date()) {
                 return res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
             }
         }
@@ -448,8 +449,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
         const effectiveCheckIn = checkInTime ? new Date(checkInTime) : existing.checkInTime;
         const effectiveCheckOut = checkOutTime !== undefined ? (checkOutTime ? new Date(checkOutTime) : null) : existing.checkOutTime;
 
-        if (!effectiveCheckIn) {
-            res.status(400).json({ success: false, message: 'Check-in time is required.' });
+        if (!effectiveCheckIn && !effectiveCheckOut) {
+            res.status(400).json({ success: false, message: 'At least check-in time or check-out time is required.' });
             return;
         }
 
@@ -458,7 +459,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
             resolvedShift = await prisma.shift.findUnique({ where: { id: existing.shiftId } });
         }
         if (!resolvedShift) {
-            const { shift } = await resolveShiftForTimestamp(existing.employeeId, effectiveCheckIn, existing.date);
+            const shiftResolveTime = effectiveCheckIn ?? effectiveCheckOut!;
+            const { shift } = await resolveShiftForTimestamp(existing.employeeId, shiftResolveTime, existing.date);
             resolvedShift = shift;
         }
 
@@ -468,7 +470,7 @@ export const updateAttendance = async (req: Request, res: Response) => {
         const isNightShift = resolvedShift?.isNightShift ?? false;
         
         console.log(`[DEBUG] updateAttendance - employee: ${existing.employee?.id}, shift: ${resolvedShift?.name}, isNightShift: ${isNightShift}`);
-        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn.toISOString()}, now: ${new Date().toISOString()}`);
+        console.log(`[DEBUG] effectiveCheckIn: ${effectiveCheckIn ? effectiveCheckIn.toISOString() : 'NULL'}, now: ${new Date().toISOString()}`);
 
         if (isNightShift) {
             const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -479,13 +481,13 @@ export const updateAttendance = async (req: Request, res: Response) => {
             }
         } else {
             const now = new Date();
-            if (effectiveCheckIn > now) {
+            if (effectiveCheckIn && effectiveCheckIn > now) {
                 res.status(400).json({ success: false, message: 'Check-in time cannot be in the future.' });
                 return;
             }
         }
 
-        if (effectiveCheckOut) {
+        if (effectiveCheckIn && effectiveCheckOut) {
             if (effectiveCheckOut <= effectiveCheckIn) {
                 res.status(400).json({ success: false, message: 'Check-out time must be later than check-in time.' });
                 return;
@@ -535,8 +537,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
                     submittedById: adjustedById,
                     originalCheckIn: existing.checkInTime,
                     originalCheckOut: existing.checkOutTime,
-                    requestedCheckIn: checkInTime ? new Date(checkInTime) : null,
-                    requestedCheckOut: checkOutTime ? new Date(checkOutTime) : null,
+                    requestedCheckIn: checkInTime !== undefined ? (checkInTime ? new Date(checkInTime) : null) : existing.checkInTime,
+                    requestedCheckOut: checkOutTime !== undefined ? (checkOutTime ? new Date(checkOutTime) : null) : existing.checkOutTime,
                     employeeName: `${existing.employee.firstName} ${existing.employee.lastName}`,
                     employeeBranch: (existing.employee as any).Branch?.name || null,
                     reason: String(reason).trim(),
@@ -568,13 +570,14 @@ export const updateAttendance = async (req: Request, res: Response) => {
         const updateData: Prisma.AttendanceUpdateInput = {};
         const auditEntries: { field: string; oldValue: string | null; newValue: string | null }[] = [];
 
-        if (checkInTime) {
+        if (checkInTime !== undefined) {
             const oldVal = existing.checkInTime ? existing.checkInTime.toISOString() : null;
-            const newDate = new Date(checkInTime);
-            if (oldVal !== newDate.toISOString()) {
-                updateData.checkInTime = newDate;
+            const newVal = checkInTime ? new Date(checkInTime) : null;
+            const newValStr = newVal ? newVal.toISOString() : null;
+            if (oldVal !== newValStr) {
+                updateData.checkInTime = newVal;
                 updateData.checkin_updated = new Date();
-                auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newDate.toISOString() });
+                auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: newValStr });
             }
         }
 
@@ -591,8 +594,8 @@ export const updateAttendance = async (req: Request, res: Response) => {
         }
 
         // Centralized status recalculation
-        if (updateData.checkInTime || updateData.checkOutTime !== undefined) {
-            const finalCheckIn = (updateData.checkInTime as Date) ?? existing.checkInTime;
+        if (updateData.checkInTime !== undefined || updateData.checkOutTime !== undefined) {
+            const finalCheckIn = updateData.checkInTime !== undefined ? (updateData.checkInTime as Date | null) : existing.checkInTime;
             const finalCheckOut = updateData.checkOutTime !== undefined ? (updateData.checkOutTime as Date | null) : existing.checkOutTime;
 
             const newStatus = calculateAttendanceStatus(finalCheckIn, finalCheckOut, existing.date, resolvedShift ?? null);
@@ -1172,21 +1175,25 @@ export const reviewAdjustment = async (req: Request, res: Response) => {
 
     const isManualCreation = adjustment.originalCheckIn === null;
 
-    if (adjustment.requestedCheckIn) {
+    const checkInChanged = (adjustment.requestedCheckIn ? new Date(adjustment.requestedCheckIn).getTime() : null) !== 
+                           (existing.checkInTime ? new Date(existing.checkInTime).getTime() : null);
+    if (checkInChanged || isManualCreation) {
       const oldVal = isManualCreation ? null : (existing.checkInTime ? existing.checkInTime.toISOString() : null);
       updateData.checkInTime = adjustment.requestedCheckIn;
       updateData.checkin_updated = new Date();
       updateData.checkInAuthMethod = 'MANUAL';
-      auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn.toISOString() });
+      auditEntries.push({ field: 'checkInTime', oldValue: oldVal, newValue: adjustment.requestedCheckIn ? adjustment.requestedCheckIn.toISOString() : null });
     }
 
-    if (adjustment.requestedCheckOut !== undefined && adjustment.requestedCheckOut !== null) {
+    const checkOutChanged = (adjustment.requestedCheckOut ? new Date(adjustment.requestedCheckOut).getTime() : null) !== 
+                            (existing.checkOutTime ? new Date(existing.checkOutTime).getTime() : null);
+    if (checkOutChanged || isManualCreation) {
       const oldVal = isManualCreation ? null : (existing.checkOutTime ? existing.checkOutTime.toISOString() : null);
       updateData.checkOutTime = adjustment.requestedCheckOut;
       updateData.checkout_updated = new Date();
       updateData.checkoutSource = 'manual';
       updateData.checkOutAuthMethod = 'MANUAL';
-      auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: adjustment.requestedCheckOut.toISOString() });
+      auditEntries.push({ field: 'checkOutTime', oldValue: oldVal, newValue: adjustment.requestedCheckOut ? adjustment.requestedCheckOut.toISOString() : null });
     } else if (adjustment.requestedCheckOut === null && existing.checkOutTime) {
        // if they explicitly wanted to clear the checkout time? Unlikely but just in case
        // For our adjustment model, null could mean no change or clearing.

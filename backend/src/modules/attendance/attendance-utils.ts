@@ -31,7 +31,8 @@ export const getTodayPHT = (): Date => toPHTDate(new Date());
 /**
  * Helper: Convert UTC date to Philippine Time string
  */
-export function formatToPhilippineTime(utcDate: Date): string {
+export function formatToPhilippineTime(utcDate: Date | null): string {
+    if (!utcDate) return '—';
     return utcDate.toLocaleString('en-US', {
         timeZone: 'Asia/Manila',
         year: 'numeric',

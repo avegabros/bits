@@ -41,18 +41,18 @@ function windowsOverlap(
 export async function validateAttendanceConflicts(params: {
     employeeId: number;
     date: Date;
-    checkInTime: Date;
+    checkInTime: Date | null;
     checkOutTime: Date | null;
     excludeAttendanceId?: number;
 }): Promise<AttendanceConflictReport> {
     const { employeeId, date, checkInTime, checkOutTime, excludeAttendanceId } = params;
     const conflicts: AttendanceConflict[] = [];
 
-    const normalizedCheckIn = normalizeTime(checkInTime);
-    const editStart = normalizedCheckIn.getTime();
+    const normalizedCheckIn = checkInTime ? normalizeTime(checkInTime) : null;
+    const editStart = normalizedCheckIn ? normalizedCheckIn.getTime() : null;
     const editEnd = checkOutTime ? normalizeTime(checkOutTime).getTime() : null;
 
-    const editStartStr = formatTimePHT(normalizedCheckIn);
+    const editStartStr = normalizedCheckIn ? formatTimePHT(normalizedCheckIn) : 'missing';
     const editEndStr = checkOutTime ? formatTimePHT(normalizeTime(checkOutTime)) : 'pending';
     const editedTimeRange = `${editStartStr} – ${editEndStr}`;
 
@@ -70,11 +70,25 @@ export async function validateAttendanceConflicts(params: {
         for (const record of otherRecords) {
             if (!record.checkOutTime) continue;
 
-            const recStart = normalizeTime(record.checkInTime).getTime();
+            const recStart = record.checkInTime ? normalizeTime(record.checkInTime).getTime() : null;
             const recEnd = normalizeTime(record.checkOutTime).getTime();
 
-            if (windowsOverlap(editStart, editEnd, recStart, recEnd)) {
-                const recStartStr = formatTimePHT(record.checkInTime);
+            let overlaps = false;
+            if (editStart !== null && recStart !== null) {
+                overlaps = windowsOverlap(editStart, editEnd, recStart, recEnd);
+            } else {
+                // If one or both check-ins are missing, check point-in-time intersections
+                if (editStart === null && recStart !== null) {
+                    overlaps = editEnd >= recStart && editEnd <= recEnd;
+                } else if (editStart !== null && recStart === null) {
+                    overlaps = recEnd >= editStart && recEnd <= editEnd;
+                } else if (editStart === null && recStart === null) {
+                    overlaps = editEnd === recEnd;
+                }
+            }
+
+            if (overlaps) {
+                const recStartStr = record.checkInTime ? formatTimePHT(record.checkInTime) : 'missing';
                 const recEndStr = formatTimePHT(record.checkOutTime);
                 const shiftName = record.shift?.name ?? 'Unknown Shift';
 
