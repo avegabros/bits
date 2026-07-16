@@ -22,6 +22,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     container_name: bits_backend
     environment:
       NODE_ENV: ${NODE_ENV:-production}
@@ -67,6 +68,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      network: host
     container_name: bits_frontend
     environment:
       NODE_ENV: ${NODE_ENV:-production}
