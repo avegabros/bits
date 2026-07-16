@@ -118,17 +118,14 @@ export function processAttendanceData(
     };
   });
 
-  // 3. Track present shifts by employee to inject absent rows
-  const presentShiftsByEmployee = new Map<number, Set<number | null>>();
+  // 3. Track shifts that already have records by employee to prevent duplicate/incorrect absent rows
+  const recordedShiftsByEmployee = new Map<number, Set<number | null>>();
   for (const r of mapped) {
-    if (isPendingManualCreation(r)) continue;
-    if (!presentShiftsByEmployee.has(r.employeeId)) {
-      presentShiftsByEmployee.set(r.employeeId, new Set());
+    if (!recordedShiftsByEmployee.has(r.employeeId)) {
+      recordedShiftsByEmployee.set(r.employeeId, new Set());
     }
-    presentShiftsByEmployee.get(r.employeeId)!.add(r.shiftId);
+    recordedShiftsByEmployee.get(r.employeeId)!.add(r.shiftId);
   }
-  const presentIds = new Set(mapped.filter(r => !isPendingManualCreation(r)).map(r => r.employeeId));
-  const hasAnyRecordIds = new Set(mapped.map(r => r.employeeId));
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const isFutureDate = selectedDate > todayStr;
@@ -150,11 +147,6 @@ export function processAttendanceData(
   const absentRows: AttendanceRecord[] = [];
   if (!isFutureDate) {
     for (const e of employees) {
-      // If employee already has any check-in record for the day, they are present! Skip absent injection completely.
-      if (presentIds.has(e.id)) continue;
-      // If they already have any record (e.g. pending manual creation), skip injecting new absent row
-      if (hasAnyRecordIds.has(e.id)) continue;
-
       // Hire date check: skip if hired after selectedDate
       if (e.hireDate) {
         const hireDateStr = new Date(e.hireDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -164,14 +156,14 @@ export function processAttendanceData(
       // Holiday check: skip if affected by holiday
       if (matchedHoliday && holidayAppliesTo(matchedHoliday, e.branchId)) continue;
 
-      const employeePresentShifts = presentShiftsByEmployee.get(e.id);
+      const employeeRecordedShifts = recordedShiftsByEmployee.get(e.id);
       const shifts = (e.EmployeeShift && e.EmployeeShift.length > 0)
         ? e.EmployeeShift.map((es: any) => es.shift)
         : (e.Shift ? [e.Shift] : [{ id: null, name: null, shiftCode: null, isNightShift: false, startTime: undefined, endTime: undefined, workDays: undefined }]);
 
       shifts.forEach((shift: any, idx: number) => {
         const shiftId = shift.id ?? null;
-        if (employeePresentShifts?.has(shiftId)) return;
+        if (employeeRecordedShifts?.has(shiftId)) return;
 
         const isWorking = isWorkDayForShift(shift.workDays);
         const rowStatus = isWorking ? 'absent' : 'rest_day';
