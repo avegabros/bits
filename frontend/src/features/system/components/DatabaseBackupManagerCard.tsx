@@ -161,7 +161,7 @@ export function DatabaseBackupManagerCard() {
                 <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60 hover:shadow-md hover:bg-white hover:border-slate-300 transition-all duration-300 flex flex-col justify-between min-h-[90px]">
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Database Size</span>
                     <span className="text-xl font-black text-slate-800 tracking-tight mt-auto block">
-                        {data?.dbSize ? formatBytes(data.dbSize) : 'N/A'}
+                        {typeof data?.dbSize === 'number' ? formatBytes(data.dbSize) : 'N/A'}
                     </span>
                 </div>
 

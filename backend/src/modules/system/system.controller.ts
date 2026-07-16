@@ -440,9 +440,22 @@ export const getBackupsList = async (req: Request, res: Response) => {
             })
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+        let dbSize = 0;
+        try {
+            const sizeResult = await prisma.$queryRaw<Array<{ pg_database_size: bigint | number }>>`
+                SELECT pg_database_size(current_database()) as pg_database_size;
+            `;
+            if (sizeResult && sizeResult[0]) {
+                dbSize = Number(sizeResult[0].pg_database_size);
+            }
+        } catch (dbError) {
+            console.error('[System] Error querying database size:', dbError);
+        }
+
         return res.status(200).json({
             success: true,
             backups: files,
+            dbSize
         });
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';

@@ -1,5 +1,6 @@
 import { ZKDriver } from './zk-driver';
 import { DeviceQueue } from './device-queue';
+import { deviceRegistry } from './device-registry';
 
 export type AgentCommand =
     | { action: 'TEST_CONNECTION'; deviceIp: string; devicePort: number }
@@ -48,21 +49,33 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
     const port = devicePort || 4370;
 
     if (action === 'PING_DEVICE') {
-        if (deviceQueue.isBusy(deviceIp)) {
-            console.log(`[Handler] Fast probing "${action}" on ${deviceIp}:${port} - DEVICE IS ACTIVE (Skipping TCP handshake)`);
-            return { success: true, data: { status: 'ONLINE' } };
+        console.log(`[Handler] Probing "${action}" on ${deviceIp}:${port}...`);
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const probeDriver = new ZKDriver(deviceIp, port, 10000);
+            try {
+                await probeDriver.connect();
+                await probeDriver.disconnect();
+                deviceRegistry.markOnline(deviceIp);
+                return { success: true, data: { status: 'ONLINE' } };
+            } catch (error: unknown) {
+                await probeDriver.disconnect().catch(() => {});
+                if (attempt < 2) {
+                    console.log(`[Handler] Probe attempt ${attempt} failed, retrying in 2s...`);
+                    await new Promise(r => setTimeout(r, 2000));
+                } else {
+                    deviceRegistry.markOffline(deviceIp);
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    return { success: false, error: errorMsg };
+                }
+            }
         }
+        return { success: false, error: 'Probe failed' };
+    }
 
-        const driver = new ZKDriver(deviceIp, port);
-        try {
-            console.log(`[Handler] Fast probing (no queue) "${action}" on ${deviceIp}:${port}...`);
-            await driver.connect();
-            await driver.disconnect();
-            return { success: true, data: { status: 'ONLINE' } };
-        } catch (error: any) {
-            await driver.disconnect().catch(() => {});
-            return { success: false, error: error.message || String(error) };
-        }
+    const status = deviceRegistry.getStatus(deviceIp);
+    if (status === 'OFFLINE') {
+        console.log(`[Handler] Skipping "${action}" on ${deviceIp}:${port} — device is OFFLINE. Waiting for health check.`);
+        return { success: false, error: 'DEVICE_OFFLINE' };
     }
 
     return deviceQueue.enqueue(deviceIp, async (): Promise<CommandResult> => {
@@ -76,7 +89,7 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
 
                 let data: any = null;
 
-                switch (action) {
+                switch (command.action) {
                     case 'TEST_CONNECTION':
                         let serialNumber = 'N/A';
                         let userCount = 0;
@@ -97,7 +110,7 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
 
                     case 'PULL_ATTENDANCE':
                         const allLogs = await driver.getLogs();
-                        const sinceFilter = (command as any).since ? new Date((command as any).since) : null;
+                        const sinceFilter = command.since ? new Date(command.since) : null;
                         if (sinceFilter) {
                             const filtered = allLogs.filter(log => new Date(log.recordTime) > sinceFilter);
                             console.log(`[Handler] Filtered ${allLogs.length} total logs to ${filtered.length} (since ${sinceFilter.toISOString()})`);
@@ -108,57 +121,50 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         break;
 
                     case 'WRITE_FINGERPRINT':
-                        const writeCmd = command as any;
                         await driver.setFingerTemplate(
-                            writeCmd.zkId,
-                            writeCmd.fingerIndex,
-                            parseTemplateData(writeCmd.templateData)
+                            command.zkId,
+                            command.fingerIndex,
+                            parseTemplateData(command.templateData)
                         );
                         data = { status: 'SUCCESS' };
                         break;
 
                     case 'READ_FINGERPRINT':
-                        const readCmd = command as any;
-                        const template = await driver.getFingerTemplate(readCmd.zkId, readCmd.fingerIndex);
+                        const template = await driver.getFingerTemplate(command.zkId, command.fingerIndex);
                         data = template ? template : null;
                         break;
 
                     case 'READ_ALL_FINGERPRINTS':
-                        const readAllCmd = command as any;
-                        const templates = await driver.readAllFingerprintTemplates(readAllCmd.zkId);
+                        const templates = await driver.readAllFingerprintTemplates(command.zkId);
                         data = templates;
                         break;
 
                     case 'UPSERT_USER':
-                        const userCmd = command as any;
                         await driver.setUser(
-                            userCmd.zkId,
-                            userCmd.name,
+                            command.zkId,
+                            command.name,
                             "",
-                            userCmd.role,
-                            userCmd.card
+                            command.role,
+                            command.card
                         );
                         await driver.refreshData();
                         data = { status: 'SUCCESS' };
                         break;
 
                     case 'DELETE_USER':
-                        const delCmd = command as any;
-                        await driver.clearUserFingerprints(delCmd.zkId).catch(() => {});
-                        await driver.deleteUser(delCmd.zkId);
+                        await driver.clearUserFingerprints(command.zkId).catch(() => {});
+                        await driver.deleteUser(command.zkId);
                         await driver.refreshData();
                         data = { status: 'SUCCESS' };
                         break;
 
                     case 'DELETE_FINGER':
-                        const delFingerCmd = command as any;
-                        await driver.deleteFingerTemplate(delFingerCmd.zkId, delFingerCmd.fingerIndex);
+                        await driver.deleteFingerTemplate(command.zkId, command.fingerIndex);
                         data = { status: 'SUCCESS' };
                         break;
 
                     case 'SET_TIME':
-                        const timeCmd = command as any;
-                        await driver.setTime(new Date(timeCmd.utcTime));
+                        await driver.setTime(new Date(command.utcTime));
                         data = { status: 'SUCCESS' };
                         break;
 
@@ -173,10 +179,9 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         break;
 
                     case 'GET_USER_FINGERS_STATUS':
-                        const statusCmd = command as any;
                         const enrolledFingers: number[] = [];
                         for (let finger = 0; finger <= 2; finger++) {
-                            const hasTemplate = await driver.hasFingerTemplate(statusCmd.zkId, finger);
+                            const hasTemplate = await driver.hasFingerTemplate(command.zkId, finger);
                             if (hasTemplate) {
                                 enrolledFingers.push(finger);
                             }
@@ -186,8 +191,7 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         break;
 
                     case 'START_ENROLLMENT':
-                        const startCmd = command as any;
-                        await driver.startEnrollment(String(startCmd.zkId), startCmd.fingerIndex);
+                        await driver.startEnrollment(String(command.zkId), command.fingerIndex);
                         data = { status: 'SUCCESS' };
                         break;
 
@@ -198,12 +202,13 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
                         break;
 
                     default:
-                        throw new Error(`Unsupported action type: ${(command as any).action}`);
+                        const cmd = command as Record<string, unknown>;
+                        throw new Error(`Unsupported action type: ${cmd.action}`);
                 }
 
                 await driver.disconnect();
                 return { success: true, data };
-            } catch (error: any) {
+            } catch (error: unknown) {
                 await driver.disconnect().catch(() => {});
                 throw error;
             }
@@ -218,12 +223,19 @@ export async function handleCommand(command: AgentCommand, deviceQueue: DeviceQu
         try {
             const result = await Promise.race([executionPromise, timeoutPromise]);
             if (timeoutId) clearTimeout(timeoutId);
+            if (result.success) {
+                deviceRegistry.markOnline(deviceIp);
+            }
             return result;
-        } catch (error: any) {
+        } catch (error: unknown) {
             if (timeoutId) clearTimeout(timeoutId);
             console.error(`[Handler] Command "${action}" failed:`, error);
             await driver.disconnect().catch(() => {});
-            return { success: false, error: error.message || String(error) };
+            if (deviceRegistry.isConnectionError(error)) {
+                deviceRegistry.markOffline(deviceIp);
+            }
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            return { success: false, error: errorMsg };
         }
     });
 }
