@@ -3,8 +3,9 @@ import { AttendanceRecord } from '@/types/reports';
 /** Derive a display status from backend-enriched record fields */
 export const getRecordStatusFromBackend = (
   r: AttendanceRecord
-): 'early-out' | 'anomaly' | 'late' | 'on-time' | 'in-progress' | 'missing-checkout' => {
+): 'early-out' | 'anomaly' | 'late' | 'on-time' | 'in-progress' | 'missing-checkout' | 'missing-checkin' => {
   if (r.isShiftActive) return 'in-progress';
+  if (!r.checkInTime) return 'missing-checkin';
   if (r.checkOutTime === null && r.status === 'incomplete') return 'missing-checkout';
   if (r.isEarlyOut) return 'early-out';
   if (r.isAnomaly) return 'anomaly';

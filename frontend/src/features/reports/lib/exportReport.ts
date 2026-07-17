@@ -11,6 +11,54 @@ import {
 } from './formatters';
 import type { Holiday } from '@/features/holidays/hooks/useHolidays';
 
+interface RawEmployee {
+  id: number;
+  firstName: string;
+  lastName: string;
+  middleName?: string | null;
+  suffix?: string | null;
+  employeeNumber?: string | null;
+  zkId?: number | null;
+  Department?: { name: string } | null;
+  Section?: { name: string } | null;
+  Branch?: { name: string } | null;
+  employmentStatus: string;
+  role: string;
+  position?: string | null;
+  hireDate?: string | null;
+  Company?: { name: string } | null;
+  Shift?: {
+    id: number;
+    name: string;
+    startTime: string;
+    endTime: string;
+    graceMinutes?: number;
+    breakMinutes?: number;
+    workDays?: string;
+    halfDays?: string;
+  } | null;
+}
+
+interface RawBranch {
+  id: number;
+  name: string;
+}
+
+interface RawHoliday {
+  id: number;
+  name: string;
+  date: string;
+}
+
+interface RawPunchLog {
+  id: number;
+  employeeId: number;
+  timestamp: string;
+  status: number;
+  deviceId?: number | null;
+  authMethod?: string | null;
+}
+
 const MONTHS = [
   'January',
   'February',
@@ -46,10 +94,10 @@ export const handleExport = (
   exportSource: 'admin-panel' | 'hr-panel' = 'admin-panel'
 ) => {
   const allRows: (string | number)[][] = [];
-  const s = new Date(startDate + 'T00:00:00Z');
-  const e = new Date(endDate + 'T00:00:00Z');
+  const parsedStartDate = new Date(startDate + 'T00:00:00Z');
+  const parsedEndDate = new Date(endDate + 'T00:00:00Z');
 
-  allRows.push(['Period', `${fmtFullDate(s)} to ${fmtFullDate(e)}`]);
+  allRows.push(['Period', `${fmtFullDate(parsedStartDate)} to ${fmtFullDate(parsedEndDate)}`]);
   allRows.push(['Total Employees', filteredData.length]);
   allRows.push([]);
 
@@ -70,26 +118,26 @@ export const handleExport = (
   let sumUndertime = 0;
   let sumRegHrs = 0;
 
-  filteredData.forEach((e) => {
-    const shiftLabel = e.shift
-      ? `${e.shift.name} (${formatShiftTime(
-        e.shift.startTime
-      )}–${formatShiftTime(e.shift.endTime)})`
+  filteredData.forEach((employee) => {
+    const shiftLabel = employee.shift
+      ? `${employee.shift.name} (${formatShiftTime(
+        employee.shift.startTime
+      )}–${formatShiftTime(employee.shift.endTime)})`
       : 'No Shift';
     allRows.push([
-      e.name,
+      employee.name,
       shiftLabel,
-      formatLateHrs(e.lateMinutes),
-      formatTotalLate(e.lateMinutes),
-      e.overtime > 0 ? formatHrsMins(e.overtime) : '—',
-      e.undertime > 0 ? formatHrsMins(e.undertime) : '—',
-      Math.max(0, e.totalHours).toFixed(2),
+      formatLateHrs(employee.lateMinutes),
+      formatTotalLate(employee.lateMinutes),
+      employee.overtime > 0 ? formatHrsMins(employee.overtime) : '—',
+      employee.undertime > 0 ? formatHrsMins(employee.undertime) : '—',
+      Math.max(0, employee.totalHours).toFixed(2),
     ]);
-    sumLateDays += e.late;
-    sumLateMinutes += e.lateMinutes;
-    sumOvertime += e.overtime;
-    sumUndertime += e.undertime;
-    sumRegHrs += e.totalHours;
+    sumLateDays += employee.late;
+    sumLateMinutes += employee.lateMinutes;
+    sumOvertime += employee.overtime;
+    sumUndertime += employee.undertime;
+    sumRegHrs += employee.totalHours;
   });
 
   // Summary / totals row
@@ -189,9 +237,9 @@ export const handleExportIndividual = (
   ]);
   allRows.push([]);
 
-  const s = new Date(startDate + 'T00:00:00Z');
-  const e = new Date(endDate + 'T00:00:00Z');
-  allRows.push(['Period', `${fmtFullDate(s)} — ${fmtFullDate(e)}`]);
+  const parsedStartDate = new Date(startDate + 'T00:00:00Z');
+  const parsedEndDate = new Date(endDate + 'T00:00:00Z');
+  allRows.push(['Period', `${fmtFullDate(parsedStartDate)} — ${fmtFullDate(parsedEndDate)}`]);
   allRows.push([]);
 
   allRows.push([
@@ -240,8 +288,8 @@ export const handleExportIndividual = (
 
   // Walk every calendar day from startDate to endDate inclusive
   let totalCalendarDays = 0;
-  const cursor = new Date(s);
-  while (cursor <= e) {
+  const cursor = new Date(parsedStartDate);
+  while (cursor <= parsedEndDate) {
     totalCalendarDays++;
     const dayOfWeek = cursor.getUTCDay();
     const dateKey = cursor.toISOString().split('T')[0];
@@ -258,6 +306,23 @@ export const handleExportIndividual = (
 
       const firstRecord = sortedDayRecords[0];
       const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
+
+      // Find earliest valid check-in time
+      const checkInRecords = dayRecords.filter(r => r.checkInTime);
+      const earliestCheckInTime = checkInRecords.length > 0
+        ? checkInRecords.reduce((earliest, current) => 
+            new Date(current.checkInTime!).getTime() < new Date(earliest.checkInTime!).getTime() ? current : earliest
+          ).checkInTime
+        : null;
+
+      // Find latest valid check-out time
+      const checkOutRecords = dayRecords.filter(r => r.checkOutTime);
+      const latestCheckOutTime = checkOutRecords.length > 0
+        ? checkOutRecords.reduce((latest, current) => 
+            new Date(current.checkOutTime!).getTime() > new Date(latest.checkOutTime!).getTime() ? current : latest
+          ).checkOutTime
+        : null;
+
       const isShiftActive = dayRecords.some(r => r.isShiftActive);
 
       const workedHrsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.totalHours ?? 0)), 0);
@@ -265,11 +330,22 @@ export const handleExportIndividual = (
       const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
       const utMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.undertimeMinutes ?? 0)), 0);
 
+      // Determine aggregated daily status
+      let aggregatedStatus = firstRecord.status;
+      if (dayRecords.every(r => r.status === 'incomplete' && !r.checkOutTime)) {
+        aggregatedStatus = 'incomplete';
+      } else {
+        const nonIncompleteRecord = sortedDayRecords.find(r => r.status !== 'incomplete');
+        if (nonIncompleteRecord) {
+          aggregatedStatus = nonIncompleteRecord.status;
+        }
+      }
+
       // Construct representative merged record
       const mergedRecord: AttendanceRecord = {
         ...firstRecord,
         isShiftActive,
-        checkOutTime: lastRecord.checkOutTime,
+        checkOutTime: latestCheckOutTime,
         gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
         checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
         checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
@@ -277,11 +353,11 @@ export const handleExportIndividual = (
         isEarlyOut: lastRecord.isEarlyOut,
         isAnomaly: dayRecords.some(r => r.isAnomaly),
         lateMinutes: lateMinsVal,
-        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
+        status: aggregatedStatus,
       };
 
-      const checkIn = firstRecord.checkInTime ? new Date(firstRecord.checkInTime) : null;
-      const checkOut = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
+      const checkIn = earliestCheckInTime ? new Date(earliestCheckInTime) : null;
+      const checkOut = latestCheckOutTime ? new Date(latestCheckOutTime) : null;
       const checkInLabel = checkIn ? checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
       const hoursWorked = workedHrsVal > 0 ? workedHrsVal.toFixed(2) : '—';
       const statusLabel = getRecordStatusFromBackend(mergedRecord);
@@ -299,16 +375,18 @@ export const handleExportIndividual = (
         displayStatus = 'ANOMALY – Out of Shift';
       } else if (statusLabel === 'late') {
         displayStatus = 'Late';
+      } else if (statusLabel === 'missing-checkout') {
+        displayStatus = 'Missing Out';
+      } else if (statusLabel === 'missing-checkin') {
+        displayStatus = 'Missing In';
       } else {
         displayStatus = 'On Time';
       }
 
       // Check Out column — mirrors UI "Active" indicator
-      const checkOutLabel = isShiftActive
-        ? 'Active'
-        : checkOut
-          ? checkOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-          : '—';
+      const checkOutLabel = checkOut
+        ? checkOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : (isShiftActive ? 'Active' : '—');
 
       // Hours column — mirrors UI "Live" indicator
       const hoursLabel = isShiftActive ? 'Live' : hoursWorked;
@@ -499,6 +577,48 @@ const FILL_NONE: Record<string, unknown> = {};
 // Locale-independent day name lookup (index matches Date.getUTCDay())
 const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const isLogDeleted = (
+  log: RawPunchLog,
+  originalDayRecords: AttendanceRecord[]
+): boolean => {
+  const logTimeMs = new Date(log.timestamp).getTime();
+
+  // If the log matches checkInTime or checkOutTime of any daily record, it is credited.
+  const isCredited = originalDayRecords.some(r => {
+    const checkInMs = r.checkInTime ? new Date(r.checkInTime).getTime() : 0;
+    const checkOutMs = r.checkOutTime ? new Date(r.checkOutTime).getTime() : 0;
+    return logTimeMs === checkInMs || logTimeMs === checkOutMs;
+  });
+
+  if (isCredited) {
+    return false;
+  }
+
+  // Overtime punches: check if there's credited overtime on this day.
+  if (log.status === 4 || log.status === 5) {
+    const hasCreditedOt = originalDayRecords.some(r => (r.overtimeMinutes ?? 0) > 0);
+    return !hasCreditedOt;
+  }
+
+  // Duplicate Check-in punch check
+  if (log.status === 0) {
+    const hasCreditedCheckIn = originalDayRecords.some(r => r.checkInTime);
+    if (hasCreditedCheckIn) {
+      return false;
+    }
+  }
+
+  // Duplicate Check-out punch check
+  if (log.status === 1) {
+    const hasCreditedCheckOut = originalDayRecords.some(r => r.checkOutTime);
+    if (hasCreditedCheckOut) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 export const handleExportAllCompanies = async (
   startDate: string,
   endDate: string,
@@ -506,7 +626,7 @@ export const handleExportAllCompanies = async (
 ): Promise<{ excludedCount: number; truncationWarning: boolean }> => {
   // ── 1. Fetch all required data ─────────────────────────────────────
   const startYear = new Date(startDate + 'T00:00:00Z').getFullYear();
-  const [empRes, attRes, branchRes, holRes, rawLogsRes] = await Promise.all([
+  const [empRes, attRes, branchRes, holRes, rawLogsRes, devicesRes] = await Promise.all([
     fetch('/api/employees?limit=5000', { credentials: 'include' }),
     fetch(
       `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=10000`,
@@ -518,30 +638,58 @@ export const handleExportAllCompanies = async (
       `/api/attendance/raw-logs?startDate=${startDate}&endDate=${endDate}`,
       { credentials: 'include' }
     ),
+    fetch('/api/devices', { credentials: 'include' }),
   ]);
 
+  // Validate response status code
+  if (
+    empRes.status === 401 ||
+    attRes.status === 401 ||
+    branchRes.status === 401 ||
+    holRes.status === 401 ||
+    rawLogsRes.status === 401 ||
+    devicesRes.status === 401
+  ) {
+    window.location.href = '/login';
+    throw new Error('Unauthorized session. Redirecting to login...');
+  }
+
+  if (!empRes.ok) throw new Error(`Failed to fetch employees: ${empRes.statusText}`);
+  if (!attRes.ok) throw new Error(`Failed to fetch attendance data: ${attRes.statusText}`);
+  if (!branchRes.ok) throw new Error(`Failed to fetch branches list: ${branchRes.statusText}`);
+  if (!holRes.ok) throw new Error(`Failed to fetch holidays list: ${holRes.statusText}`);
+  if (!rawLogsRes.ok) throw new Error(`Failed to fetch raw punches logs: ${rawLogsRes.statusText}`);
+  if (!devicesRes.ok) throw new Error(`Failed to fetch devices list: ${devicesRes.statusText}`);
+
   const empData = await empRes.json();
-  const attData = attRes.ok ? await attRes.json() : { success: false };
-  const branchData = branchRes.ok
-    ? await branchRes.json()
-    : { success: false };
-  const holData = holRes.ok ? await holRes.json() : { success: false };
-  const rawLogsData = rawLogsRes.ok ? await rawLogsRes.json() : { success: false };
+  const attData = await attRes.json();
+  const branchData = await branchRes.json();
+  const holData = await holRes.json();
+  const rawLogsData = await rawLogsRes.json();
+  const devicesData = await devicesRes.json();
 
   // ── 2. Parse & filter ──────────────────────────────────────────────
-  const allEmps: any[] = (
+  const allEmps: RawEmployee[] = (
     empData.employees ||
     empData.data ||
     []
   ).filter(
-    (e: any) => e.employmentStatus === 'ACTIVE' && (e.role === 'USER' || !e.role)
+    (e: RawEmployee) => e.employmentStatus === 'ACTIVE' && (e.role === 'USER' || !e.role)
   );
-  const records: any[] = attData.success ? attData.data || [] : [];
-  const branches: any[] = branchData.success
+  const records: AttendanceRecord[] = attData.success ? attData.data || [] : [];
+  const branches: RawBranch[] = branchData.success
     ? branchData.branches || branchData.data || []
     : [];
-  const holidays: any[] = holData.success ? holData.holidays || [] : [];
-  const rawLogs: any[] = rawLogsData.success ? rawLogsData.data || [] : [];
+  const holidays: RawHoliday[] = holData.success ? holData.holidays || [] : [];
+  const rawLogs: RawPunchLog[] = rawLogsData.success ? rawLogsData.data || [] : [];
+  const devicesList: { id: number; name: string }[] = devicesData.success
+    ? devicesData.devices || devicesData.data || []
+    : [];
+
+  const deviceMap = new Map<number, string>();
+  for (const d of devicesList) {
+    deviceMap.set(d.id, d.name);
+  }
 
   // ── 3. Truncation check ────────────────────────────────────────────
   const truncationWarning = allEmps.length >= 5000 || records.length >= 10000;
@@ -557,7 +705,7 @@ export const handleExportAllCompanies = async (
   }
 
   // Attendance: employeeId → dateStr → record
-  const attByEmployeeTemp = new Map<number, Map<string, any[]>>();
+  const attByEmployeeTemp = new Map<number, Map<string, AttendanceRecord[]>>();
   for (const r of records) {
     const empId = r.employeeId;
     if (!attByEmployeeTemp.has(empId)) attByEmployeeTemp.set(empId, new Map());
@@ -570,47 +718,115 @@ export const handleExportAllCompanies = async (
     attByEmployeeTemp.get(empId)!.get(dateStr)!.push(r);
   }
 
-  const attByEmployee = new Map<number, Map<string, any>>();
+  const attByEmployee = new Map<number, Map<string, AttendanceRecord[]>>();
   for (const [empId, dateMap] of attByEmployeeTemp.entries()) {
-    const mergedDateMap = new Map<string, any>();
+    const processedDateMap = new Map<string, AttendanceRecord[]>();
     for (const [dateStr, dayRecords] of dateMap.entries()) {
-      const sortedDayRecords = [...dayRecords].sort((a, b) => {
-        const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
-        const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
-        return timeA - timeB;
-      });
-      const firstRecord = sortedDayRecords[0];
-      const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
-      const isShiftActive = dayRecords.some(r => r.isShiftActive);
-      const workedHrsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.totalHours ?? 0)), 0);
-      const lateMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.lateMinutes ?? 0)), 0);
-      const otMinsVal = dayRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
-      const utMinsVal = dayRecords.reduce((sum, r) => sum + (!r.shift && !r.shiftCode ? 0 : (r.undertimeMinutes ?? 0)), 0);
+      const scheduledShifts = dayRecords.filter(r => r.shift || r.shiftCode);
+      const noShiftRecords = dayRecords.filter(r => !r.shift && !r.shiftCode);
+      
+      const recordsToRender: AttendanceRecord[] = [];
+      
+      if (scheduledShifts.length > 0) {
+        const sortedScheduled = [...scheduledShifts].sort((a, b) => {
+          const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
+          const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
+          return timeA - timeB;
+        });
 
-      const mergedRecord = {
-        ...firstRecord,
-        isShiftActive,
-        checkInTime: firstRecord.checkInTime,
-        checkOutTime: lastRecord.checkOutTime,
-        gracePeriodApplied: dayRecords.some(r => r.gracePeriodApplied),
-        checkin_updated: dayRecords.some(r => r.checkin_updated) ? 'true' : null,
-        checkout_updated: dayRecords.some(r => r.checkout_updated) ? 'true' : null,
-        notes: dayRecords.map(r => r.notes).filter(Boolean).join(' | '),
-        isEarlyOut: lastRecord.isEarlyOut,
-        isAnomaly: dayRecords.some(r => r.isAnomaly),
-        lateMinutes: lateMinsVal,
-        undertimeMinutes: utMinsVal,
-        overtimeMinutes: otMinsVal,
-        totalHours: workedHrsVal,
-        status: lastRecord.status === 'incomplete' ? 'incomplete' : firstRecord.status,
-      };
-      mergedDateMap.set(dateStr, mergedRecord);
+        if (noShiftRecords.length > 0) {
+          const checkOutRecords = noShiftRecords.filter(r => r.checkOutTime);
+          const latestNoShiftCheckOutTime = checkOutRecords.length > 0
+            ? checkOutRecords.reduce((latest, current) => 
+                new Date(current.checkOutTime!).getTime() > new Date(latest.checkOutTime!).getTime() ? current : latest
+              ).checkOutTime
+            : null;
+          const noShiftTotalHours = noShiftRecords.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+          const noShiftOvertime = noShiftRecords.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+          const noShiftAnomaly = noShiftRecords.some(r => r.isAnomaly);
+          const noShiftNotes = noShiftRecords.map(r => r.notes).filter(Boolean).join(' | ');
+
+          const lastScheduled = sortedScheduled[sortedScheduled.length - 1];
+          const updatedLastScheduled: AttendanceRecord = {
+            ...lastScheduled,
+            checkOutTime: latestNoShiftCheckOutTime && (!lastScheduled.checkOutTime || new Date(latestNoShiftCheckOutTime).getTime() > new Date(lastScheduled.checkOutTime).getTime())
+              ? latestNoShiftCheckOutTime
+              : lastScheduled.checkOutTime,
+            totalHours: (lastScheduled.totalHours ?? 0) + noShiftTotalHours,
+            overtimeMinutes: (lastScheduled.overtimeMinutes ?? 0) + noShiftOvertime,
+            isAnomaly: lastScheduled.isAnomaly || noShiftAnomaly,
+            notes: [lastScheduled.notes, noShiftNotes].filter(Boolean).join(' | ') || null,
+          };
+          sortedScheduled[sortedScheduled.length - 1] = updatedLastScheduled;
+        }
+
+        recordsToRender.push(...sortedScheduled);
+      } else if (noShiftRecords.length > 0) {
+        const sortedNoShift = [...noShiftRecords].sort((a, b) => {
+          const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
+          const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
+          return timeA - timeB;
+        });
+        
+        const firstRecord = sortedNoShift[0];
+        const lastRecord = sortedNoShift[sortedNoShift.length - 1];
+        
+        const checkInRecords = sortedNoShift.filter(r => r.checkInTime);
+        const earliestCheckInTime = checkInRecords.length > 0
+          ? checkInRecords.reduce((earliest, current) => 
+              new Date(current.checkInTime).getTime() < new Date(earliest.checkInTime).getTime() ? current : earliest
+            ).checkInTime
+          : null;
+
+        const checkOutRecords = sortedNoShift.filter(r => r.checkOutTime);
+        const latestCheckOutTime = checkOutRecords.length > 0
+          ? checkOutRecords.reduce((latest, current) => 
+              new Date(current.checkOutTime!).getTime() > new Date(latest.checkOutTime!).getTime() ? current : latest
+            ).checkOutTime
+          : null;
+
+        const isShiftActive = sortedNoShift.some(r => r.isShiftActive);
+        const workedHrsVal = sortedNoShift.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+        const otMinsVal = sortedNoShift.reduce((sum, r) => sum + (r.overtimeMinutes ?? 0), 0);
+
+        let aggregatedStatus = firstRecord.status;
+        if (sortedNoShift.every(r => r.status === 'incomplete' && !r.checkOutTime)) {
+          aggregatedStatus = 'incomplete';
+        } else {
+          const nonIncompleteRecord = sortedNoShift.find(r => r.status !== 'incomplete');
+          if (nonIncompleteRecord) {
+            aggregatedStatus = nonIncompleteRecord.status;
+          }
+        }
+
+        const mergedNoShift: AttendanceRecord = {
+          ...firstRecord,
+          isShiftActive,
+          checkInTime: earliestCheckInTime || firstRecord.checkInTime,
+          checkOutTime: latestCheckOutTime,
+          gracePeriodApplied: sortedNoShift.some(r => r.gracePeriodApplied),
+          checkin_updated: sortedNoShift.some(r => r.checkin_updated) ? 'true' : null,
+          checkout_updated: sortedNoShift.some(r => r.checkout_updated) ? 'true' : null,
+          notes: sortedNoShift.map(r => r.notes).filter(Boolean).join(' | ') || null,
+          isEarlyOut: lastRecord.isEarlyOut,
+          isAnomaly: sortedNoShift.some(r => r.isAnomaly),
+          lateMinutes: 0,
+          undertimeMinutes: 0,
+          overtimeMinutes: otMinsVal,
+          totalHours: workedHrsVal,
+          status: aggregatedStatus,
+        };
+        
+        recordsToRender.push(mergedNoShift);
+      }
+      
+      processedDateMap.set(dateStr, recordsToRender);
     }
-    attByEmployee.set(empId, mergedDateMap);
+    attByEmployee.set(empId, processedDateMap);
   }
 
   // Raw Logs: employeeId → dateStr → logs
-  const rawLogsByEmployee = new Map<number, Map<string, any[]>>();
+  const rawLogsByEmployee = new Map<number, Map<string, RawPunchLog[]>>();
   for (const log of rawLogs) {
     const empId = log.employeeId;
     if (!rawLogsByEmployee.has(empId)) {
@@ -627,7 +843,7 @@ export const handleExportAllCompanies = async (
   }
 
   // ── 5. Group employees by company (direct companyId) ────────────────
-  const companyEmployees = new Map<string, any[]>();
+  const companyEmployees = new Map<string, RawEmployee[]>();
   let excludedCount = 0;
 
   for (const emp of allEmps) {
@@ -667,14 +883,13 @@ export const handleExportAllCompanies = async (
 
   for (const companyName of sortedCompanies) {
     const emps = companyEmployees.get(companyName)!;
-    emps.sort((a: any, b: any) =>
+    emps.sort((a: RawEmployee, b: RawEmployee) =>
       `${a.lastName} ${a.firstName}`.localeCompare(
         `${b.lastName} ${b.firstName}`
       )
     );
 
     const ws: any = {};
-    let maxRowIdx = HEADER_ROWS + calDates.length;
 
     if (emps.length === 0) {
       setStyledCell(ws, 0, 0, 'No employees found.', STYLE_BOLD);
@@ -682,6 +897,30 @@ export const handleExportAllCompanies = async (
       XLSXS.utils.book_append_sheet(wb, ws, sanitizeSheetName(companyName));
       continue;
     }
+
+    // ── Calculate dynamic dateRowOffsets globally for this company ──
+    const dateRowOffsets = new Map<string, { startRowIdx: number; numRows: number }>();
+    let currentWriteRowIdx = HEADER_ROWS;
+    
+    for (const date of calDates) {
+      const dateStr = date.toISOString().split('T')[0];
+      let maxRowsForDate = 1;
+      for (const emp of emps) {
+        const empRecordsMap = attByEmployee.get(emp.id);
+        const dayRecordsList = empRecordsMap ? empRecordsMap.get(dateStr) || [] : [];
+        const numRows = Math.max(1, dayRecordsList.length);
+        if (numRows > maxRowsForDate) {
+          maxRowsForDate = numRows;
+        }
+      }
+      dateRowOffsets.set(dateStr, {
+        startRowIdx: currentWriteRowIdx,
+        numRows: maxRowsForDate
+      });
+      currentWriteRowIdx += maxRowsForDate;
+    }
+    const attendanceTableEndRowIdx = currentWriteRowIdx;
+    let maxRowIdx = attendanceTableEndRowIdx;
 
     // ── Write each employee block horizontally ─────────────────────
     for (let empIdx = 0; empIdx < emps.length; empIdx++) {
@@ -699,9 +938,11 @@ export const handleExportAllCompanies = async (
       const empRecordsMap = attByEmployee.get(emp.id) || new Map();
       let empTotalLateMinutes = 0;
       let empTotalUndertimeMinutes = 0;
-      for (const rec of empRecordsMap.values()) {
-        empTotalLateMinutes += rec.lateMinutes ?? 0;
-        empTotalUndertimeMinutes += rec.undertimeMinutes ?? 0;
+      for (const recs of empRecordsMap.values()) {
+        for (const rec of recs) {
+          empTotalLateMinutes += rec.lateMinutes ?? 0;
+          empTotalUndertimeMinutes += rec.undertimeMinutes ?? 0;
+        }
       }
       const empTotalCombinedMinutes = empTotalLateMinutes + empTotalUndertimeMinutes;
 
@@ -769,6 +1010,7 @@ export const handleExportAllCompanies = async (
       }
 
       const empRecords = attByEmployee.get(emp.id) || new Map();
+      const empOriginalRecords = attByEmployeeTemp.get(emp.id) || new Map();
       const empHireDate = emp.hireDate
         ? new Date(emp.hireDate).toLocaleDateString('en-CA', {
           timeZone: 'Asia/Manila',
@@ -778,8 +1020,9 @@ export const handleExportAllCompanies = async (
       // ── Walk every calendar date ───────────────────────────────
       for (let dayIdx = 0; dayIdx < calDates.length; dayIdx++) {
         const date = calDates[dayIdx];
-        const rowIdx = HEADER_ROWS + dayIdx;
         const dateStr = date.toISOString().split('T')[0];
+        const layout = dateRowOffsets.get(dateStr)!;
+
         // Use locale-independent day name lookup
         const dayShort = SHORT_DAY_NAMES[date.getUTCDay()];
         const dayFull = date.toLocaleDateString('en-US', {
@@ -791,117 +1034,141 @@ export const handleExportAllCompanies = async (
         const isFuture = dateStr > todayStr;
         const isHoliday = holidayDateSet.has(dateStr);
         const isBeforeHire = empHireDate ? dateStr < empHireDate : false;
-        const record = empRecords.get(dateStr);
 
+        const empRecordsMap = attByEmployee.get(emp.id) || new Map();
+        const dayRecordsList = empRecordsMap.get(dateStr) || [];
         const formattedDate = fmtFullDate(date);
 
-        if (isBeforeHire || isFuture) {
-          // Blank row — before hire or future — no fill
-          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(FILL_NONE, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(FILL_NONE, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 4, '', FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
-          setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
-          ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
-        } else if (record) {
-          // Has attendance record
-          const checkIn = record.checkInTime ? new Date(record.checkInTime) : null;
-          const checkOut = record.checkOutTime
-            ? new Date(record.checkOutTime)
-            : null;
-          const checkInStr = checkIn
-            ? checkIn.toLocaleTimeString('en-US', {
+        for (let offset = 0; offset < layout.numRows; offset++) {
+          const rowIdx = layout.startRowIdx + offset;
+          const record = dayRecordsList[offset];
+
+          const dateVal = offset === 0 ? formattedDate : '';
+          const dayVal = offset === 0 ? dayFull : '';
+
+          if (isBeforeHire || isFuture) {
+            // Blank row — before hire or future — no fill
+            setStyledCell(ws, rowIdx, c0, dateVal, mergeStyle(FILL_NONE, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 1, dayVal, mergeStyle(FILL_NONE, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
+            setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(FILL_NONE, ALIGN_RIGHT));
+            setStyledCell(ws, rowIdx, c0 + 4, '', FILL_NONE);
+            setStyledCell(ws, rowIdx, c0 + 5, '', FILL_NONE);
+            setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+            ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+          } else if (record) {
+            // Has attendance record
+            const checkIn = record.checkInTime ? new Date(record.checkInTime) : null;
+            const checkOut = record.checkOutTime
+              ? new Date(record.checkOutTime)
+              : null;
+            const checkInStr = checkIn
+              ? checkIn.toLocaleTimeString('en-US', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                })
+              : '';
+            const checkOutStr = checkOut
+              ? checkOut.toLocaleTimeString('en-US', {
                 hour12: false,
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
               })
-            : '';
-          const checkOutStr = checkOut
-            ? checkOut.toLocaleTimeString('en-US', {
-              hour12: false,
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })
-            : '';
+              : '';
 
-          const lateMins = record.lateMinutes ?? 0;
-          const utMins = record.undertimeMinutes ?? 0;
+            const lateMins = record.lateMinutes ?? 0;
+            const utMins = record.undertimeMinutes ?? 0;
 
-          // Priority: Holiday > Rest Day > Late > On Time
-          let rowFill: Record<string, unknown>;
-          if (isHoliday) rowFill = FILL_HOLIDAY;
-          else if (isRestDay) rowFill = FILL_REST_DAY;
-          else if (lateMins > 0) rowFill = FILL_LATE;
-          else rowFill = FILL_ON_TIME;
+            // Priority: Holiday > Rest Day > Late > On Time
+            let rowFill: Record<string, unknown>;
+            if (isHoliday) rowFill = FILL_HOLIDAY;
+            else if (isRestDay) rowFill = FILL_REST_DAY;
+            else if (lateMins > 0) rowFill = FILL_LATE;
+            else rowFill = FILL_ON_TIME;
 
-          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 2, checkInStr, mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, mergeStyle(rowFill, ALIGN_RIGHT));
+            setStyledCell(ws, rowIdx, c0, dateVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 1, dayVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 2, checkInStr, mergeStyle(rowFill, ALIGN_RIGHT));
+            setStyledCell(ws, rowIdx, c0 + 3, checkOutStr, mergeStyle(rowFill, ALIGN_RIGHT));
 
-          if (isHoliday || isRestDay) {
-            const hName = holidayNameMap.get(dateStr);
-            const remarks = isHoliday ? (hName || 'Holiday') : 'Rest Day';
-            setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
-            setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
-            setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
-            ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+            if (isHoliday || isRestDay) {
+              const hName = holidayNameMap.get(dateStr);
+              const remarks = isHoliday ? (hName || 'Holiday') : 'Rest Day';
+              setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
+              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+              setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+            } else {
+              const lateVal = lateMins > 0 ? formatTotalLate(lateMins) : '';
+              const utVal = utMins > 0 ? formatTotalLate(utMins) : '';
+              setStyledCell(ws, rowIdx, c0 + 4, lateVal, mergeStyle(rowFill, ALIGN_CENTER));
+              setStyledCell(ws, rowIdx, c0 + 5, utVal, mergeStyle(rowFill, ALIGN_CENTER));
+              setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
+            }
           } else {
-            const lateVal = lateMins > 0 ? formatTotalLate(lateMins) : '';
-            const utVal = utMins > 0 ? formatTotalLate(utMins) : '';
-            setStyledCell(ws, rowIdx, c0 + 4, lateVal, mergeStyle(rowFill, ALIGN_CENTER));
-            setStyledCell(ws, rowIdx, c0 + 5, utVal, mergeStyle(rowFill, ALIGN_CENTER));
+            // No record — determine status & fill
+            // Priority: Holiday > Rest Day > Absent
+            let remarks = '';
+            let rowFill: Record<string, unknown>;
+            if (isHoliday) {
+              const hName = holidayNameMap.get(dateStr);
+              remarks = hName || 'Holiday';
+              rowFill = FILL_HOLIDAY;
+            } else if (isRestDay) {
+              remarks = 'Rest Day';
+              rowFill = FILL_REST_DAY;
+            } else {
+              remarks = 'Absent';
+              rowFill = FILL_ABSENT;
+            }
+
+            if (dayRecordsList.length > 0) {
+              const firstRecord = dayRecordsList[0];
+              const lateMins = firstRecord.lateMinutes ?? 0;
+              if (isHoliday) rowFill = FILL_HOLIDAY;
+              else if (isRestDay) rowFill = FILL_REST_DAY;
+              else if (lateMins > 0) rowFill = FILL_LATE;
+              else rowFill = FILL_ON_TIME;
+              remarks = ''; // No remarks on extra filled slots
+            }
+
+            setStyledCell(ws, rowIdx, c0, dateVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 1, dayVal, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(rowFill, ALIGN_RIGHT));
+            setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(rowFill, ALIGN_RIGHT));
+            
+            if (offset === 0) {
+              setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
+              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+            } else {
+              setStyledCell(ws, rowIdx, c0 + 4, '', rowFill);
+              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+            }
             setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
           }
-        } else {
-          // No record — determine status & fill
-          // Priority: Holiday > Rest Day > Absent
-          let remarks = '';
-          let rowFill: Record<string, unknown>;
-          if (isHoliday) {
-            const hName = holidayNameMap.get(dateStr);
-            remarks = hName || 'Holiday';
-            rowFill = FILL_HOLIDAY;
-          } else if (isRestDay) {
-            remarks = 'Rest Day';
-            rowFill = FILL_REST_DAY;
-          } else {
-            remarks = 'Absent';
-            rowFill = FILL_ABSENT;
-          }
-
-          setStyledCell(ws, rowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 1, dayFull, mergeStyle(rowFill, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 2, '', mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(rowFill, ALIGN_RIGHT));
-          setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
-          setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
-          setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
-          ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
         }
       }
 
-      // ── Spacer Rows (Rows 18–19) ───────────────────────────────
+      // ── Spacer Rows ───────────────────────────────
       // (Rows are left blank as in reference.xlsx)
 
-      // ── Row 20: Punches Header ──────────────────────────────────
-      const punchesHeaderRowIdx = HEADER_ROWS + calDates.length + 2;
+      // ── Punches Header ──────────────────────────────────
+      const punchesHeaderRowIdx = attendanceTableEndRowIdx + 2;
       setStyledCell(ws, punchesHeaderRowIdx, c0, 'Punches', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, punchesHeaderRowIdx, c0 + 1, 'Check-in', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, punchesHeaderRowIdx, c0 + 2, 'Check-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, punchesHeaderRowIdx, c0 + 3, 'Overtime-In', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, punchesHeaderRowIdx, c0 + 4, 'Overtime-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, punchesHeaderRowIdx, c0 + 5, 'Overtime-out', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, punchesHeaderRowIdx, c0 + 6, '', FILL_NONE);
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 5, 'Devices', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, punchesHeaderRowIdx, c0 + 6, 'Remarks', mergeStyle({ font: { bold: true, size: 11 } }, ALIGN_CENTER));
 
-      ws['!merges'].push({ s: { r: punchesHeaderRowIdx, c: c0 + 4 }, e: { r: punchesHeaderRowIdx, c: c0 + 5 } });
-
-      // ── Detail Rows (Row 21 onwards): Every raw punch ────────────
-      let punchRowIdx = HEADER_ROWS + calDates.length + 3;
+      // ── Detail Rows: Every raw punch ────────────
+      let punchRowIdx = attendanceTableEndRowIdx + 3;
       let alternateColorFlag = false;
 
       for (let dayIdx = 0; dayIdx < calDates.length; dayIdx++) {
@@ -909,45 +1176,66 @@ export const handleExportAllCompanies = async (
         const dateStr = date.toISOString().split('T')[0];
         const dateLogsMap = rawLogsByEmployee.get(emp.id);
         const dayLogs = dateLogsMap ? dateLogsMap.get(dateStr) || [] : [];
+        const dayOriginalRecords = empOriginalRecords.get(dateStr) || [];
 
         if (dayLogs.length > 0) {
-          const rowFill = {
-            fill: { patternType: 'solid', fgColor: { rgb: alternateColorFlag ? 'FFEDEDED' : 'FFFFFFFF' } },
-            border: THIN_BORDER
-          };
+          const alternateColor = alternateColorFlag ? 'FFEDEDED' : 'FFFFFFFF';
           alternateColorFlag = !alternateColorFlag;
 
           const formattedDate = fmtFullDate(date);
 
           for (const log of dayLogs) {
+            const deleted = isLogDeleted(log, dayOriginalRecords);
+            const textColor = deleted ? 'FFC00000' : 'FF000000';
+
+            const baseStyle = {
+              fill: { patternType: 'solid', fgColor: { rgb: alternateColor } },
+              border: THIN_BORDER,
+              font: { name: 'Calibri', size: 11, color: { rgb: textColor } }
+            };
+
             // Column A: Date
-            setStyledCell(ws, punchRowIdx, c0, formattedDate, mergeStyle(rowFill, ALIGN_CENTER));
+            setStyledCell(ws, punchRowIdx, c0, formattedDate, mergeStyle(baseStyle, ALIGN_CENTER));
 
-            // Format log timestamp to local time string (HH:MM:SS) in PHT
-            const phtTime = new Date(new Date(log.timestamp).getTime() + 8 * 60 * 60 * 1000);
-            const timeStr = phtTime.toISOString().slice(11, 19);
-
-            // Populate columns B–F with rowFill (bordered), and G with no style
+            // Populate columns B–F with baseStyle (bordered)
             for (let c = 1; c <= 5; c++) {
-              setStyledCell(ws, punchRowIdx, c0 + c, '', rowFill);
+              setStyledCell(ws, punchRowIdx, c0 + c, '', baseStyle);
             }
+            // Column G (Remarks) has NO border and NO background fill by default
             setStyledCell(ws, punchRowIdx, c0 + 6, '', FILL_NONE);
 
             const status = log.status;
-            if (status === 0 || status === 4) {
-              const colOffset = status === 0 ? 1 : 3;
-              setStyledCell(ws, punchRowIdx, c0 + colOffset, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
-            } else if (status === 1 || status === 5) {
-              if (status === 1) {
-                setStyledCell(ws, punchRowIdx, c0 + 2, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
-              } else {
-                setStyledCell(ws, punchRowIdx, c0 + 4, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
-                setStyledCell(ws, punchRowIdx, c0 + 5, timeStr, mergeStyle(rowFill, ALIGN_CENTER));
-              }
+            const phtTime = new Date(new Date(log.timestamp).getTime() + 8 * 60 * 60 * 1000);
+            const timeStr = phtTime.toISOString().slice(11, 19);
+
+            if (status === 0) {
+              setStyledCell(ws, punchRowIdx, c0 + 1, timeStr, mergeStyle(baseStyle, ALIGN_CENTER));
+            } else if (status === 1) {
+              setStyledCell(ws, punchRowIdx, c0 + 2, timeStr, mergeStyle(baseStyle, ALIGN_CENTER));
+            } else if (status === 4) {
+              setStyledCell(ws, punchRowIdx, c0 + 3, timeStr, mergeStyle(baseStyle, ALIGN_CENTER));
+            } else if (status === 5) {
+              setStyledCell(ws, punchRowIdx, c0 + 4, timeStr, mergeStyle(baseStyle, ALIGN_CENTER));
             }
 
-            // Always merge columns E+F on every punch row (matches reference layout)
-            ws['!merges'].push({ s: { r: punchRowIdx, c: c0 + 4 }, e: { r: punchRowIdx, c: c0 + 5 } });
+            // Column F: Device Name
+            let deviceName = '—';
+            if (log.deviceId) {
+              deviceName = deviceMap.get(log.deviceId) || `Device ${log.deviceId}`;
+            } else if (log.authMethod === 'MANUAL') {
+              deviceName = 'Manual';
+            } else {
+              deviceName = 'Device 1';
+            }
+            setStyledCell(ws, punchRowIdx, c0 + 5, deviceName, mergeStyle(baseStyle, ALIGN_CENTER));
+
+            // Column G: Status/Action
+            if (deleted) {
+              const remarksStyle = {
+                font: { name: 'Calibri', size: 11, bold: true, italic: true, color: { rgb: textColor } }
+              };
+              setStyledCell(ws, punchRowIdx, c0 + 6, 'DELETED', mergeStyle(remarksStyle, ALIGN_CENTER));
+            }
 
             punchRowIdx++;
           }
@@ -974,9 +1262,9 @@ export const handleExportAllCompanies = async (
       cols[base + 1] = { wch: 16 }; // DAY / Name
       cols[base + 2] = { wch: 14 }; // IN
       cols[base + 3] = { wch: 14 }; // OUT
-      cols[base + 4] = { wch: 10 }; // LATE (E)
-      cols[base + 5] = { wch: 10 }; // UT (F)
-      cols[base + 6] = { wch: 15 }; // Summary (G)
+      cols[base + 4] = { wch: 14 }; // LATE (E) / Overtime-out / Overtime-out
+      cols[base + 5] = { wch: 14 }; // UT (F) / Devices / Devices
+      cols[base + 6] = { wch: 15 }; // Summary (G) / Remarks / Remarks
       if (i < emps.length - 1) {
         cols[base + 7] = { wch: 18 }; // Separator (wide gap)
       }

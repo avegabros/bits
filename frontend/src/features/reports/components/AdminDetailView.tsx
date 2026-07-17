@@ -332,7 +332,7 @@ export function AdminDetailView({
                                                     <td className="px-5 py-3.5">
                                                         <div className="flex flex-col">
                                                             <span className="text-xs font-bold text-slate-700 font-mono">
-                                                                {checkIn!.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                                {checkIn ? checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—'}
                                                             </span>
                                                             {record.gracePeriodApplied && (
                                                                 <span className="text-[9px] text-slate-400 mt-0.5 font-bold uppercase">Grace Period</span>
@@ -394,6 +394,8 @@ export function AdminDetailView({
                                                                 </div>
                                                             ) : statusType === 'missing-checkout' || statusType === 'incomplete' ? (
                                                                 <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Missing Out</span>
+                                                            ) : statusType === 'missing-checkin' ? (
+                                                                <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Missing In</span>
                                                             ) : statusType === 'late' ? (
                                                                 <span className="inline-flex items-center justify-center w-28 h-6 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50/30 text-amber-600/70 border border-amber-100 shrink-0">Late</span>
                                                             ) : (
