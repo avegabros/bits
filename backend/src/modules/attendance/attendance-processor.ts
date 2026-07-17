@@ -194,6 +194,12 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
     try {
         const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+        // Migration cutoff for ZKTeco punch-type logic. Records created before this cutoff
+        // must not be deleted or reprocessed, as their raw punch statuses are incompatible
+        // with the new strict IN/OUT status-based logic.
+        const migrationCutoffStr = process.env.ATTENDANCE_MIGRATION_CUTOFF || '2026-07-16T00:00:00Z';
+        const migrationCutoff = new Date(migrationCutoffStr);
+
         // Pre-processing step: Retrieve all currently unprocessed logs to identify which employees
         // and dates require chronological re-processing.
         const unprocessedLogs = await prisma.attendanceLog.findMany({
@@ -242,6 +248,11 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                         hasManualOrAdjustments = true;
                         break;
                     }
+                    // Protect historical records created under the old system (before migration cutoff)
+                    if (rec.createdAt < migrationCutoff) {
+                        hasManualOrAdjustments = true;
+                        break;
+                    }
                 }
 
                 if (!hasManualOrAdjustments) {
@@ -255,13 +266,17 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
                     const endRange = new Date(date.getTime() + 32 * 60 * 60 * 1000);
 
                     // Reset processedAt = null for all raw logs of this employee in this target date range
-                    await prisma.attendanceLog.updateMany({
-                        where: {
-                            employeeId,
-                            timestamp: { gte: startRange, lt: endRange }
-                        },
-                        data: { processedAt: null }
-                    });
+                    // but only if the raw log timestamp is on or after the migration cutoff.
+                    if (endRange.getTime() > migrationCutoff.getTime()) {
+                        const resetStart = startRange.getTime() > migrationCutoff.getTime() ? startRange : migrationCutoff;
+                        await prisma.attendanceLog.updateMany({
+                            where: {
+                                employeeId,
+                                timestamp: { gte: resetStart, lt: endRange }
+                            },
+                            data: { processedAt: null }
+                        });
+                    }
 
                     // Delete the pure device-based Attendance records
                     if (existingRecords.length > 0) {
