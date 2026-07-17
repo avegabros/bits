@@ -10,6 +10,8 @@
  * 
  * Usage:
  *   npx ts-node src/scripts/migrations/backfill-fingerprint-templates.ts
+ *   npx ts-node src/scripts/migrations/backfill-fingerprint-templates.ts --device-id=1
+ *   npx ts-node src/scripts/migrations/backfill-fingerprint-templates.ts --device-name="Office Fingerprint"
  * 
  * Supports both direct TCP devices and agent-routed devices.
  */
@@ -39,6 +41,21 @@ async function main() {
     console.log('='.repeat(70));
     console.log();
 
+    const deviceIdArg = process.argv.find(arg => arg.startsWith('--device-id='));
+    const deviceNameArg = process.argv.find(arg => arg.startsWith('--device-name='));
+    
+    const targetDeviceId = deviceIdArg ? parseInt(deviceIdArg.split('=')[1], 10) : null;
+    const targetDeviceName = deviceNameArg ? deviceNameArg.split('=')[1] : null;
+
+    const whereClause: any = {};
+    if (targetDeviceId) {
+        whereClause.deviceId = targetDeviceId;
+        console.log(`Filtering backfill to Device ID: ${targetDeviceId}`);
+    } else if (targetDeviceName) {
+        whereClause.device = { name: { contains: targetDeviceName, mode: 'insensitive' } };
+        console.log(`Filtering backfill to Device Name containing: "${targetDeviceName}"`);
+    }
+
     const stats: BackfillStats = {
         totalEnrollments: 0,
         alreadyCached: 0,
@@ -50,6 +67,7 @@ async function main() {
 
     // 1. Gather all enrollment records grouped by employee
     const enrollments = await prisma.employeeFingerprintEnrollment.findMany({
+        where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
         include: {
             employee: { select: { id: true, firstName: true, lastName: true, zkId: true } },
             device: { select: { id: true, name: true, ip: true, port: true, branchId: true, isActive: true } },
@@ -57,7 +75,7 @@ async function main() {
     });
 
     stats.totalEnrollments = enrollments.length;
-    console.log(`Found ${enrollments.length} enrollment record(s) across all employees.\n`);
+    console.log(`Found ${enrollments.length} enrollment record(s) matching the filter.\n`);
 
     if (enrollments.length === 0) {
         console.log('No enrollment records found. Nothing to migrate.');
