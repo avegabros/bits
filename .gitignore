@@ -26,9 +26,11 @@ Thumbs.db
 .idea/
 
 .agent/
+.agents/
+.gemini
+ecc/
 .thingsToDo/
 .prettierrc
-oldStructure/
 .kilo/
 
 data/

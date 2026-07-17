@@ -125,19 +125,19 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
         ]);
 
         let attendanceLogs: (AttendanceLog & { Device: { name: string } | null })[] = [];
-        let attendanceRecords: Pick<Attendance, 'id' | 'employeeId' | 'date'>[] = [];
+        let attendanceRecords: Pick<Attendance, 'id' | 'employeeId' | 'date' | 'checkInTime' | 'checkOutTime'>[] = [];
 
         if (requests.length > 0) {
-            const employeeIds = [...new Set(requests.map(r => r.employeeId))];
-            const dates = [...new Set(requests.map(r => r.date))];
+            const employeeIds = [...new Set(requests.map((r: any) => r.employeeId))];
+            const dates = [...new Set(requests.map((r: any) => r.date))];
 
             const [logs, records] = await Promise.all([
                 prisma.attendanceLog.findMany({
                     where: {
                         employeeId: { in: employeeIds },
                         timestamp: {
-                            gte: new Date(Math.min(...dates.map(d => d.getTime()))),
-                            lte: new Date(Math.max(...dates.map(d => d.getTime())) + 24 * 60 * 60 * 1000)
+                            gte: new Date(Math.min(...dates.map((d: any) => d.getTime()))),
+                            lte: new Date(Math.max(...dates.map((d: any) => d.getTime())) + 24 * 60 * 60 * 1000)
                         }
                     },
                     include: { Device: { select: { name: true } } }
@@ -147,65 +147,97 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
                         employeeId: { in: employeeIds },
                         date: { in: dates }
                     },
-                    select: { id: true, employeeId: true, date: true }
+                    select: { id: true, employeeId: true, date: true, checkInTime: true, checkOutTime: true }
                 })
             ]);
             attendanceLogs = logs;
             attendanceRecords = records;
         }
 
-        const sessions = requests.map(req => {
+        const sessions = requests.map((req: any) => {
             const reqDateStr = getPhtDateStr(req.date);
-            const reqLogs = attendanceLogs.filter(log => 
+            const reqLogs = attendanceLogs.filter((log: any) => 
                 log.employeeId === req.employeeId && getPhtDateStr(log.timestamp) === reqDateStr
             );
+
+            // Fetch all attendance records for this employee on this date
+            const empAttRecords = attendanceRecords.filter((a: any) => a.employeeId === req.employeeId && getPhtDateStr(a.date) === reqDateStr);
+
+            // Compute approved OT window in UTC ms
+            const dateMs = new Date(req.date).getTime();
+            const [otStartH, otStartM] = req.startTime.split(':').map(Number);
+            const [otEndH, otEndM] = req.endTime.split(':').map(Number);
+
+            const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+            let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
+            if (otEndMs <= otStartMs) otEndMs += 24 * 60 * 60 * 1000;
+
+            // Find the attendance record with the best overlap with the OT window
+            let bestOverlapAtt: any = null;
+            let maxOverlapMs = 0;
+
+            for (const att of empAttRecords) {
+                if (!att.checkInTime) continue;
+                const checkInMs = normalizeTime(new Date(att.checkInTime)).getTime();
+                const checkOutMs = att.checkOutTime ? normalizeTime(new Date(att.checkOutTime)).getTime() : null;
+
+                // If check-out is null (active shift), we temporarily use current time for overlap calculation
+                const effectiveCheckOutMs = checkOutMs || Date.now();
+                const overlapStart = Math.max(checkInMs, otStartMs);
+                const overlapEnd = Math.min(effectiveCheckOutMs, otEndMs);
+
+                const overlapMs = overlapEnd - overlapStart;
+                if (overlapMs > maxOverlapMs) {
+                    maxOverlapMs = overlapMs;
+                    bestOverlapAtt = att;
+                } else if (!bestOverlapAtt && checkInMs < otEndMs && (checkOutMs === null || checkOutMs > otStartMs)) {
+                    // Fallback to match an active or overlapping record even if the overlap duration calculation is 0
+                    bestOverlapAtt = att;
+                }
+            }
+
+            // Derive actual OT start/end from the best overlapping attendance record
+            let actualStartTime: Date | null = null;
+            let actualEndTime: Date | null = null;
+
+            if (bestOverlapAtt) {
+                const checkInMs = normalizeTime(new Date(bestOverlapAtt.checkInTime)).getTime();
+                const checkOutMs = bestOverlapAtt.checkOutTime ? normalizeTime(new Date(bestOverlapAtt.checkOutTime)).getTime() : null;
+
+                // Clamp actual times to the approved OT window
+                actualStartTime = new Date(Math.max(checkInMs, otStartMs));
+                if (checkOutMs !== null) {
+                    actualEndTime = new Date(Math.min(checkOutMs, otEndMs));
+                }
+            }
+
             // Match device logs by timestamp proximity (within 1s) for accurate device name resolution,
             // then fall back to status codes as a secondary signal.
-            const checkInLog = req.actualStartTime
-                ? (reqLogs.find(l => Math.abs(l.timestamp.getTime() - new Date(req.actualStartTime!).getTime()) < 1000)
-                    || reqLogs.find(l => l.status === 0 || l.status === 4))
+            const checkInLog = actualStartTime
+                ? (reqLogs.find((l: any) => Math.abs(l.timestamp.getTime() - actualStartTime!.getTime()) < 1000)
+                    || reqLogs.find((l: any) => l.status === 0 || l.status === 4))
                 : null;
-            const checkOutLog = req.actualEndTime
-                ? (reqLogs.find(l => Math.abs(l.timestamp.getTime() - new Date(req.actualEndTime!).getTime()) < 1000)
-                    || reqLogs.find(l => l.status === 1 || l.status === 5))
+            const checkOutLog = actualEndTime
+                ? (reqLogs.find((l: any) => Math.abs(l.timestamp.getTime() - actualEndTime!.getTime()) < 1000)
+                    || reqLogs.find((l: any) => l.status === 1 || l.status === 5))
                 : null;
-            const linkedAtt = attendanceRecords.find(a => a.employeeId === req.employeeId && getPhtDateStr(a.date) === reqDateStr);
 
             const approvedStartMin = timeStringToMinutes(req.startTime);
             const approvedEndMin = timeStringToMinutes(req.endTime);
             let approvedDurationMinutes = approvedEndMin - approvedStartMin;
             if (approvedDurationMinutes < 0) approvedDurationMinutes += 24 * 60;
 
-            // Calculate actual OT duration as the intersection of actual times and the approved OT window.
-            // Clamps to only count time worked inside the approved OT window (e.g. employee arrived early
-            // or left late — only the overlap with approved hours is credited).
-            // NOTE: req.date from Prisma is stored as UTC midnight (e.g. 2026-05-21T00:00:00Z).
-            // We must NOT add +8h here — that would shift the OT window 8 hours forward.
             let actualDurationMinutes = 0;
-            if (req.actualStartTime && req.actualEndTime) {
-                const dateStr = getPhtDateStr(req.date);
-                const dateMs = new Date(`${dateStr}T00:00:00.000Z`).getTime();
-                const [otStartH, otStartM] = req.startTime.split(':').map(Number);
-                const [otEndH, otEndM] = req.endTime.split(':').map(Number);
-
-                // Convert HH:MM (PHT) to UTC ms: PHT = UTC+8, so subtract 8h
-                const otStartMs = dateMs + (otStartH * 60 + otStartM) * 60 * 1000 - 8 * 60 * 60 * 1000;
-                let otEndMs = dateMs + (otEndH * 60 + otEndM) * 60 * 1000 - 8 * 60 * 60 * 1000;
-                // Handle OT that wraps past midnight
-                if (otEndMs <= otStartMs) otEndMs += 24 * 60 * 60 * 1000;
-
-                const actualCheckIn = normalizeTime(new Date(req.actualStartTime)).getTime();
-                const actualCheckOut = normalizeTime(new Date(req.actualEndTime)).getTime();
-
-                const overlapStart = Math.max(actualCheckIn, otStartMs);
-                const overlapEnd = Math.min(actualCheckOut, otEndMs);
-
-                if (overlapEnd > overlapStart) {
-                    actualDurationMinutes = Math.round((overlapEnd - overlapStart) / 60000);
-                }
+            if (actualStartTime && actualEndTime) {
+                actualDurationMinutes = Math.round((actualEndTime.getTime() - actualStartTime.getTime()) / 60000);
             }
 
             const now = new Date();
+            const computedRequest = {
+                ...req,
+                actualStartTime,
+                actualEndTime
+            };
 
             return {
                 id: req.id,
@@ -219,15 +251,15 @@ export const getOvertimeSessions = async (req: Request, res: Response) => {
                 },
                 date: reqDateStr,
                 approved: { startTime: req.startTime, endTime: req.endTime },
-                actual: { startTime: req.actualStartTime, endTime: req.actualEndTime },
+                actual: { startTime: actualStartTime, endTime: actualEndTime },
                 actualDurationMinutes,
                 approvedDurationMinutes,
-                sessionState: computeSessionState(req, now),
+                sessionState: computeSessionState(computedRequest, now),
                 device: {
                     checkIn: checkInLog?.Device?.name || null,
                     checkOut: checkOutLog?.Device?.name || null
                 },
-                linkedAttendanceId: linkedAtt?.id || null,
+                linkedAttendanceId: bestOverlapAtt?.id || null,
                 source: req.source,
                 reason: req.reason
             };

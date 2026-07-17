@@ -60,6 +60,38 @@ export class ZKDriver {
      * of the combined ZKLib class.
      */
     async connect(): Promise<void> {
+        // Monkey-patch node-zklib/utils in-memory to decode status (punch type) from raw 40-byte attendance log records
+        const utils = require('node-zklib/utils');
+        if (utils && !utils.__patchedForPunchStatus) {
+            const originalDecodeRecordData40 = utils.decodeRecordData40;
+            utils.decodeRecordData40 = (recordData: Buffer) => {
+                const record = originalDecodeRecordData40(recordData);
+                // Offset 31 is the punch status byte in 40-byte TCP records (0: check-in, 1: check-out, 4: OT-in, 5: OT-out)
+                if (recordData.length >= 32) {
+                    record.status = recordData.readUInt8(31);
+                } else {
+                    record.status = 0;
+                }
+                return record;
+            };
+
+            const originalDecodeRecordRealTimeLog52 = utils.decodeRecordRealTimeLog52;
+            utils.decodeRecordRealTimeLog52 = (recordData: Buffer) => {
+                const record = originalDecodeRecordRealTimeLog52(recordData);
+                const payload = utils.removeTcpHeader(recordData);
+                const recvData = payload.subarray(8);
+                // Offset 31 in real-time logs is also the status byte
+                if (recvData.length > 31) {
+                    record.status = recvData.readUInt8(31);
+                } else {
+                    record.status = 0;
+                }
+                return record;
+            };
+            utils.__patchedForPunchStatus = true;
+            console.log('[ZKDriver] Successfully patched node-zklib parser to support punch status/type');
+        }
+
         const ZKLibTCP = require('node-zklib/zklibtcp');
         this.zkInstance = new ZKLibTCP(this.ip, this.port, this.timeout);
 

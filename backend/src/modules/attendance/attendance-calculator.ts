@@ -16,14 +16,6 @@ export function calculateAttendanceMetrics(
     const isHoliday = !!record.isHoliday;
     const shiftCode = isHoliday ? null : (shift?.shiftCode ?? null);
 
-    if (!record.checkInTime) {
-        return { 
-            shiftCode: null, lateMinutes: 0, overtimeMinutes: 0, undertimeMinutes: 0, 
-            totalHours: 0, isAnomaly: false, isEarlyOut: false, isShiftActive: false, 
-            status: record.status, gracePeriodApplied: false, latePenaltyMinutes: 0, workedHours: 0 
-        };
-    }
-
     const isRestDay = (() => {
         if (!shift) return false;
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -40,6 +32,13 @@ export function calculateAttendanceMetrics(
     })();
 
     if (!shift || isHoliday || isRestDay) {
+        if (!record.checkInTime) {
+            return { 
+                shiftCode: null, lateMinutes: 0, overtimeMinutes: 0, undertimeMinutes: 0, 
+                totalHours: 0, isAnomaly: false, isEarlyOut: false, isShiftActive: false, 
+                status: record.status, gracePeriodApplied: false, latePenaltyMinutes: 0, workedHours: 0 
+            };
+        }
         // No shift assigned – mostly OT-only logic or generic fallbacks
         const checkIn = normalizeTime(new Date(record.checkInTime));
         const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
@@ -164,6 +163,31 @@ export function calculateAttendanceMetrics(
 
     // Full expected shift duration (minutes), without break
     const fullShiftMins = (expectedEnd.getTime() - expectedStart.getTime()) / (1000 * 60);
+
+    if (!record.checkInTime) {
+        let effectiveBreaks = explicitBreaks;
+        if (!isHalfDay && explicitBreaks.length === 0 && (shift.breakMinutes ?? 0) > 0) {
+            const shiftMidMs = expectedStart.getTime() + (expectedEnd.getTime() - expectedStart.getTime()) / 2;
+            const halfBreakMs = ((shift.breakMinutes ?? 60) / 2) * 60 * 1000;
+            effectiveBreaks = [{ start: new Date(shiftMidMs - halfBreakMs), end: new Date(shiftMidMs + halfBreakMs) }];
+        }
+        const rawBreakMins = isHalfDay ? 0 : effectiveBreaks.reduce((sum, b) => sum + (b.end.getTime() - b.start.getTime()) / 60000, 0);
+        const fullExpectedMins = fullShiftMins - rawBreakMins;
+        return {
+            shiftCode,
+            lateMinutes: 0,
+            overtimeMinutes: 0,
+            undertimeMinutes: Math.max(0, Math.floor(fullExpectedMins)),
+            totalHours: 0,
+            isAnomaly: true,
+            isEarlyOut: false,
+            isShiftActive: false,
+            status: 'incomplete',
+            gracePeriodApplied: false,
+            latePenaltyMinutes: 0,
+            workedHours: 0
+        };
+    }
 
     const checkIn = normalizeTime(new Date(record.checkInTime));
     const checkOut = record.checkOutTime ? normalizeTime(new Date(record.checkOutTime)) : null;
@@ -312,7 +336,7 @@ export function calculateAttendanceMetrics(
  * Used consistently across biometric sync, manual creation, and adjustment approvals.
  */
 export function calculateAttendanceStatus(
-    checkInTime: Date,
+    checkInTime: Date | null,
     checkOutTime: Date | null,
     date: Date,
     shift: Prisma.ShiftGetPayload<{}> | null,
@@ -322,6 +346,7 @@ export function calculateAttendanceStatus(
     const record = { date, checkInTime, checkOutTime, status: 'present', isHoliday };
     const metrics = calculateAttendanceMetrics(record as any, shift, approvedOts);
     
+    if (!checkInTime) return 'incomplete';
     if (!checkOutTime) return 'incomplete';
     if (metrics.lateMinutes > 0) return 'late';
     return 'present';

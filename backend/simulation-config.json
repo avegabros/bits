@@ -7,7 +7,7 @@
   "shifts": [
     {
       "shiftCode": "S_AM",
-      "name": "AM Shift (8-12)",
+      "name": "AM Shift (8-17)",
       "startTime": "08:00",
       "endTime": "17:00",
       "graceMinutes": 30,
@@ -54,8 +54,8 @@
   "_comment": "overtimes format: { 'startTime': 'HH:MM', 'endTime': 'HH:MM', 'status': 'APPROVED' | 'PENDING', 'reason': 'text' }",
   "overtimes": [
     {
-      "startTime": "22:30",
-      "endTime": "02:00",
+      "startTime": "18:00",
+      "endTime": "22:00",
       "status": "PENDING",
       "reason": "Overnight overtime test"
     }

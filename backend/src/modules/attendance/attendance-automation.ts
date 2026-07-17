@@ -107,6 +107,7 @@ export const autoCheckoutEmployees = async (): Promise<number> => {
         let count = 0;
 
         for (const record of incompleteRecords) {
+            if (!record.checkInTime) continue;
             const shift = record.shift ?? record.employee?.Shift ?? null;
 
             let checkoutHour: number = ATTENDANCE_LIMITS.AUTO_CHECKOUT_FALLBACK_HOUR;

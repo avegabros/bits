@@ -110,9 +110,11 @@ function buildTableRows(
             statusType = missingStatus;
         } else {
             // Sort day records chronologically by check-in time
-            const sortedDayRecords = [...dayRecords].sort((a, b) => 
-                new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
-            );
+            const sortedDayRecords = [...dayRecords].sort((a, b) => {
+                const timeA = a.checkInTime ? new Date(a.checkInTime).getTime() : 0;
+                const timeB = b.checkInTime ? new Date(b.checkInTime).getTime() : 0;
+                return timeA - timeB;
+            });
 
             const firstRecord = sortedDayRecords[0];
             const lastRecord = sortedDayRecords[sortedDayRecords.length - 1];
@@ -139,7 +141,7 @@ function buildTableRows(
             };
 
             recordToPass = mergedRecord;
-            checkInVal = new Date(firstRecord.checkInTime);
+            checkInVal = firstRecord.checkInTime ? new Date(firstRecord.checkInTime) : null;
             checkOutVal = lastRecord.checkOutTime ? new Date(lastRecord.checkOutTime) : null;
             statusType = getRecordStatusFromBackend(mergedRecord);
         }

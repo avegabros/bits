@@ -7,6 +7,7 @@
     "dev": "ts-node src/index.ts",
     "seed": "ts-node prisma/seed.ts",
     "dev:watch": "nodemon --exec ts-node src/index.ts --watch src --ext ts,json --legacy-watch",
+    "simulate-punch": "ts-node src/scripts/simulate-punch.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "assign-zkids": "ts-node src/scripts/sync/assignZkIds.ts",
