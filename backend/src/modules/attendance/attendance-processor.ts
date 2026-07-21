@@ -197,7 +197,7 @@ const runProcessAttendanceLogs = async (): Promise<ProcessResult> => {
         // Migration cutoff for ZKTeco punch-type logic. Records created before this cutoff
         // must not be deleted or reprocessed, as their raw punch statuses are incompatible
         // with the new strict IN/OUT status-based logic.
-        const migrationCutoffStr = process.env.ATTENDANCE_MIGRATION_CUTOFF || '2026-07-16T00:00:00Z';
+        const migrationCutoffStr = process.env.ATTENDANCE_MIGRATION_CUTOFF || '2026-07-18T00:00:00Z';
         const migrationCutoff = new Date(migrationCutoffStr);
 
         // Pre-processing step: Retrieve all currently unprocessed logs to identify which employees
