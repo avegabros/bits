@@ -108,14 +108,12 @@ export const handleExport = (
     'Late (Duration)',
     'Total Late',
     'Overtime',
-    'Undertime',
     'Reg Hrs',
   ]);
 
   let sumLateDays = 0;
   let sumLateMinutes = 0;
   let sumOvertime = 0;
-  let sumUndertime = 0;
   let sumRegHrs = 0;
 
   filteredData.forEach((employee) => {
@@ -130,13 +128,11 @@ export const handleExport = (
       formatLateHrs(employee.lateMinutes),
       formatTotalLate(employee.lateMinutes),
       employee.overtime > 0 ? formatHrsMins(employee.overtime) : '—',
-      employee.undertime > 0 ? formatHrsMins(employee.undertime) : '—',
       Math.max(0, employee.totalHours).toFixed(2),
     ]);
     sumLateDays += employee.late;
     sumLateMinutes += employee.lateMinutes;
     sumOvertime += employee.overtime;
-    sumUndertime += employee.undertime;
     sumRegHrs += employee.totalHours;
   });
 
@@ -148,7 +144,6 @@ export const handleExport = (
     `${sumLateDays} late day(s)`,
     formatTotalLate(sumLateMinutes),
     sumOvertime > 0 ? formatHrsMins(sumOvertime) : '—',
-    sumUndertime > 0 ? formatHrsMins(sumUndertime) : '—',
     sumRegHrs > 0 ? sumRegHrs.toFixed(2) : '0.00',
   ]);
 
@@ -160,12 +155,11 @@ export const handleExport = (
     { wch: 12 },
     { wch: 12 },
     { wch: 12 },
-    { wch: 12 },
   ];
 
   // Bold the totals row
   const totalsRowIdx = allRows.length - 1;
-  for (let c = 0; c < 7; c++) {
+  for (let c = 0; c < 6; c++) {
     const addr = XLSX.utils.encode_cell({ r: totalsRowIdx, c });
     if (worksheet[addr]) {
       worksheet[addr].s = { font: { bold: true } };
@@ -222,7 +216,6 @@ export const handleExportIndividual = (
     'PRESENT',
     'LATE DAYS',
     'LATE TOTAL',
-    'UNDERTIME TOTAL',
     'REG HOURS',
   ]); // Removed ABSENT
   const rate =
@@ -232,7 +225,6 @@ export const handleExportIndividual = (
     emp.present,
     emp.late,
     formatLateHrs(emp.lateMinutes),
-    emp.undertime > 0 ? formatHrsMins(emp.undertime) : '—',
     Math.max(0, emp.totalHours).toFixed(2),
   ]);
   allRows.push([]);
@@ -250,7 +242,6 @@ export const handleExportIndividual = (
     'Reg Hrs',
     'Late',
     'OT',
-    'UT',
     'Status',
     'Note',
   ]);
@@ -410,7 +401,6 @@ export const handleExportIndividual = (
         hoursLabel,
         lateLabel,
         otMins > 0 ? formatHrsMins(otMins / 60) : '—',
-        utMins > 0 ? formatHrsMins(utMins / 60) : '—',
         displayStatus,
         holidayName ? `Holiday — ${holidayName}` : '—',
       ]);
@@ -425,7 +415,6 @@ export const handleExportIndividual = (
       allRows.push([
         fmtFullDate(cursor),
         DAYS[dayOfWeek],
-        '—',
         '—',
         '—',
         '—',
@@ -454,7 +443,6 @@ export const handleExportIndividual = (
     { wch: 12 },
     { wch: 12 },
     { wch: 12 },
-    { wch: 10 },
     { wch: 10 },
     { wch: 22 },
     { wch: 28 },
@@ -944,9 +932,7 @@ export const handleExportAllCompanies = async (
           empTotalUndertimeMinutes += rec.undertimeMinutes ?? 0;
         }
       }
-      const empTotalCombinedMinutes = empTotalLateMinutes + empTotalUndertimeMinutes;
-
-      // Row 0: [EmpNumber] | [FullName (merged B+C)] | DEPARTMENT | [DeptName (merged E+F)] | [TotalLate (G)]
+      // Row 0: [EmpNumber] | [FullName (merged B+C)] | DEPARTMENT | [DeptName (merged E+F)] | [TotalLate (G merged 0-3)]
       setStyledCell(ws, 0, c0, empNumber, STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 1, fullName.toUpperCase(), STYLE_INFO_HEADER);
       setStyledCell(ws, 0, c0 + 2, '', STYLE_INFO_VALUE);
@@ -955,14 +941,14 @@ export const handleExportAllCompanies = async (
       setStyledCell(ws, 0, c0 + 5, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 0, c0 + 6, "LATE: " + formatTotalLate(empTotalLateMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
 
-      // Row 1: POSITION | [Position (merged B+C)] | SITE | [Branch (merged E+F)] | [TotalUT (G)]
+      // Row 1: POSITION | [Position (merged B+C)] | SITE | [Branch (merged E+F)]
       setStyledCell(ws, 1, c0, 'POSITION', STYLE_INFO_HEADER);
       setStyledCell(ws, 1, c0 + 1, position.toUpperCase(), STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 2, '', STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 3, 'SITE', STYLE_INFO_HEADER);
       setStyledCell(ws, 1, c0 + 4, branchName, STYLE_INFO_VALUE);
       setStyledCell(ws, 1, c0 + 5, '', STYLE_INFO_VALUE);
-      setStyledCell(ws, 1, c0 + 6, "UT: " + formatTotalLate(empTotalUndertimeMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
+      setStyledCell(ws, 1, c0 + 6, '', FILL_NONE);
 
       // Merge header cells B+C and E+F
       if (!ws['!merges']) ws['!merges'] = [];
@@ -970,30 +956,32 @@ export const handleExportAllCompanies = async (
       ws['!merges'].push({ s: { r: 0, c: c0 + 4 }, e: { r: 0, c: c0 + 5 } }); // Dept E1+F1
       ws['!merges'].push({ s: { r: 1, c: c0 + 1 }, e: { r: 1, c: c0 + 2 } }); // Pos B2+C2
       ws['!merges'].push({ s: { r: 1, c: c0 + 4 }, e: { r: 1, c: c0 + 5 } }); // Branch E2+F2
+      ws['!merges'].push({ s: { r: 0, c: c0 + 6 }, e: { r: 3, c: c0 + 6 } }); // G1-G4 Merged for LATE
 
       // Row 2 & 3: Table Headers
-      // DATE, DAY, IN, OUT are merged vertically from row index 2 to 3
+      // DATE, DAY, IN, OUT, LATE, REMARKS are merged vertically from row index 2 to 3
       setStyledCell(ws, 2, c0, 'DATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 1, 'DAY', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 2, 'IN', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 2, c0 + 3, 'OUT', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 2, c0 + 4, 'REMARKS', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 2, c0 + 5, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 2, c0 + 6, "TOTAL: " + formatTotalLate(empTotalCombinedMinutes), mergeStyle(STYLE_BOLD, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 4, 'LATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 5, 'REMARKS', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 2, c0 + 6, '', FILL_NONE);
 
       setStyledCell(ws, 3, c0, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 3, c0 + 1, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 3, c0 + 2, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 3, c0 + 3, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 3, c0 + 4, 'LATE', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
-      setStyledCell(ws, 3, c0 + 5, 'UT', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 4, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
+      setStyledCell(ws, 3, c0 + 5, '', mergeStyle(STYLE_COL_HEADER, ALIGN_CENTER));
       setStyledCell(ws, 3, c0 + 6, '', FILL_NONE);
 
       ws['!merges'].push({ s: { r: 2, c: c0 }, e: { r: 3, c: c0 } });         // Date A3+A4
       ws['!merges'].push({ s: { r: 2, c: c0 + 1 }, e: { r: 3, c: c0 + 1 } }); // Day B3+B4
       ws['!merges'].push({ s: { r: 2, c: c0 + 2 }, e: { r: 3, c: c0 + 2 } }); // In C3+C4
       ws['!merges'].push({ s: { r: 2, c: c0 + 3 }, e: { r: 3, c: c0 + 3 } }); // Out D3+D4
-      ws['!merges'].push({ s: { r: 2, c: c0 + 4 }, e: { r: 2, c: c0 + 5 } }); // Remarks E3+F3
+      ws['!merges'].push({ s: { r: 2, c: c0 + 4 }, e: { r: 3, c: c0 + 4 } }); // Late E3+E4
+      ws['!merges'].push({ s: { r: 2, c: c0 + 5 }, e: { r: 3, c: c0 + 5 } }); // Remarks F3+F4
 
       // Parse employee work days from shift
       let workDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -1097,15 +1085,13 @@ export const handleExportAllCompanies = async (
             if (isHoliday || isRestDay) {
               const hName = holidayNameMap.get(dateStr);
               const remarks = isHoliday ? (hName || 'Holiday') : 'Rest Day';
-              setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
-              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
+              setStyledCell(ws, rowIdx, c0 + 4, '', rowFill);
+              setStyledCell(ws, rowIdx, c0 + 5, remarks, mergeStyle(rowFill, ALIGN_CENTER));
               setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
-              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
             } else {
               const lateVal = lateMins > 0 ? formatTotalLate(lateMins) : '';
-              const utVal = utMins > 0 ? formatTotalLate(utMins) : '';
               setStyledCell(ws, rowIdx, c0 + 4, lateVal, mergeStyle(rowFill, ALIGN_CENTER));
-              setStyledCell(ws, rowIdx, c0 + 5, utVal, mergeStyle(rowFill, ALIGN_CENTER));
+              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
               setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
             }
           } else {
@@ -1141,13 +1127,11 @@ export const handleExportAllCompanies = async (
             setStyledCell(ws, rowIdx, c0 + 3, '', mergeStyle(rowFill, ALIGN_RIGHT));
             
             if (offset === 0) {
-              setStyledCell(ws, rowIdx, c0 + 4, remarks, mergeStyle(rowFill, ALIGN_CENTER));
-              setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
-              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
+              setStyledCell(ws, rowIdx, c0 + 4, '', rowFill);
+              setStyledCell(ws, rowIdx, c0 + 5, remarks, mergeStyle(rowFill, ALIGN_CENTER));
             } else {
               setStyledCell(ws, rowIdx, c0 + 4, '', rowFill);
               setStyledCell(ws, rowIdx, c0 + 5, '', rowFill);
-              ws['!merges'].push({ s: { r: rowIdx, c: c0 + 4 }, e: { r: rowIdx, c: c0 + 5 } });
             }
             setStyledCell(ws, rowIdx, c0 + 6, '', FILL_NONE);
           }
@@ -1263,7 +1247,7 @@ export const handleExportAllCompanies = async (
       cols[base + 2] = { wch: 14 }; // IN
       cols[base + 3] = { wch: 14 }; // OUT
       cols[base + 4] = { wch: 14 }; // LATE (E) / Overtime-out / Overtime-out
-      cols[base + 5] = { wch: 14 }; // UT (F) / Devices / Devices
+      cols[base + 5] = { wch: 16 }; // REMARKS (F) / Devices / Devices
       cols[base + 6] = { wch: 15 }; // Summary (G) / Remarks / Remarks
       if (i < emps.length - 1) {
         cols[base + 7] = { wch: 18 }; // Separator (wide gap)
